@@ -1,0 +1,320 @@
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
+import { render, screen, fireEvent, waitFor } from "@testing-library/react"
+
+import { PrintAgentCard } from "@/components/print/print-agent-card"
+
+/**
+ * The install panel.
+ *
+ * The person reading it is a shopkeeper, or a freelancer on a remote-desktop
+ * session at 11pm. Two things have to be true: the steps shown must match the
+ * machine they are sitting at, and the panel must tell them — without being
+ * asked — whether it worked.
+ */
+vi.mock("@/lib/print/agent", () => ({
+  agentStatus: vi.fn(),
+  agentPrint: vi.fn(async () => ({ ok: true })),
+  agentPrinters: vi.fn(async () => ({ printers: [], default: "" })),
+  testSlipEscPos: () => new Uint8Array([1, 2, 3]),
+}))
+import { agentStatus, agentPrinters } from "@/lib/print/agent"
+
+const mocked = vi.mocked(agentStatus)
+const mockedPrinters = vi.mocked(agentPrinters)
+
+function ua(value: string) {
+  Object.defineProperty(window.navigator, "userAgent", {
+    value,
+    configurable: true,
+  })
+}
+
+beforeEach(() => {
+  vi.useFakeTimers({ shouldAdvanceTime: true })
+  mocked.mockReset()
+  mockedPrinters.mockReset()
+  mockedPrinters.mockResolvedValue({ printers: [], default: "" })
+  window.localStorage.clear()
+})
+afterEach(() => vi.useRealTimers())
+
+describe("print agent card", () => {
+  it("says plainly when it is connected, and names the printer", async () => {
+    mocked.mockResolvedValue({ available: true, printer: "RONGTA 80mm", version: "1" })
+    render(<PrintAgentCard />)
+    expect(await screen.findByText(/متصل/)).toBeTruthy()
+    expect(screen.getByText(/RONGTA 80mm/)).toBeTruthy()
+  })
+
+  it("hides the install steps once connected — they are only noise then", async () => {
+    mocked.mockResolvedValue({ available: true, printer: "P", version: "1" })
+    render(<PrintAgentCard />)
+    await screen.findByText(/متصل/)
+    expect(screen.queryByText(/تنزيل برنامج الطباعة/)).toBeNull()
+  })
+
+  it("separates 'not installed' from 'installed but no printer'", async () => {
+    // These need different actions from the person reading, so they must not
+    // share a message.
+    mocked.mockResolvedValue({ available: false, reason: "no-printer" })
+    const { unmount } = render(<PrintAgentCard />)
+    expect(await screen.findByText(/لا توجد طابعة افتراضية/)).toBeTruthy()
+    unmount()
+
+    mocked.mockResolvedValue({ available: false, reason: "no-agent" })
+    render(<PrintAgentCard />)
+    expect(await screen.findByText(/غير مثبّت/)).toBeTruthy()
+  })
+
+  it("shows the Windows steps on Windows", async () => {
+    ua("Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+    mocked.mockResolvedValue({ available: false, reason: "no-agent" })
+    render(<PrintAgentCard />)
+    expect(await screen.findByText(/Windows protected your PC/)).toBeTruthy()
+    expect(screen.queryByText(/Open Anyway/)).toBeNull()
+  })
+
+  it("shows the macOS steps on a Mac, including the Open Anyway path", async () => {
+    // Control-click no longer bypasses Gatekeeper on current macOS; Privacy &
+    // Security → Open Anyway is the only route, so it has to be spelled out.
+    ua("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)")
+    mocked.mockResolvedValue({ available: false, reason: "no-agent" })
+    render(<PrintAgentCard />)
+    // Mentioned in the step and again in the warning about step order, so
+    // "at least one" is the assertion — not "exactly one".
+    expect((await screen.findAllByText(/Open Anyway/)).length).toBeGreaterThan(0)
+    expect(screen.queryByText(/Windows protected your PC/)).toBeNull()
+  })
+
+  it("offers a zip on macOS — a bare binary loses its executable bit", async () => {
+    ua("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)")
+    mocked.mockResolvedValue({ available: false, reason: "no-agent" })
+    render(<PrintAgentCard />)
+    const link = (await screen.findByText(/تنزيل برنامج الطباعة/))
+      .closest("a") as HTMLAnchorElement
+    expect(link.getAttribute("href")).toMatch(/\.zip$/)
+  })
+
+  it("lets the person pick another machine's file", async () => {
+    ua("Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+    mocked.mockResolvedValue({ available: false, reason: "no-agent" })
+    render(<PrintAgentCard />)
+    fireEvent.click(await screen.findByText(/Apple Silicon/))
+    const link = screen.getByText(/تنزيل برنامج الطباعة/).closest("a")!
+    expect(link.getAttribute("href")).toContain("mac-arm64")
+  })
+
+  it("turns green on its own, without anyone pressing anything", async () => {
+    // The person is at the till double-clicking a file; they should not have to
+    // come back and press a button to find out it worked.
+    mocked.mockResolvedValue({ available: false, reason: "no-agent" })
+    render(<PrintAgentCard />)
+    await screen.findByText(/غير مثبّت/)
+    mocked.mockResolvedValue({ available: true, printer: "RONGTA", version: "1" })
+    await vi.advanceTimersByTimeAsync(2500)
+    await waitFor(() => expect(screen.getByText(/متصل/)).toBeTruthy())
+  })
+
+  it("stops polling once unmounted", async () => {
+    mocked.mockResolvedValue({ available: false, reason: "no-agent" })
+    const { unmount } = render(<PrintAgentCard />)
+    await screen.findByText(/غير مثبّت/)
+    unmount()
+    const before = mocked.mock.calls.length
+    await vi.advanceTimersByTimeAsync(6000)
+    expect(mocked.mock.calls.length).toBe(before)
+  })
+
+  it("offers the quarantine rescue on macOS only", async () => {
+    // The .app is ad-hoc signed, so "damaged" should not appear — but if a
+    // macOS build still refuses it, the only fix is a terminal command, and
+    // the person needs it in front of them rather than in a chat log.
+    ua("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)")
+    mocked.mockResolvedValue({ available: false, reason: "no-agent" })
+    const { unmount } = render(<PrintAgentCard />)
+    expect(await screen.findByText(/is damaged/)).toBeTruthy()
+    expect(screen.getByText(/xattr -dr com.apple.quarantine/)).toBeTruthy()
+    unmount()
+
+    ua("Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+    render(<PrintAgentCard />)
+    await screen.findByText(/Windows protected your PC/)
+    expect(screen.queryByText(/xattr/)).toBeNull()
+  })
+})
+
+/**
+ * The card is the whole manual. Anything a person has to be told out of band —
+ * in a chat message, on a phone call — is a step that does not happen at 11pm
+ * in a shop.
+ */
+describe("the manual is complete", () => {
+  it("covers Windows end to end: default printer → SmartScreen → test slip", async () => {
+    ua("Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+    mocked.mockResolvedValue({ available: false, reason: "no-agent" })
+    render(<PrintAgentCard />)
+    expect(await screen.findByText(/Set as default/)).toBeTruthy()
+    expect(screen.getByText(/Windows protected your PC/)).toBeTruthy()
+    expect(screen.getByText(/Run anyway/)).toBeTruthy()
+    expect(screen.getAllByText(/طباعة ورقة اختبار/).length).toBeGreaterThan(0)
+  })
+
+  it("covers macOS end to end, in the order the OS forces", async () => {
+    ua("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)")
+    mocked.mockResolvedValue({ available: false, reason: "no-agent" })
+    render(<PrintAgentCard />)
+    expect(await screen.findByText(/Default printer/)).toBeTruthy()
+    expect(screen.getByText(/Apple cannot check it/)).toBeTruthy()
+    expect(screen.getAllByText(/Open Anyway/).length).toBeGreaterThan(0)
+  })
+
+  it("tells the person what to do when the status stays red", async () => {
+    // The most likely stall: Chrome blocked the local-network request, which
+    // looks exactly like "not installed".
+    mocked.mockResolvedValue({ available: false, reason: "no-agent" })
+    render(<PrintAgentCard />)
+    expect(await screen.findByText(/بقي أحمر/)).toBeTruthy()
+    expect(screen.getByText(/127.0.0.1:9110/)).toBeTruthy()
+  })
+
+  it("says how to uninstall — a thing that cannot be left to a phone call", async () => {
+    mocked.mockResolvedValue({ available: false, reason: "no-agent" })
+    render(<PrintAgentCard />)
+    expect(await screen.findByText(/كيف أوقفه أو أحذفه/)).toBeTruthy()
+  })
+
+  it("frames 'installed but no printer' as progress, not failure", async () => {
+    // It is the half that carries the risk: install and connection both work.
+    mocked.mockResolvedValue({ available: false, reason: "no-printer" })
+    render(<PrintAgentCard />)
+    expect(await screen.findByText(/مثبّت ويعمل/)).toBeTruthy()
+    expect(screen.getByText(/التثبيت والاتصال بالتطبيق نجحا/)).toBeTruthy()
+  })
+
+  it("offers the test slip only once there is something to print to", async () => {
+    mocked.mockResolvedValue({ available: false, reason: "no-printer" })
+    const { unmount } = render(<PrintAgentCard />)
+    await screen.findByText(/مثبّت ويعمل/)
+    expect(screen.queryByRole("button", { name: /طباعة ورقة اختبار/ })).toBeNull()
+    unmount()
+
+    mocked.mockResolvedValue({ available: true, printer: "RONGTA", version: "1" })
+    render(<PrintAgentCard />)
+    expect(await screen.findByRole("button", { name: /طباعة ورقة اختبار/ })).toBeTruthy()
+  })
+
+  it("promises no driver install, because that is the owner's real fear", async () => {
+    mocked.mockResolvedValue({ available: false, reason: "no-agent" })
+    render(<PrintAgentCard />)
+    expect(await screen.findByText(/لا يثبّت أي تعريف/)).toBeTruthy()
+  })
+})
+
+/**
+ * Choosing the printer.
+ *
+ * The shop's till had Microsoft Print to PDF as its Windows default, so every
+ * receipt became a silent PDF download and nothing reached the thermal
+ * printer. Trusting the OS default is not good enough on a machine we do not
+ * control.
+ */
+describe("the printer picker", () => {
+  it("lists every printer the machine has", async () => {
+    mocked.mockResolvedValue({ available: true, printer: "Microsoft Print to PDF", version: "1" })
+    mockedPrinters.mockResolvedValue({
+      printers: ["Microsoft Print to PDF", "RONGTA 80mm"],
+      default: "Microsoft Print to PDF",
+    })
+    render(<PrintAgentCard />)
+    expect(await screen.findByText("RONGTA 80mm")).toBeTruthy()
+  })
+
+  it("auto-selects a real printer when the OS default is a PDF writer", async () => {
+    mocked.mockResolvedValue({ available: true, printer: "Microsoft Print to PDF", version: "1" })
+    mockedPrinters.mockResolvedValue({
+      printers: ["Microsoft Print to PDF", "RONGTA 80mm"],
+      default: "Microsoft Print to PDF",
+    })
+    render(<PrintAgentCard />)
+    await waitFor(() =>
+      expect(JSON.parse(window.localStorage.getItem("pharma_print_settings_v1")!).printerName)
+        .toBe("RONGTA 80mm"),
+    )
+  })
+
+  it("says plainly when the chosen printer only makes files", async () => {
+    mocked.mockResolvedValue({ available: true, printer: "Microsoft Print to PDF", version: "1" })
+    mockedPrinters.mockResolvedValue({
+      printers: ["Microsoft Print to PDF"],
+      default: "Microsoft Print to PDF",
+    })
+    render(<PrintAgentCard />)
+    expect(await screen.findByText(/ليست طابعة حرارية/)).toBeTruthy()
+  })
+
+  it("warns when the machine has no real printer at all", async () => {
+    // The till showed the thermal printer under «أجهزة أخرى» — Windows saw
+    // the USB device but no driver was bound, so it was not a printer yet.
+    mocked.mockResolvedValue({ available: true, printer: "Microsoft Print to PDF", version: "1" })
+    mockedPrinters.mockResolvedValue({
+      printers: ["Microsoft Print to PDF", "Fax"],
+      default: "Microsoft Print to PDF",
+    })
+    render(<PrintAgentCard />)
+    expect(await screen.findByText(/لا توجد طابعة حقيقية/)).toBeTruthy()
+    expect(screen.getByText(/أجهزة أخرى/)).toBeTruthy()
+  })
+
+  it("remembers the choice", async () => {
+    mocked.mockResolvedValue({ available: true, printer: "A", version: "1" })
+    mockedPrinters.mockResolvedValue({ printers: ["A", "RONGTA"], default: "A" })
+    render(<PrintAgentCard />)
+    fireEvent.click(await screen.findByText("RONGTA"))
+    expect(
+      JSON.parse(window.localStorage.getItem("pharma_print_settings_v1")!).printerName,
+    ).toBe("RONGTA")
+  })
+
+  it("names the chosen printer in the status line, not the OS default", async () => {
+    mocked.mockResolvedValue({ available: true, printer: "Microsoft Print to PDF", version: "1" })
+    mockedPrinters.mockResolvedValue({ printers: ["Microsoft Print to PDF", "RONGTA"], default: "Microsoft Print to PDF" })
+    render(<PrintAgentCard />)
+    fireEvent.click(await screen.findByText("RONGTA"))
+    await waitFor(() => expect(screen.getByText(/سيُطبع على: RONGTA/)).toBeTruthy())
+  })
+})
+
+/**
+ * When the list is empty, say WHY.
+ *
+ * An empty picker looked identical in two very different situations — an
+ * agent too old to have the endpoint, and a machine with no printers
+ * installed — and in both the card simply showed nothing where the list
+ * should be. They need different actions from the person reading.
+ */
+describe("an empty printer list explains itself", () => {
+  it("tells you to reinstall when the agent is too old to answer", async () => {
+    mocked.mockResolvedValue({ available: false, reason: "no-printer" })
+    mockedPrinters.mockResolvedValue({ printers: null, default: "" })
+    render(<PrintAgentCard />)
+    expect(await screen.findByText(/نسخة قديمة من برنامج الطباعة/)).toBeTruthy()
+  })
+
+  it("tells you to install a printer when the machine has none", async () => {
+    mocked.mockResolvedValue({ available: false, reason: "no-printer" })
+    mockedPrinters.mockResolvedValue({ printers: [], default: "" })
+    render(<PrintAgentCard />)
+    expect(await screen.findByText(/لا توجد أي طابعة مركّبة/)).toBeTruthy()
+    // and points at the Windows symptom that caused this at the shop
+    expect(screen.getByText(/أجهزة أخرى/)).toBeTruthy()
+  })
+
+  it("shows neither message once there are printers to pick", async () => {
+    mocked.mockResolvedValue({ available: true, printer: "RONGTA", version: "1" })
+    mockedPrinters.mockResolvedValue({ printers: ["RONGTA"], default: "RONGTA" })
+    render(<PrintAgentCard />)
+    await screen.findByText("RONGTA")
+    expect(screen.queryByText(/نسخة قديمة/)).toBeNull()
+    expect(screen.queryByText(/لا توجد أي طابعة مركّبة/)).toBeNull()
+  })
+})

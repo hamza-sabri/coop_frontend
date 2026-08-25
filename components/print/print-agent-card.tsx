@@ -1,0 +1,635 @@
+"use client"
+
+import { useCallback, useEffect, useRef, useState } from "react"
+import {
+  Check,
+  CheckCircle2,
+  Copy,
+  Download,
+  Loader2,
+  Printer,
+  RefreshCw,
+  XCircle,
+} from "lucide-react"
+import { toast } from "sonner"
+
+import {
+  agentPrint,
+  agentPrinters,
+  agentStatus,
+  testSlipEscPos,
+  type AgentStatus,
+} from "@/lib/print/agent"
+import { loadPrintSettings, savePrintSettings } from "@/lib/print/settings"
+import { toBase64 } from "@/lib/print/escpos"
+import { cn } from "@/lib/utils"
+
+/**
+ * Install-and-verify panel for the local print agent.
+ *
+ * This is the whole manual. The person reading it is a shopkeeper, or a
+ * freelancer on a remote-desktop session at midnight — anything they have to
+ * be TOLD, out of band, is a step that will not happen. So every step for both
+ * platforms lives here, including the two scary OS dialogs quoted in the words
+ * they actually say, and what each status line means.
+ *
+ * It re-checks every two seconds while open, so nobody has to guess when to
+ * press anything: install the file, look back at the screen, it is green.
+ */
+
+type Os = "windows" | "mac-arm" | "mac-intel"
+
+const FILES: Record<Os, { file: string; label: string; short: string }> = {
+  windows: { file: "retail-print.exe", label: "ويندوز", short: "Windows" },
+  "mac-arm": {
+    file: "retail-print-mac-arm64.zip",
+    label: "ماك — Apple Silicon (M1/M2/M3/M4)",
+    short: "macOS",
+  },
+  "mac-intel": {
+    file: "retail-print-mac-intel.zip",
+    label: "ماك — Intel",
+    short: "macOS",
+  },
+}
+
+/** Best guess at the machine this browser is on; the person can override it. */
+function guessOs(): Os {
+  if (typeof navigator === "undefined") return "windows"
+  if (!/Mac/i.test(navigator.userAgent)) return "windows"
+  // Apple Silicon does not announce itself in the user agent; the GPU renderer
+  // string does. Guessing wrong costs one wrong download — the other button is
+  // right there.
+  try {
+    const gl = document
+      .createElement("canvas")
+      .getContext("webgl") as WebGLRenderingContext | null
+    const dbg = gl?.getExtension("WEBGL_debug_renderer_info")
+    const r = dbg ? String(gl?.getParameter(dbg.UNMASKED_RENDERER_WEBGL)) : ""
+    if (/Apple/i.test(r)) return "mac-arm"
+    if (/Intel/i.test(r)) return "mac-intel"
+  } catch {
+    /* blocked by a privacy setting — fall through */
+  }
+  return "mac-arm"
+}
+
+/**
+ * Printers that are not printers.
+ *
+ * A Windows till commonly has one of these as the system default, and then
+ * every receipt is a silent PDF download instead of paper — which is exactly
+ * what happened on the shop's machine. Worth saying out loud rather than
+ * leaving someone to wonder where the paper went.
+ */
+const NOT_A_PRINTER =
+  /print to pdf|microsoft xps|onenote|fax|pdf24|cutepdf|adobe pdf|_pdf|to file/i
+
+/**
+ * Last resort on macOS. The bundle is ad-hoc signed, so the normal path is
+ * Privacy & Security → Open Anyway; this only matters if a particular macOS
+ * build still refuses. Windows never needs it.
+ */
+const MAC_RESCUE =
+  "xattr -dr com.apple.quarantine ~/Downloads/RetailPrint.app && open ~/Downloads/RetailPrint.app"
+
+function CopyLine({ text }: { text: string }) {
+  const [done, setDone] = useState(false)
+  return (
+    <div className="flex items-stretch gap-1.5">
+      <code
+        dir="ltr"
+        className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap rounded-lg bg-muted px-2 py-1.5 text-[10px] leading-5"
+      >
+        {text}
+      </code>
+      <button
+        type="button"
+        onClick={() => {
+          void navigator.clipboard?.writeText(text)
+          setDone(true)
+          setTimeout(() => setDone(false), 1500)
+        }}
+        title="نسخ"
+        className="shrink-0 rounded-lg border px-2 transition hover:bg-muted"
+      >
+        {done ? (
+          <Check className="size-3.5 text-success" />
+        ) : (
+          <Copy className="size-3.5" />
+        )}
+      </button>
+    </div>
+  )
+}
+
+function Step({ n, children }: { n: string; children: React.ReactNode }) {
+  return (
+    <li className="flex gap-2">
+      <span className="mt-px grid size-5 shrink-0 place-items-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">
+        {n}
+      </span>
+      <span className="flex-1">{children}</span>
+    </li>
+  )
+}
+
+function Note({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="rounded-lg border-s-2 border-primary/40 bg-primary/5 px-2.5 py-1.5">
+      {children}
+    </div>
+  )
+}
+
+function Fold({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <details className="rounded-xl border bg-muted/30 px-2.5 py-2">
+      <summary className="cursor-pointer text-[11px] font-semibold">{title}</summary>
+      <div className="mt-2 space-y-1.5 text-[11px] leading-relaxed text-muted-foreground">
+        {children}
+      </div>
+    </details>
+  )
+}
+
+function WindowsSteps() {
+  return (
+    <ol className="space-y-2.5 text-[11px] leading-relaxed text-muted-foreground">
+      <Step n="١">
+        <b className="text-foreground">اضبط الطابعة الافتراضية.</b>
+        <br />
+        Settings ← Bluetooth &amp; devices ← Printers &amp; scanners ← اختر
+        الطابعة ← <b>Set as default</b>. واطبع منها Test Page للتأكد أن ويندوز
+        نفسه يطبع — إن لم يطبع من هنا فلن يصلحه أي تطبيق.
+      </Step>
+      <Step n="٢">
+        <b className="text-foreground">نزّل الملف</b> من الزر أعلاه على جهاز
+        الكاشير.
+      </Step>
+      <Step n="٣">
+        <b className="text-foreground">افتحه بضغطتين.</b> لا يحتاج صلاحيات مدير،
+        ولا إعادة تشغيل، ولا يثبّت أي تعريف.
+      </Step>
+      <Step n="٤">
+        ستظهر شاشة زرقاء:{" "}
+        <i className="text-foreground">«Windows protected your PC»</i>. اضغط{" "}
+        <b className="text-foreground">More info</b> ثم{" "}
+        <b className="text-foreground">Run anyway</b>.
+        <br />
+        تظهر لأن الملف غير موقّع رقمياً — التوقيع يتطلب شهادة سنوية مدفوعة.
+      </Step>
+      <Step n="٥">
+        ستظهر رسالة <b className="text-foreground">«تم التثبيت»</b> مع اسم
+        الطابعة. اضغط حسناً.
+      </Step>
+      <Step n="٦">
+        <b className="text-foreground">ارجع إلى هذه الصفحة.</b> إن سأل المتصفح عن
+        السماح بالوصول إلى الشبكة المحلية اضغط{" "}
+        <b className="text-foreground">Allow</b> (مرة واحدة فقط). سيتحوّل السطر
+        أعلاه إلى <b className="text-success">متصل ✅</b> وحده خلال ثانيتين.
+      </Step>
+      <Step n="٧">
+        اضغط <b className="text-foreground">«طباعة ورقة اختبار»</b> — يجب أن تخرج
+        ورقة مكتوب عليها <span dir="ltr">TEST OK</span>. هذه هي اللحظة التي
+        تعرف فيها أن كل شيء يعمل.
+      </Step>
+    </ol>
+  )
+}
+
+function MacSteps() {
+  return (
+    <ol className="space-y-2.5 text-[11px] leading-relaxed text-muted-foreground">
+      <Step n="١">
+        <b className="text-foreground">اضبط الطابعة الافتراضية.</b>
+        <br />
+        System Settings ← Printers &amp; Scanners ← <b>Default printer</b>.
+      </Step>
+      <Step n="٢">
+        <b className="text-foreground">نزّل الملف</b> من الزر أعلاه، ثم افتح ملف
+        الـ zip بضغطتين — سيظهر تطبيق باسم{" "}
+        <b className="text-foreground">RetailPrint</b>.
+        <br />
+        إن كنت جرّبت قبل الآن، احذف النسخ القديمة من Downloads أولاً حتى لا تفتح
+        نسخة قديمة بالخطأ.
+      </Step>
+      <Step n="٣">
+        <b className="text-foreground">افتح RetailPrint بضغطتين.</b> سيرفضه
+        الماك في أول مرة برسالة{" "}
+        <i className="text-foreground">
+          «Apple cannot check it for malicious software»
+        </i>{" "}
+        — اضغط <b className="text-foreground">OK</b>.
+        <br />
+        هذا متوقّع ولا يعني أن الملف تالف؛ الخطوة التالية هي الحل.
+      </Step>
+      <Step n="٤">
+        افتح{" "}
+        <b className="text-foreground">System Settings ← Privacy &amp; Security</b>
+        ، انزل إلى قسم <b className="text-foreground">Security</b>، وستجد سطراً
+        عن RetailPrint فيه زر <b className="text-foreground">Open Anyway</b> —
+        اضغطه، ثم <b className="text-foreground">Open</b> في التأكيد.
+        <Note>
+          <span className="text-foreground">
+            يظهر زر Open Anyway بعد المحاولة في الخطوة ٣ فقط
+          </span>{" "}
+          — لا تقلب الترتيب. والضغط بالزر الأيمن لم يعد يكفي في نسخ الماك
+          الحديثة.
+        </Note>
+      </Step>
+      <Step n="٥">
+        ستظهر رسالة <b className="text-foreground">«تم التثبيت»</b> مع اسم
+        الطابعة. اضغط حسناً.
+      </Step>
+      <Step n="٦">
+        <b className="text-foreground">ارجع إلى هذه الصفحة.</b> إن سأل المتصفح عن
+        السماح بالوصول إلى الشبكة المحلية اضغط{" "}
+        <b className="text-foreground">Allow</b> (مرة واحدة فقط). سيتحوّل السطر
+        أعلاه إلى <b className="text-success">متصل ✅</b> وحده خلال ثانيتين.
+      </Step>
+      <Step n="٧">
+        اضغط <b className="text-foreground">«طباعة ورقة اختبار»</b> — يجب أن تخرج
+        ورقة مكتوب عليها <span dir="ltr">TEST OK</span>.
+      </Step>
+    </ol>
+  )
+}
+
+export function PrintAgentCard() {
+  const [os, setOs] = useState<Os>("windows")
+  const [status, setStatus] = useState<AgentStatus | null>(null)
+  const [checking, setChecking] = useState(false)
+  const [testing, setTesting] = useState(false)
+  // null = not asked yet, or the agent is too old to answer.
+  const [printers, setPrinters] = useState<string[] | null>(null)
+  const [staleAgent, setStaleAgent] = useState(false)
+  const [chosen, setChosen] = useState("")
+  const alive = useRef(true)
+
+  function pickPrinter(name: string) {
+    setChosen(name)
+    savePrintSettings({ ...loadPrintSettings(), printerName: name })
+  }
+
+  const check = useCallback(async (manual = false) => {
+    if (manual) setChecking(true)
+    const s = await agentStatus()
+    if (!alive.current) return
+    setStatus(s)
+    setChecking(false)
+  }, [])
+
+  useEffect(() => {
+    alive.current = true
+    setOs(guessOs())
+    setChosen(loadPrintSettings().printerName)
+    void check()
+    const id = setInterval(() => void check(), 2000)
+    return () => {
+      alive.current = false
+      clearInterval(id)
+    }
+  }, [check])
+
+  /**
+   * Print a short slip on demand.
+   *
+   * It separates "is it wired up" from "does this printer like our bytes" —
+   * two failures that look identical from a sale, and only one of which is
+   * ours. Ten seconds over a remote session, no fake sale in the books.
+   */
+  async function testPrint() {
+    setTesting(true)
+    try {
+      const res = await agentPrint(
+        toBase64(testSlipEscPos()),
+        "اختبار الطباعة",
+        chosen,
+      )
+      if (res.ok)
+        toast.success("أُرسلت الورقة التجريبية — تحقّق من الطابعة", {
+          id: "print-test",
+          duration: 4000,
+        })
+      else
+        toast.error("لم تُطبع الورقة التجريبية", {
+          id: "print-test",
+          description: res.detail || "الطابعة رفضت المهمة",
+          duration: 8000,
+        })
+    } finally {
+      setTesting(false)
+    }
+  }
+
+  // Once the agent answers, ask it what printers exist — this is the list
+  // that reveals a till whose default is a PDF writer.
+  const reachable = status?.available === true || status?.reason === "no-printer"
+  useEffect(() => {
+    if (!reachable) return
+    void agentPrinters().then((p) => {
+      if (!alive.current) return
+      setStaleAgent(p.printers === null)
+      setPrinters(p.printers)
+      if (!p.printers) return
+      // Nothing chosen yet: pick the first REAL printer rather than inheriting
+      // a PDF writer from the OS default.
+      if (!loadPrintSettings().printerName) {
+        const real = p.printers.find((n) => !NOT_A_PRINTER.test(n))
+        if (real && NOT_A_PRINTER.test(p.default)) pickPrinter(real)
+      }
+    })
+  }, [reachable])
+
+  const ok = status?.available === true || (reachable && Boolean(chosen))
+  const noPrinter =
+    status?.available === false && status.reason === "no-printer" && !chosen
+  const isMac = os !== "windows"
+  const effective = chosen || (status?.available ? status.printer : "")
+  const pdfTrap = Boolean(effective) && NOT_A_PRINTER.test(effective)
+
+  return (
+    <div className="space-y-3 rounded-2xl border p-3">
+      <div className="space-y-0.5">
+        <p className="text-sm font-bold">الطباعة المباشرة (بدون نافذة طباعة)</p>
+        <p className="text-[11px] leading-relaxed text-muted-foreground">
+          برنامج صغير يعمل على جهاز الكاشير ويطبع مباشرة على الطابعة. بدونه يفتح
+          المتصفح نافذة الطباعة عند كل عملية بيع — وهذه نافذة المتصفح نفسه، لا
+          يستطيع أي تطبيق داخل الصفحة إخفاءها.{" "}
+          <b className="text-foreground">لا يثبّت أي تعريف</b>؛ يستخدم تعريف
+          الطابعة الموجود على الجهاز أصلاً.
+        </p>
+      </div>
+
+      {/* The answer to "did it work" — the reason this card exists. */}
+      <div
+        className={cn(
+          "flex items-center gap-2 rounded-xl border px-3 py-2.5 text-xs font-semibold",
+          ok
+            ? "border-success/40 bg-success/10 text-success"
+            : "border-warning/50 bg-warning/10 text-foreground",
+        )}
+      >
+        {status === null ? (
+          <Loader2 className="size-4 shrink-0 animate-spin" />
+        ) : ok ? (
+          <CheckCircle2 className="size-4 shrink-0" />
+        ) : (
+          <XCircle className="size-4 shrink-0" />
+        )}
+        <span className="flex-1">
+          {status === null
+            ? "جارٍ الفحص…"
+            : ok
+              ? `متصل ✅ — سيُطبع على: ${effective || "الطابعة الافتراضية"}`
+              : noPrinter
+                ? "البرنامج مثبّت ويعمل ✅ — لكن لا توجد طابعة افتراضية على هذا الجهاز"
+                : "غير مثبّت على هذا الجهاز — اتبع الخطوات بالأسفل"}
+        </span>
+        <button
+          type="button"
+          onClick={() => void check(true)}
+          disabled={checking}
+          title="إعادة الفحص"
+          className="shrink-0 rounded-lg p-1 transition hover:bg-foreground/10 disabled:opacity-50"
+        >
+          <RefreshCw className={cn("size-3.5", checking && "animate-spin")} />
+        </button>
+      </div>
+
+      {/* Half-success: the risky half (install + connection) is already proven. */}
+      {noPrinter && (
+        <p className="rounded-xl border border-dashed p-2.5 text-[11px] leading-relaxed text-muted-foreground">
+          هذا يعني أن التثبيت والاتصال بالتطبيق نجحا — الجزء الصعب — ولم يبقَ إلا
+          طابعة. اضبط طابعة افتراضية في إعدادات النظام وسيتحوّل السطر إلى{" "}
+          <b className="text-success">متصل</b> وحده.
+        </p>
+      )}
+
+      {/* An agent too old to list printers. Says so, instead of showing an
+          empty space where the list should be. */}
+      {reachable && staleAgent && (
+        <div className="space-y-1.5 rounded-xl border border-warning/50 bg-warning/10 p-2.5">
+          <p className="text-[11px] font-semibold">
+            نسخة قديمة من برنامج الطباعة على هذا الجهاز
+          </p>
+          <p className="text-[11px] leading-relaxed text-muted-foreground">
+            هذه النسخة لا تعرف كيف تسرد الطابعات، لذلك لا تظهر القائمة. نزّل
+            البرنامج من الزر بالأسفل وافتحه بضغطتين — سيحدّث نفسه ولا يحتاج
+            إزالة القديم.
+          </p>
+        </div>
+      )}
+
+      {reachable && printers !== null && printers.length === 0 && (
+        <div className="space-y-1.5 rounded-xl border border-warning/50 bg-warning/10 p-2.5">
+          <p className="text-[11px] font-semibold">
+            لا توجد أي طابعة مركّبة على هذا الجهاز
+          </p>
+          <p className="text-[11px] leading-relaxed text-muted-foreground">
+            برنامج الطباعة يعمل، لكن النظام نفسه لا يعرف أي طابعة. ركّب الطابعة
+            من إعدادات النظام أولاً (على ويندوز:{" "}
+            <b>Settings ← Bluetooth &amp; devices ← Printers &amp; scanners</b>؛
+            على الماك: <b>System Settings ← Printers &amp; Scanners</b>)، ثم
+            ارجع هنا. إن كانت الطابعة تظهر تحت «أجهزة أخرى» في ويندوز فتعريفها
+            غير مثبّت بعد.
+          </p>
+        </div>
+      )}
+
+      {reachable && printers !== null && printers.length > 0 && (
+        <div className="space-y-1.5">
+          <p className="text-[11px] font-semibold">الطابعة المستخدمة</p>
+          <div className="flex flex-wrap gap-1.5">
+            {printers.map((name) => (
+              <button
+                key={name}
+                type="button"
+                onClick={() => pickPrinter(name)}
+                className={cn(
+                  "rounded-lg border px-2 py-1 text-[11px] font-semibold transition",
+                  effective === name
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-border text-muted-foreground hover:bg-muted/60",
+                )}
+              >
+                {name}
+              </button>
+            ))}
+          </div>
+          {pdfTrap && (
+            <p className="rounded-lg border border-warning/50 bg-warning/10 p-2 text-[11px] leading-relaxed">
+              هذه ليست طابعة حرارية — إنها تحفظ ملف PDF. لهذا «تُنزَّل» الفاتورة
+              بدل أن تُطبع. اختر طابعة الإيصالات من القائمة أعلاه.
+            </p>
+          )}
+          {!printers.some((n) => !NOT_A_PRINTER.test(n)) && (
+            <p className="rounded-lg border border-warning/50 bg-warning/10 p-2 text-[11px] leading-relaxed">
+              لا توجد طابعة حقيقية على هذا الجهاز — كل ما في القائمة يحفظ ملفات.
+              يجب أن تظهر طابعة الإيصالات في{" "}
+              <b>Settings ← Bluetooth &amp; devices ← Printers &amp; scanners</b>.
+              إن كانت تظهر تحت «أجهزة أخرى» فقط، فإن تعريفها غير مُثبَّت على هذا
+              الجهاز بعد.
+            </p>
+          )}
+        </div>
+      )}
+
+      {ok && (
+        <button
+          type="button"
+          onClick={() => void testPrint()}
+          disabled={testing}
+          className="flex w-full items-center justify-center gap-2 rounded-xl border border-primary/40 bg-primary/5 px-3 py-2.5 text-sm font-bold text-primary transition hover:bg-primary/10 disabled:opacity-50"
+        >
+          {testing ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : (
+            <Printer className="size-4" />
+          )}
+          طباعة ورقة اختبار
+        </button>
+      )}
+
+      {/*
+        The one test that tells the two failures apart.
+
+        When fetch() fails, JavaScript cannot see WHY — a stopped agent and a
+        browser that blocked the local-network request are the same error
+        object. Opening the agent's own page in a tab is not subject to that
+        restriction, so it answers the question in five seconds: if the page
+        loads, the agent is fine and the problem is a browser permission; if
+        it does not, the agent is not running.
+      */}
+      {status?.available === false && status.reason === "no-agent" && (
+        <div className="space-y-1.5 rounded-xl border border-dashed p-2.5">
+          <p className="text-[11px] font-semibold">
+            افحص بنفسك — يفرّق بين مشكلتين تبدوان متشابهتين:
+          </p>
+          <a
+            href="http://127.0.0.1:9110"
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition hover:bg-muted"
+          >
+            افتح صفحة خادم الطباعة في تبويب جديد
+          </a>
+          <p className="text-[11px] leading-relaxed text-muted-foreground">
+            <b className="text-foreground">ظهرت صفحة «خادم الطباعة يعمل»؟</b>{" "}
+            إذن البرنامج سليم والمشكلة أن المتصفح يمنع الاتصال بالشبكة المحلية —
+            اضغط أيقونة القفل بجانب عنوان الموقع ← إعدادات الموقع ← اسمح بـ{" "}
+            <b className="text-foreground">Local network</b>، ثم حدّث الصفحة.
+            <br />
+            <b className="text-foreground">لم تظهر؟</b> إذن البرنامج غير مُشغَّل —
+            افتحه بضغطتين من جديد.
+          </p>
+        </div>
+      )}
+
+      {/* Nothing below this line is needed once it is connected. */}
+      {!ok && (
+        <>
+          <div className="space-y-1.5">
+            <p className="text-[11px] font-semibold">١. اختر جهاز الكاشير:</p>
+            <div className="flex flex-wrap gap-1.5">
+              {(Object.keys(FILES) as Os[]).map((k) => (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => setOs(k)}
+                  className={cn(
+                    "rounded-lg border px-2 py-1 text-[11px] font-semibold transition",
+                    os === k
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border text-muted-foreground hover:bg-muted/60",
+                  )}
+                >
+                  {FILES[k].label}
+                </button>
+              ))}
+            </div>
+            <a
+              href={`/agent/${FILES[os].file}`}
+              download
+              className="flex items-center justify-center gap-2 rounded-xl bg-primary px-3 py-2.5 text-sm font-bold text-white transition hover:bg-primary/90"
+            >
+              <Download className="size-4" />
+              تنزيل برنامج الطباعة — {FILES[os].short}
+            </a>
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-[11px] font-semibold">
+              ٢. الخطوات على {isMac ? "الماك" : "ويندوز"}:
+            </p>
+            {isMac ? <MacSteps /> : <WindowsSteps />}
+          </div>
+
+          <div className="space-y-1.5">
+            <p className="text-[11px] font-semibold">إن واجهت مشكلة:</p>
+
+            <Fold title="السطر أعلاه بقي أحمر بعد التثبيت">
+              <p>
+                غالباً المتصفح منع الوصول إلى الشبكة المحلية. اضغط على أيقونة
+                القفل/الإعدادات بجانب عنوان الموقع في المتصفح ← Site settings ←
+                ابحث عن <b>Local network</b> أو <b>Insecure content</b> واجعلها{" "}
+                <b>Allow</b>، ثم حدّث الصفحة.
+              </p>
+              <p>
+                إن بقيت حمراء: افتح <code dir="ltr">http://127.0.0.1:9110</code>{" "}
+                في تبويب جديد. إن ظهرت صفحة «خادم الطباعة يعمل» فالبرنامج شغّال
+                والمشكلة في إذن المتصفح فقط؛ وإن لم تظهر فالبرنامج لم يبدأ — أعد
+                فتحه بضغطتين.
+              </p>
+              <p>
+                سجلّ البرنامج يكتب سبب أي فشل هنا:
+                <br />
+                <code dir="ltr">%AppData%\RetailPrint\agent.log</code> على
+                ويندوز، و{" "}
+                <code dir="ltr">~/Library/Application Support/RetailPrint/agent.log</code>{" "}
+                على الماك.
+              </p>
+            </Fold>
+
+            <Fold title="ورقة الاختبار لم تخرج">
+              <p>
+                اقرأ نص الخطأ في التنبيه الأحمر وأرسله لي — يحدّد بدقة أين توقّف.
+                وتأكّد أولاً أن الطابعة تطبع Test Page من إعدادات النظام نفسه.
+              </p>
+            </Fold>
+
+            {isMac && (
+              <Fold title="الماك يقول «RetailPrint is damaged»">
+                <p>
+                  رسالة <i>damaged</i> تعني أن الماك رفض الملف، لا أنه تالف
+                  فعلاً. احذف النسخ القديمة من Downloads ونزّل من جديد أولاً. إن
+                  تكرّرت، انسخ هذا السطر والصقه في Terminal مرة واحدة:
+                </p>
+                <CopyLine text={MAC_RESCUE} />
+                <p>(لا يحدث هذا على ويندوز إطلاقاً.)</p>
+              </Fold>
+            )}
+
+            <Fold title="كيف أوقفه أو أحذفه">
+              <p>
+                <b>ويندوز:</b> Task Manager ← Startup apps ← عطّل RetailPrint،
+                واحذف المجلد <code dir="ltr">%APPDATA%\RetailPrint</code>.
+              </p>
+              <p>
+                <b>ماك:</b> احذف{" "}
+                <code dir="ltr">~/Library/LaunchAgents/com.retail.print.plist</code>{" "}
+                وأعد تشغيل الجهاز.
+              </p>
+            </Fold>
+          </div>
+        </>
+      )}
+
+      <p className="text-[11px] leading-relaxed text-muted-foreground">
+        يبدأ البرنامج تلقائياً مع تشغيل الجهاز. إن توقّف يوماً، يعود التطبيق إلى
+        تنزيل الفاتورة كملف — ولا تتعطّل عملية البيع أبداً.
+      </p>
+    </div>
+  )
+}
