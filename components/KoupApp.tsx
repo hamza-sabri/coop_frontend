@@ -14,6 +14,7 @@ import type { KoupAuth } from '@/components/koup/auth'
 import { gsap } from 'gsap'
 import { Cup } from '@/lib/cup'
 import { SFX, haptic } from '@/lib/sfx'
+import { readPrefs, writePrefs } from '@/lib/koup-prefs'
 import { CATS as FALLBACK_CATS, TAGS, T, type Item } from '@/lib/menu'
 import { useKoupMenu } from '@/lib/koup-menu'
 
@@ -138,16 +139,36 @@ function ProductCard({ m, i, lang, onOpen }:
 
 /* ── the app ─────────────────────────────────────────────────────────────── */
 export default function KoupApp({ auth }: { auth: KoupAuth }) {
-  const [lang, setLang] = useState<Lang>('ar')
+  /* Arabic is the default for a shop in Qalqilya, and it is also what the
+     server renders. The stored choice is applied on mount instead of in the
+     initial state so the server HTML and the first client render agree —
+     reading localStorage during render is the classic hydration mismatch. */
+  const [lang, setLangState] = useState<Lang>('ar')
+  useEffect(() => {
+    const saved = readPrefs().lang
+    if (saved) setLangState(saved)
+  }, [])
+  const setLang = useCallback((next: Lang) => {
+    setLangState(next)
+    writePrefs({ lang: next })
+  }, [])
   const [screen, setScreen] = useState<Screen>('home')
   const [cat, setCat] = useState('all')
   const [view, setView] = useState<'grid' | 'carpet'>('grid')
   const [sheetItem, setSheetItem] = useState<Item | null>(null)
   const [qty, setQty] = useState(1)
-  const [opts, setOpts] = useState({ size: 4, milk: 3, milkKey: 'it.almond', shot: 3 })
+  /* Which option of this drink is being ordered. Reset every time the sheet
+     opens, or the last drink's flavour follows the next one in. */
+  const [pickedVariant, setPickedVariant] =
+    useState<{ id: number; label: string; price: number } | null>(null)
   const [beansSpent, setBeansSpent] = useState(0)
   const [orderType, setOrderType] = useState<'pickup' | 'dinein' | 'delivery'>('pickup')
+  /* The icon must show what SFX actually is, not a fresh `true`: the mute
+     flag is restored from localStorage inside lib/sfx, so on a reload the
+     button would otherwise draw 🔊 over a silenced app. Synced on mount for
+     the same hydration reason as the language above. */
   const [sound, setSound] = useState(true)
+  useEffect(() => { setSound(SFX.enabled()) }, [])
   const [splashUp, setSplashUp] = useState(true)
   const [topBar, setTopBar] = useState(false)
   // The gate waits for the opening to finish. Blurring the app while the cup
@@ -446,6 +467,12 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
   /* The sheet closing was the only sign that anything happened, which reads as
      "did that work?" — so the add now answers in three channels at once: the
      count moves, the tab jumps, and it makes a noise you can feel. */
+  useEffect(() => {
+    if (!sheetItem) { setPickedVariant(null); return }
+    const vs = sheetItem.v ?? []
+    setPickedVariant(vs.length === 1 ? vs[0] : null)
+  }, [sheetItem])
+
   function addToCart() {
     setCartCount(n => n + qty)
     setCartBump(b => b + 1)
@@ -478,7 +505,7 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
   }
 
   const itemTotal = sheetItem
-    ? (sheetItem.p + (opts.size ?? 0) + (opts.milk ?? 0) + (opts.shot ?? 0)) * qty
+    ? (pickedVariant?.price ?? sheetItem.p) * qty
     : 0
   const cartSub = 72
   const beanDiscount = Math.round(beansSpent / 3.33)
@@ -935,29 +962,32 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
             {sheetItem && (<>
               <h3>{nm(sheetItem, lang)}</h3>
               <p className="sub">{dsc(sheetItem, lang)}</p>
-              <div className="optgrp">
-                <div className="lbl"><span>{t('it.size', 'الحجم')}</span></div>
-                <div className="opts">
-                  {([[0, 'it.sm', 'وسط'], [4, 'it.lg', 'كبير']] as const).map(([v, k, ar]) => (
-                    <button key={k} className="opt" aria-pressed={opts.size === v}
-                      onClick={() => { SFX.tap(); setOpts(o => ({ ...o, size: v })) }}>
-                      <span>{t(k, ar)}</span>{v > 0 && <small>+₪{v}</small>}
-                    </button>
-                  ))}
+              {/* The options this drink is really sold in. The الحجم / الحليب
+                  groups that used to sit here were prototype furniture from
+                  before the menu existed — كوب has no sizes at all, and the
+                  choice on almost every line is a flavour. */}
+              {sheetItem.v && sheetItem.v.length > 0 && (
+                <div className="optgrp">
+                  <div className="lbl"><span>{t('it.pick', 'اختر النوع')}</span></div>
+                  <div className="opts">
+                    {sheetItem.v.map(v => {
+                      const extra = v.price - sheetItem.p
+                      return (
+                        <button
+                          key={v.id}
+                          className="opt"
+                          aria-pressed={pickedVariant?.id === v.id}
+                          onClick={() => { SFX.tap(); setPickedVariant(v) }}
+                        >
+                          <span>{v.label}</span>
+                          {extra > 0 && <small>+₪{extra}</small>}
+                        </button>
+                      )
+                    })}
+                  </div>
                 </div>
-              </div>
-              <div className="optgrp">
-                <div className="lbl"><span>{t('it.milk', 'الحليب')}</span></div>
-                <div className="opts">
-                  {([[0, 'it.full', 'كامل الدسم'], [0, 'it.skim', 'قليل الدسم'],
-                     [3, 'it.almond', 'لوز'], [3, 'it.oat', 'شوفان']] as const).map(([v, k, ar]) => (
-                    <button key={k} className="opt" aria-pressed={opts.milkKey === k}
-                      onClick={() => { SFX.tap(); setOpts(o => ({ ...o, milk: v, milkKey: k })) }}>
-                      <span>{t(k, ar)}</span>{v > 0 && <small>+₪{v}</small>}
-                    </button>
-                  ))}
-                </div>
-              </div>
+              )}
+
               <div className="sheet-foot">
                 <div className="qty">
                   <button onClick={() => { SFX.tap(); setQty(q => Math.max(1, q - 1)) }}>−</button>

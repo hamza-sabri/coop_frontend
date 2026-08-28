@@ -4,12 +4,18 @@
    the part the ear checks and an oscillator cannot fake it: /koup/sfx/pour.mp3
    and /koup/sfx/sip.mp3. Either one missing simply falls through to the
    synthesised version below, so nothing is ever silent. */
+import { readPrefs, writePrefs } from '@/lib/koup-prefs'
+
 const SFX_DIR = '/koup/sfx/'
 const buffers: Record<string, AudioBuffer> = {}
 const tried: Record<string, boolean> = {}
 
 export const SFX = (() => {
-  let ctx: any = null, noise: any = null, on = true, master: any = null;
+  /* Muting is a per-device preference and it must survive a refresh: someone
+     who silenced the app in a lecture should not be re-announced by it thirty
+     seconds later. readPrefs() is storage-safe and returns {} on the server,
+     so this default holds during SSR and is corrected on the client. */
+  let ctx: any = null, noise: any = null, on = readPrefs().sound !== false, master: any = null;
   function boot(){
     if(ctx) return ctx;
     const AC = window.AudioContext || (window as any).webkitAudioContext;
@@ -78,7 +84,9 @@ export const SFX = (() => {
   }
   return {
     enabled: () => on,
-    toggle(){ on = !on; if(on) live(); return on; },
+    toggle(){ on = !on; writePrefs({ sound: on }); if(on) live(); return on; },
+    /** Set the mute state explicitly (and remember it). */
+    setEnabled(next: boolean){ on = next; writePrefs({ sound: on }); if(on) live(); return on; },
     resume(){ live(); },
     tap(){ const c = live(); if(!c) return; tone(1180, c.currentTime, .05, .05, 'triangle'); },
     tick(){ const c = live(); if(!c) return; tone(1560, c.currentTime, .035, .022, 'sine'); },

@@ -71,7 +71,10 @@ export function PrintReceiptDialog({
 }) {
   const { user } = useMe()
   const me = user as { pharmacy_name?: string; pharmacy_logo?: string } | undefined
-  const pharmacyName = me?.pharmacy_name?.trim() || "المودة"
+  // Same rule as the page title: no cross-tenant fallback. A receipt is
+  // handed to a customer, so printing another client's name on it is worse
+  // than printing none.
+  const pharmacyName = me?.pharmacy_name?.trim() || ""
   const pharmacyLogo = me?.pharmacy_logo || ""
   const cashierName = displayName(user)
 

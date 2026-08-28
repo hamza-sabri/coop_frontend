@@ -39,10 +39,15 @@ export async function generateMetadata(): Promise<Metadata> {
   // Host header, or every store gets the generic brand.
   const slug = await currentSlug()
   const branding = await fetchBranding({ slug })
-  const name = branding?.name?.trim() || 'المودة'
+  // NEVER fall back to another tenant's name. This used to read 'المودة',
+  // so any store whose branding lookup failed — a slug mismatch, a cold
+  // backend during the Docker build — served a different client's brand in
+  // the browser tab. An unbranded title is a cosmetic miss; the wrong
+  // client's name on someone else's dashboard is not.
+  const name = branding?.name?.trim() || ''
   const hasLogo = Boolean(branding?.logo)
   return {
-    title: `${name} — لوحة التحكم`,
+    title: name ? `${name} — لوحة التحكم` : 'لوحة التحكم',
     description: 'نظام إدارة المنتجات والزبائن والديون للمتجر',
     generator: 'v0.app',
     // The manifest is a dynamic route (per-tenant name + icons).
