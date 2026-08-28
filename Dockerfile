@@ -46,6 +46,16 @@ ENV NEXT_PUBLIC_VERTICAL=$NEXT_PUBLIC_VERTICAL
 ARG NEXT_PUBLIC_ROOT_DOMAIN=
 ENV NEXT_PUBLIC_ROOT_DOMAIN=$NEXT_PUBLIC_ROOT_DOMAIN
 
+# Clerk's PUBLISHABLE key — public by design (it ships inside the browser
+# bundle; the secret key is the one that must never be built in).
+#
+# This ARG was missing. Next inlines NEXT_PUBLIC_* at build time, and
+# components/koup/auth.ts derives CLERK_ON from whether this value is present,
+# so without the ARG the deployed customer app came up with sign-in silently
+# switched OFF — no error, no log line, just no way for a customer to log in.
+ARG NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=
+ENV NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=$NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+
 # Convex (realtime cart sync) — public client URL, baked at build time.
 #
 # DEFAULT EMPTY, on purpose. This used to default to one shared Convex
