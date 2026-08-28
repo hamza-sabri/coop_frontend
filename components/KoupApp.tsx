@@ -595,6 +595,9 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
   }
 
   function go(s: Screen) {
+    /* "طلبي" is one destination with two faces: once an order is placed the
+       customer wants its status, not the basket they already emptied. */
+    if (s === 'cart' && ordered) s = 'track'
     if (s === screen) return
     SFX.tap()
     setScreen(s)
@@ -721,8 +724,11 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
                   onClick={e => { SFX.resume(); beanBurst(9, e.currentTarget) }}>
                   {t('home.scan', 'امسح عند الكاشير')}
                 </button>
+                {/* No longer a tab — نقاطي IS this screen now. What is left
+                    behind that door is the ledger: every point that moved and
+                    why. So it is named for what it holds. */}
                 <button className="btn-ghost press" onClick={() => go('wallet')}>
-                  {t('home.wallet', 'نقاطي')}
+                  {t('home.ledger', 'سجل النقاط')}
                 </button>
               </div>
 
@@ -738,6 +744,74 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
                   <div className="k">{t('stat.free', 'كاسات مجانية')}</div></div>
               </div>
               )}
+
+              {/* المكافآت, moved here from the old نقاطي screen. The two
+                  screens were one subject split across two tabs: a balance on
+                  one, and the reason the balance matters on the other. */}
+            {/* المكافآت, folded into this page. Two tabs for "your
+                points" and "what points get you" was one idea split
+                across two taps — the ladder and the rewards are the
+                reason the balance above matters. */}
+            <div className="greet"><div>
+              <h2>{t('r.h', 'المكافآت')}</h2><p>{t('r.sub', 'كل ما تزيد زياراتك، بتزيد نقاطك')}</p>
+            </div></div>
+            <div className="sechead" style={{ marginTop: 4 }}><h3>{t('r.tiers', 'مستواك')}</h3></div>
+            <div className="ladder">
+              {([['done', 1, 't1.n', 'سنجل', 't1.d', 'نقطة البداية · ١.٠×', '١.٠×'],
+                 ['now', 2, 't2.n', 'دوبل — مستواك الحالي', 't2.d', '١٠ زيارات بالشهر · بيضل ٣ شهور', '١.٢٥×'],
+                 ['', 3, 't3.n', 'تريبل', 't3.d', '٢٥٠٠ نقطة بالسنة · نقاطك ما بتنتهي أبداً', '١.٥×']] as const)
+                .map(([cls, shots, nk, nAr, dk, dAr, mult]) => (
+                  <div className={`rung ${cls}`} key={nk}>
+                    <div className="shots">
+                      {[0, 1, 2].slice(0, shots).map(i => <span className="shot on" key={i} />)}
+                    </div>
+                    <div className="t"><b>{t(nk, nAr)}</b><span>{t(dk, dAr)}</span></div>
+                    <span className="mult">{t(`${nk}x`, mult)}</span>
+                  </div>
+                ))}
+            </div>
+            <div className="mini" style={{ marginTop: 12 }}><i style={{ width: '38%' }} /></div>
+            <p style={{ fontSize: 11.5, color: 'var(--app-ink3)', marginTop: 7 }}>
+              {t('r.next', 'باقي ١٥٥٠ نقطة لتوصل تريبل')}
+            </p>
+
+            <div className="sechead"><h3>{t('r.streak', 'سلسلتك')}</h3></div>
+            <div className="chal">
+              <div className="chal-top">
+                <div className="chal-ic" style={{ background: 'rgba(217,124,103,.14)', color: 'var(--app-rust)' }}>
+                  <svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor"><path d={P.flame} /></svg>
+                </div>
+                <div className="t"><b>{t('r.streakT', '٦ أسابيع متتالية')}</b>
+                  <span>{t('r.streakS', 'زورنا قبل الأحد وبتصير ٧')}</span></div>
+                <span className="reward">{t('r.streakR', '+٢٥')}</span>
+              </div>
+              <div className="mini"><i style={{ width: '85%' }} /></div>
+              <div className="chal-foot"><span>{t('r.saver', 'عندك «منقذ سلسلة» واحد هالشهر')}</span></div>
+            </div>
+
+            <div className="sechead"><h3>{t('r.badges', 'شاراتك')}</h3></div>
+            <div className="badgewrap">
+              {([['🧊', 'b1', '٥ مشروبات باردة', 0], ['🥐', 'b2', 'فطور كوب ×٣', 0],
+                 ['⚽', 'b3', 'ليلة ماتش', 0], ['🔒', 'b4', 'بوكس كوب', 1],
+                 ['💪', 'b5', 'بروتين شيك', 0], ['🔒', 'b6', '١٠٠ كوب', 1],
+                 ['🔒', 'b7', 'فزّورة رمضان', 1], ['🔒', 'b8', 'ادعي ٣ أصحاب', 1]] as const)
+                .map(([e, k, ar, locked]) => (
+                  <div className={`bdg ${locked ? 'locked' : ''}`} key={k}>{e}
+                    <small>{t(k, ar)}</small></div>
+                ))}
+            </div>
+
+            <div className="sechead" style={{ marginTop: 34 }}><h3>{t('r.ref', 'ادعي صاحبك')}</h3></div>
+            <div className="chal">
+              <div className="chal-top">
+                <div className="chal-ic"><Icon d={P.gift} s={19} /></div>
+                <div className="t">
+                  <b style={{ fontFamily: 'var(--koup-fs-dis)', letterSpacing: '.06em' }}>HAMZA-KOUP</b>
+                  <span>{t('r.refS', 'إنت وهو بتاخدوا ٣٠ نقطة بعد أول طلب إله')}</span>
+                </div>
+                <span className="reward">{t('r.refR', '+٣٠')}</span>
+              </div>
+            </div>
 
               <div className="sechead"><h3>{t('home.live', 'طلبك الحالي')}</h3></div>
               <div className="livecard press" onClick={() => go('track')}>
@@ -946,7 +1020,7 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
               <div className="topfade" />
               <div className="hero-ui">
                 <div className="hero-top"><div className="greet"><div>
-                  <h2>{t('w.h', 'نقاطي')}</h2><p>{t('w.sub', 'عملة وحدة — ولا عملية حساب')}</p>
+                  <h2>{t('w.h', 'سجل النقاط')}</h2><p>{t('w.sub', 'كل نقطة إجت وين راحت')}</p>
                 </div></div></div>
                 <div className="hero-bottom">
                   <div className="balance">
@@ -1000,70 +1074,6 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
               </div>
             </div>
 
-            {/* المكافآت, folded into this page. Two tabs for "your
-                points" and "what points get you" was one idea split
-                across two taps — the ladder and the rewards are the
-                reason the balance above matters. */}
-            <div className="greet"><div>
-              <h2>{t('r.h', 'المكافآت')}</h2><p>{t('r.sub', 'كل ما تزيد زياراتك، بتزيد نقاطك')}</p>
-            </div></div>
-            <div className="sechead" style={{ marginTop: 4 }}><h3>{t('r.tiers', 'مستواك')}</h3></div>
-            <div className="ladder">
-              {([['done', 1, 't1.n', 'سنجل', 't1.d', 'نقطة البداية · ١.٠×', '١.٠×'],
-                 ['now', 2, 't2.n', 'دوبل — مستواك الحالي', 't2.d', '١٠ زيارات بالشهر · بيضل ٣ شهور', '١.٢٥×'],
-                 ['', 3, 't3.n', 'تريبل', 't3.d', '٢٥٠٠ نقطة بالسنة · نقاطك ما بتنتهي أبداً', '١.٥×']] as const)
-                .map(([cls, shots, nk, nAr, dk, dAr, mult]) => (
-                  <div className={`rung ${cls}`} key={nk}>
-                    <div className="shots">
-                      {[0, 1, 2].slice(0, shots).map(i => <span className="shot on" key={i} />)}
-                    </div>
-                    <div className="t"><b>{t(nk, nAr)}</b><span>{t(dk, dAr)}</span></div>
-                    <span className="mult">{t(`${nk}x`, mult)}</span>
-                  </div>
-                ))}
-            </div>
-            <div className="mini" style={{ marginTop: 12 }}><i style={{ width: '38%' }} /></div>
-            <p style={{ fontSize: 11.5, color: 'var(--app-ink3)', marginTop: 7 }}>
-              {t('r.next', 'باقي ١٥٥٠ نقطة لتوصل تريبل')}
-            </p>
-
-            <div className="sechead"><h3>{t('r.streak', 'سلسلتك')}</h3></div>
-            <div className="chal">
-              <div className="chal-top">
-                <div className="chal-ic" style={{ background: 'rgba(217,124,103,.14)', color: 'var(--app-rust)' }}>
-                  <svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor"><path d={P.flame} /></svg>
-                </div>
-                <div className="t"><b>{t('r.streakT', '٦ أسابيع متتالية')}</b>
-                  <span>{t('r.streakS', 'زورنا قبل الأحد وبتصير ٧')}</span></div>
-                <span className="reward">{t('r.streakR', '+٢٥')}</span>
-              </div>
-              <div className="mini"><i style={{ width: '85%' }} /></div>
-              <div className="chal-foot"><span>{t('r.saver', 'عندك «منقذ سلسلة» واحد هالشهر')}</span></div>
-            </div>
-
-            <div className="sechead"><h3>{t('r.badges', 'شاراتك')}</h3></div>
-            <div className="badgewrap">
-              {([['🧊', 'b1', '٥ مشروبات باردة', 0], ['🥐', 'b2', 'فطور كوب ×٣', 0],
-                 ['⚽', 'b3', 'ليلة ماتش', 0], ['🔒', 'b4', 'بوكس كوب', 1],
-                 ['💪', 'b5', 'بروتين شيك', 0], ['🔒', 'b6', '١٠٠ كوب', 1],
-                 ['🔒', 'b7', 'فزّورة رمضان', 1], ['🔒', 'b8', 'ادعي ٣ أصحاب', 1]] as const)
-                .map(([e, k, ar, locked]) => (
-                  <div className={`bdg ${locked ? 'locked' : ''}`} key={k}>{e}
-                    <small>{t(k, ar)}</small></div>
-                ))}
-            </div>
-
-            <div className="sechead" style={{ marginTop: 34 }}><h3>{t('r.ref', 'ادعي صاحبك')}</h3></div>
-            <div className="chal">
-              <div className="chal-top">
-                <div className="chal-ic"><Icon d={P.gift} s={19} /></div>
-                <div className="t">
-                  <b style={{ fontFamily: 'var(--koup-fs-dis)', letterSpacing: '.06em' }}>HAMZA-KOUP</b>
-                  <span>{t('r.refS', 'إنت وهو بتاخدوا ٣٠ نقطة بعد أول طلب إله')}</span>
-                </div>
-                <span className="reward">{t('r.refR', '+٣٠')}</span>
-              </div>
-            </div>
           </div>
         )}
 
@@ -1143,38 +1153,32 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
 
         {locked && Gate ? <Gate /> : null}
 
-        {/* ── tab bar ──────────────────────────────────────────────────── */}
-        {/* The middle of the bar is the one place a thumb reaches without
-            thinking, so it holds the thing the shop wants most — a new order —
-            not a cart that is empty the majority of the time. */}
+        {/* ── tab bar ──────────────────────────────────────────────────
+            Three tabs, down from five.
+
+            What was here: الرئيسية · المنيو · [+ طلب جديد] · المكافآت · السلة.
+            Two of those five did the same thing — newOrder() was literally
+            go('menu') — so the biggest, most prominent control on the screen
+            was a second door into the room next to it. Meanwhile the order
+            tracking screen, the thing a waiting customer checks most, had no
+            tab at all and could only be reached by tapping a card on home.
+
+            Now: نقاطي is the cup, the balance and the rewards. المنيو is
+            where you order. طلبي is one place for "my order" — the basket
+            before you send it, the live status after. */}
         <nav className="tabs">
-          {([['home', P.home, 'nav.home', 'الرئيسية'], ['menu', P.list, 'nav.menu2', 'المنيو']] as const)
-            .map(([s, d, k, ar]) => (
-              <button key={s} className="tab" aria-current={screen === s} onClick={() => go(s as Screen)}>
+          {([
+            ['home', P.home, 'nav.home', 'نقاطي'],
+            ['menu', P.list, 'nav.menu2', 'المنيو'],
+            ['cart', P.bag, 'nav.order', 'طلبي'],
+          ] as const).map(([sc, d, k, ar]) => (
+            <button key={sc} className="tab"
+              aria-current={screen === sc || (sc === 'cart' && screen === 'track')}
+              onClick={() => go(sc as Screen)}>
+              <span className="tabic" key={sc === 'cart' ? cartBump : undefined}
+                data-jump={sc === 'cart' && cartBump > 0 ? '1' : undefined}>
                 <Icon d={d} />
-                <span>{t(k, ar)}</span>
-              </button>
-            ))}
-
-          <button
-            className="tab tab-new press"
-            aria-label={t('nav.new', 'طلب جديد')}
-            onClick={() => { SFX.tap(); haptic(12); newOrder() }}
-          >
-            <span className="newring" aria-hidden />
-            <span className="newdot">
-              <svg viewBox="0 0 24 24" aria-hidden><path d="M12 5v14M5 12h14" /></svg>
-            </span>
-            <span>{t('nav.new', 'طلب جديد')}</span>
-          </button>
-
-          {([['wallet', '', 'nav.rewards2', 'المكافآت'],
-             ['cart', P.bag, 'nav.cart2', 'السلة']] as const).map(([s, d, k, ar]) => (
-            <button key={s} className="tab" aria-current={screen === s} onClick={() => go(s as Screen)}>
-              <span className="tabic" key={s === 'cart' ? cartBump : undefined}
-                data-jump={s === 'cart' && cartBump > 0 ? '1' : undefined}>
-                {d ? <Icon d={d} /> : <Bean s={21} />}
-                {s === 'cart' && cartCount > 0 && (
+                {sc === 'cart' && cartCount > 0 && (
                   <span className="tabcount num">{cartCount}</span>
                 )}
               </span>
