@@ -605,7 +605,15 @@ body:has(.koup){overflow:hidden}
     100%{transform:scale(.90) rotateY(-13deg) translateZ(-30px);opacity:.88}}
 }
 
-.pcard{position:relative;aspect-ratio:3/4.05;border-radius:28px;overflow:hidden;cursor:pointer;
+/* content-visibility is the single biggest win on the menu list. Forty-five
+   cards each carry a background-image, a glow layer and a gloss layer; without
+   this the browser lays out, paints and DECODES every one of them on first
+   render, which on a mid-range Android is seconds of blocked main thread and
+   a scroll that never catches up. With it, off-screen cards cost nothing
+   until they approach the viewport. contain-intrinsic-size keeps the
+   scrollbar honest so the list does not jump as they realise their size. */
+.pcard{content-visibility:auto;contain-intrinsic-size:auto 320px;
+  position:relative;aspect-ratio:3/4.05;border-radius:28px;overflow:hidden;cursor:pointer;
   border:1px solid rgba(255,255,255,.10);isolation:isolate;
   box-shadow:0 18px 36px -18px rgba(0,0,0,.85), inset 0 1px 0 rgba(255,255,255,.12);
   transition:transform var(--d3) var(--spring),box-shadow var(--d3) var(--ease),

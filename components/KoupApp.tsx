@@ -289,8 +289,20 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
     const mount = () => Cup.mountTo(screen === 'wallet' ? walletHeroRef.current : heroRef.current)
     const onResize = () => Cup.resize()
     window.addEventListener('resize', onResize)
-    const unlock = () => SFX.resume()
-    window.addEventListener('pointerdown', unlock, { once: true })
+    /* Not `once`, and in the CAPTURE phase. A single bubbling one-shot
+       listener is exactly how audio ended up working "sometimes": any child
+       that called stopPropagation ate the one gesture we were given, and
+       there was no second chance. This re-arms until the context is really
+       running, then takes itself off. */
+    const unlock = () => {
+      SFX.resume()
+      if (SFX.running?.()) {
+        for (const ev of ['pointerdown', 'touchend', 'click'] as const)
+          window.removeEventListener(ev, unlock, true)
+      }
+    }
+    for (const ev of ['pointerdown', 'touchend', 'click'] as const)
+      window.addEventListener(ev, unlock, true)
 
     /* Nothing may depend on an animation callback firing. The splash is a
        full-screen z-90 cover: if its timeline stalls — a background tab, a
@@ -300,9 +312,15 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
     const finish = () => {
       if (introRef.current) return
       introRef.current = true
-      writePrefs({ seenIntro: true })
       setSplashUp(false); setIntroDone(true)
-      mount(); playIntro()
+      mount()
+      if (readPrefs().seenIntro === true) {
+        // Seen the pour before: hand over a full cup and the real balance.
+        restState()
+      } else {
+        writePrefs({ seenIntro: true })
+        playIntro()
+      }
     }
 
     /* The opening is a WELCOME, so it only earns its four seconds when there
@@ -312,8 +330,12 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
            back in with an account.
          · already seen → skip it: on the second launch a four-second lockout
            in front of your own points is not delight, it is a loading screen. */
-    const skipIntro = authLocked || readPrefs().seenIntro === true
-    if (!started || reduced || skipIntro) {
+    /* The lockup plays every launch — it is three seconds of brand and it is
+       the point of opening the app. What must NOT repeat is the POUR: the cup
+       filling from empty is a first-run story, and on the fiftieth launch it
+       is a wait between you and your balance. So the splash is gated only on
+       being signed in; the pour is gated on having seen it (see finish). */
+    if (!started || reduced || authLocked) {
       introRef.current = true
       setSplashUp(false); setIntroDone(true); restState(); mount(); return
     }
@@ -338,7 +360,9 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
 
     return () => {
       window.clearTimeout(floor); tl.kill()
-      window.removeEventListener('resize', onResize); window.removeEventListener('pointerdown', unlock)
+      window.removeEventListener('resize', onResize)
+      for (const ev of ['pointerdown', 'touchend', 'click'] as const)
+        window.removeEventListener(ev, unlock, true)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])

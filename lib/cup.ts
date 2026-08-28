@@ -34,6 +34,8 @@ function lowPower(): boolean {
 
 export const Cup = (() => {
   let running = false;
+  let frame = false;
+  const slow = lowPower();
 /* ══════════════════════════════════════════════════════════════════════════
  THE CUP — WebGL clay render of the كوب cup.
  Liquid = a column cut by a clipping plane + a sloshing shader surface.
@@ -364,6 +366,11 @@ function tick(): void {
   if(!ok || !mount || document.hidden){ running = false; return; }
   running = true;
   requestAnimationFrame(tick);
+  /* Half frame rate on weak hardware. The cup is a slow, floaty object —
+     nothing in it moves fast enough for 30fps to read as choppy — and this
+     hands the other half of every frame budget back to scrolling, which the
+     customer touches constantly and notices immediately. */
+  if(slow){ frame = !frame; if(!frame) return; }
   const t = (performance.now() - t0) / 1000;
   if(lerping){ fill += (targetFill - fill) * .09; applyFill(fill); }
   wobble += (0 - wobble) * .028;

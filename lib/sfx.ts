@@ -52,12 +52,29 @@ export const SFX = (() => {
     return true
   }
 
+  /* Why sound was intermittent on a phone.
+     resume() is ASYNCHRONOUS. The old code called it and then, on the very
+     same tick, asked `state === 'running'` — which is still 'suspended' — so
+     it returned null and the sound was dropped. Whether you heard anything
+     depended on whether some earlier gesture had happened to resume the
+     context already: sometimes yes, sometimes no, exactly as reported.
+     Now the resume is kicked off once, and until it lands we schedule on the
+     suspended context anyway. Web Audio holds those events and plays them the
+     instant the context starts, so the first tap makes a sound instead of
+     being swallowed. */
+  let resuming = false
   function live(){ const c = boot(); if(!c || !on) return null;
-    if(c.state === 'suspended') c.resume();
+    if(c.state === 'suspended' && !resuming){
+      resuming = true
+      const done = () => { resuming = false }
+      try { const p = c.resume(); if (p && p.then) p.then(done, done); else done() }
+      catch { done() }
+    }
     /* Fetch the file on the first sound of the session, not on the first pour
        — otherwise the pour, which is the one that matters, gets the synth. */
     void loadSample(c, 'pour'); void loadSample(c, 'drop');
-    return c.state === 'running' ? c : null; }
+    // 'closed' is the only state that can never produce sound again.
+    return c.state === 'closed' ? null : c; }
   function tone(f: number, t: number, dur: number, peak: number, type?: string){
     const c = live(); if(!c) return;
     const o = c.createOscillator(), g = c.createGain();
@@ -84,6 +101,9 @@ export const SFX = (() => {
   }
   return {
     enabled: () => on,
+    /** Is the AudioContext actually started? The unlock listeners use this
+     *  to know when to stop re-arming. */
+    running: () => Boolean(ctx && ctx.state === 'running'),
     toggle(){ on = !on; writePrefs({ sound: on }); if(on) live(); return on; },
     /** Set the mute state explicitly (and remember it). */
     setEnabled(next: boolean){ on = next; writePrefs({ sound: on }); if(on) live(); return on; },
