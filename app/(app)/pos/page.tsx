@@ -1772,7 +1772,7 @@ function PosPageInner() {
         </div>
         <div className="flex items-center gap-2">
           <Link
-            href="/sales"
+            href="/orders"
             className="inline-flex h-9 items-center gap-1.5 rounded-full border border-border bg-card px-3.5 text-xs font-medium shadow-sm transition hover:border-primary/40 hover:text-primary md:hidden"
           >
             <ChartColumn className="size-4" />

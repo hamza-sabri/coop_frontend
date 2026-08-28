@@ -25,12 +25,21 @@ export function usePagedList<T>(
   page: number,
   pageSize: number,
   enabled = true,
+  /**
+   * Poll interval in ms. Off by default — most lists are opened, read and
+   * left. Pass one for a queue somebody is watching (the orders board), where
+   * a row that appears thirty seconds late is the whole feature failing.
+   */
+  refetchInterval?: number,
 ) {
   const query = useQuery({
     queryKey: [...keyBase, "paged", params, page],
     queryFn: () => fetcher({ ...params, page, page_size: pageSize }),
     enabled,
     placeholderData: keepPreviousData,
+    refetchInterval,
+    // A till that has been asleep must not show a stale board when it wakes.
+    refetchOnWindowFocus: refetchInterval ? true : undefined,
   })
 
   const results = query.data?.data.results ?? []

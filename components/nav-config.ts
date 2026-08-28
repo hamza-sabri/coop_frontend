@@ -46,7 +46,10 @@ export const NAV_ITEMS: NavItem[] = [
      nothing was deleted — they are simply not in the navigation, so they can
      come back for a vertical that needs them by restoring these two entries. */
   // On the mobile bottom bar (took the debts slot) + the desktop rail.
-  { href: "/sales", label: "المبيعات", icon: ShoppingBag, module: "pos" },
+  /* الطلبات, not المبيعات. This is a coffee shop: the counter takes orders,
+     it does not record "sales" the way a supermarket till does. Same data,
+     the word the staff actually use. /sales still redirects here. */
+  { href: "/orders", label: "الطلبات", icon: ShoppingBag, module: "pos" },
   {
     href: "/reports",
     label: "التقارير",
