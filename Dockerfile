@@ -56,6 +56,15 @@ ENV NEXT_PUBLIC_ROOT_DOMAIN=$NEXT_PUBLIC_ROOT_DOMAIN
 ARG NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=
 ENV NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=$NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
 
+# Facebook sign-in is off unless switched on explicitly. Clerk's DEVELOPMENT
+# instances use Clerk's own shared Facebook app, which Meta deactivated — the
+# button led to "App not active" for every Clerk dev instance, ours included.
+# With custom Meta credentials now configured in Clerk's Facebook connection,
+# set this to "on". Like every NEXT_PUBLIC_* it is inlined at build time, so it
+# needs an ARG here or the build-arg value is silently dropped.
+ARG NEXT_PUBLIC_KOUP_FACEBOOK=
+ENV NEXT_PUBLIC_KOUP_FACEBOOK=$NEXT_PUBLIC_KOUP_FACEBOOK
+
 # Convex (realtime cart sync) — public client URL, baked at build time.
 #
 # DEFAULT EMPTY, on purpose. This used to default to one shared Convex
