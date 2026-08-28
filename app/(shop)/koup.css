@@ -651,6 +651,33 @@ body:has(.koup){overflow:hidden}
 @media (prefers-reduced-motion:reduce){
   .pcard-gloss{background-position:50% 0;transition:none}}
 
+/* Scroll-driven, on the compositor, where this belongs.
+   The JS version read getBoundingClientRect() and then wrote a style for each
+   of ~45 cards on every scroll frame — a read/write/read/write cycle that
+   forces synchronous layout forty-five times per frame. That is the single
+   most expensive thing the app did while scrolling, and it did it on the one
+   interaction a customer performs constantly.
+   Chrome on Android supports view() timelines, so there the whole effect runs
+   off the main thread and the JS never touches a card. Safari does not, and
+   the JS fallback below still handles it — batched, not thrashing. */
+@supports (animation-timeline: view()){
+  .pcard-gloss{
+    transition:none;
+    animation:pgloss linear both;
+    animation-timeline:view();
+    animation-range:cover 0% cover 100%;
+  }
+  @keyframes pgloss{
+    from{background-position:132% 0}
+    to{background-position:-32% 0}
+  }
+  /* A carpet scrolls sideways; the sheen should follow the same axis. */
+  .pcarpet .pcard-gloss{animation-timeline:view(inline)}
+}
+@media (prefers-reduced-motion:reduce){
+  @supports (animation-timeline: view()){ .pcard-gloss{animation:none} }
+}
+
 .pcard-glow{position:absolute;left:50%;top:34%;width:74%;aspect-ratio:1;z-index:0;
   transform:translate(-50%,-50%);border-radius:50%;pointer-events:none;
   background:radial-gradient(circle, color-mix(in oklab, var(--c) 55%, transparent), transparent 66%);
@@ -865,3 +892,47 @@ body:has(.koup){overflow:hidden}
 @media (prefers-reduced-motion:reduce){
   .ptr-dot,.ptr-dot.spin{animation:none;transition:none}
 }
+
+/* ══ LITE MODE ═══════════════════════════════════════════════════════════
+   Set by KoupApp on phones that reported four cores or less, four gigabytes
+   or less, or a reduced-motion preference. Everything switched off here is
+   something the GPU pays for on EVERY frame, whether or not anything moved:
+
+   · backdrop-filter — eleven of them, several on chrome that is always on
+     screen. Each one snapshots what is behind it and blurs it, per frame.
+     On mid-range Android this is usually the single biggest cost in a UI
+     like this one.
+   · .pcard-glow — filter:blur(16px) on an infinitely animating element,
+     once per menu card. Blur is a full GPU pass; forty-five of them running
+     forever is not a background detail, it is the frame budget.
+   · pbob / pspin — two more infinite animations per card.
+   · mix-blend-mode — forces each card's sheen into its own compositing pass.
+
+   None of this is removed for everyone: a capable phone still gets the whole
+   thing. This is the difference between "pretty" and "pretty, on a phone the
+   customer actually owns". */
+.koup[data-lite="true"] .koup-topbar,
+.koup[data-lite="true"] .koup-chrome,
+.koup[data-lite="true"] .tabbar,
+.koup[data-lite="true"] .scrim,
+.koup[data-lite="true"] .sheet-body,
+.koup[data-lite="true"] .gate,
+.koup[data-lite="true"] .chip,
+.koup[data-lite="true"] .pcard-banner{
+  backdrop-filter:none !important;
+  -webkit-backdrop-filter:none !important;
+}
+/* The blur was doing the work of separating these from the page; without it
+   they need real opacity or they read as floating text. */
+.koup[data-lite="true"] .koup-topbar,
+.koup[data-lite="true"] .tabbar{background:rgba(11,17,41,.94)}
+
+.koup[data-lite="true"] .pcard-glow{display:none}
+.koup[data-lite="true"] .pcard-gloss{mix-blend-mode:normal;opacity:.5;animation:none}
+.koup[data-lite="true"] .pcard-emoji{animation:none}
+.koup[data-lite="true"] .btn-gold::after{animation:none}
+/* The page's ambient wash: an inset:-18% pseudo-element carrying four radial
+   gradients, blurred 6px, animated forever. It is a full-viewport blurred
+   layer being recomposited for the life of the session. Lite mode keeps the
+   gradients — they are the brand — and drops the blur and the drift. */
+.koup[data-lite="true"]::before{filter:none;animation:none}

@@ -16,6 +16,7 @@ import { Cup } from '@/lib/cup'
 import { SFX, haptic } from '@/lib/sfx'
 import { readPrefs, writePrefs } from '@/lib/koup-prefs'
 import { usePullToRefresh } from '@/lib/use-pull-to-refresh'
+import { lowPower } from '@/lib/device'
 import { CATS as FALLBACK_CATS, TAGS, T, type Item } from '@/lib/menu'
 import { useKoupMenu } from '@/lib/koup-menu'
 
@@ -228,6 +229,12 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
   const cupsThisYear = me?.cups_this_year ?? 0
   const freeCups = me?.free_cups ?? 0
 
+  /* Decided once on mount — matchMedia and hardwareConcurrency are stable for
+     the life of the page, and re-reading them per render would only add work
+     to the thing we are trying to make cheaper. */
+  const [lite, setLite] = useState(false)
+  useEffect(() => { setLite(lowPower()) }, [])
+
   /* Pull down to refresh. The customer has just been to the counter and wants
      to watch the number move; making them kill the app to see it is the kind
      of small betrayal that gets a loyalty app deleted. */
@@ -260,19 +267,36 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
     if (glossRaf.current) return
     glossRaf.current = requestAnimationFrame(() => { glossRaf.current = 0; glossPaint() })
   }
+  /* Where the browser can drive the sheen from a view() timeline it does, on
+     the compositor, and this never runs. See koup.css. */
+  const CSS_GLOSS = typeof CSS !== 'undefined'
+    && CSS.supports?.('animation-timeline: view()')
+
   function glossPaint() {
-    {
-      const root = rootRef.current
-      if (!root) return
-      root.querySelectorAll<HTMLElement>('.pcard').forEach(card => {
-        const r = card.getBoundingClientRect()
-        const carpet = !!card.closest('.pcarpet')
-        const span = carpet ? window.innerWidth : window.innerHeight
-        const centre = carpet ? r.left + r.width / 2 : r.top + r.height / 2
-        const gp = Math.max(0, Math.min(1, centre / Math.max(1, span)))
-        const sheen = card.querySelector<HTMLElement>('.pcard-gloss')
-        if (sheen) sheen.style.backgroundPosition = `${(132 - 164 * gp).toFixed(1)}% 0`
-      })
+    if (CSS_GLOSS) return
+    const root = rootRef.current
+    if (!root) return
+    const cards = root.querySelectorAll<HTMLElement>('.pcard')
+    /* READ everything first, THEN write. Interleaving them — measure a card,
+       style it, measure the next — invalidates layout on every write and
+       forces the browser to recompute it on the very next read, once per
+       card, per frame. Splitting the phases is the whole fix. */
+    const n = cards.length
+    const sheens: (HTMLElement | null)[] = new Array(n)
+    const pos: number[] = new Array(n)
+    const vh = window.innerHeight, vw = window.innerWidth
+    for (let i = 0; i < n; i++) {
+      const card = cards[i]
+      const r = card.getBoundingClientRect()
+      const carpet = !!card.closest('.pcarpet')
+      const span = carpet ? vw : vh
+      const centre = carpet ? r.left + r.width / 2 : r.top + r.height / 2
+      pos[i] = Math.max(0, Math.min(1, centre / Math.max(1, span)))
+      sheens[i] = card.querySelector<HTMLElement>('.pcard-gloss')
+    }
+    for (let i = 0; i < n; i++) {
+      const sheen = sheens[i]
+      if (sheen) sheen.style.backgroundPosition = `${(132 - 164 * pos[i]).toFixed(1)}% 0`
     }
   }
   useEffect(() => {
@@ -588,6 +612,12 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
 
   return (
     <div className="koup" dir={rtl ? 'rtl' : 'ltr'} data-lang={lang} ref={rootRef}
+      /* Lite mode. Everything expensive in this stylesheet — eleven
+         backdrop-filters, a blurred glow behind every menu card, three
+         infinite per-card animations — is switched off from one attribute
+         instead of being sprinkled through the components. On a capable
+         phone nothing changes. */
+      data-lite={lite ? 'true' : 'false'}
       data-locked={locked ? 'true' : 'false'}>
       <div className="koup-inner">
 

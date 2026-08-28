@@ -17,20 +17,7 @@ import { gsap } from 'gsap'
 const T: any = THREE
 const G = gsap
 
-/* Is this a phone that will struggle? No API answers that, so this is the
-   usual triangulation: core count, reported memory, and the user's own
-   reduced-motion preference, which is also a "keep it calm" signal. Wrong
-   guesses are cheap in one direction (a slightly softer cup) and expensive in
-   the other (a café app that stutters), so it errs toward cheap. */
-function lowPower(): boolean {
-  if (typeof navigator === "undefined") return false;
-  const nav = navigator as Navigator & { deviceMemory?: number };
-  if (typeof matchMedia === "function"
-      && matchMedia("(prefers-reduced-motion: reduce)").matches) return true;
-  if ((nav.hardwareConcurrency ?? 8) <= 4) return true;
-  if ((nav.deviceMemory ?? 8) <= 4) return true;
-  return false;
-}
+import { lowPower } from "@/lib/device";
 
 export const Cup = (() => {
   let running = false;
