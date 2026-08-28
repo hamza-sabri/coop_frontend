@@ -15,6 +15,7 @@ import { gsap } from 'gsap'
 import { Cup } from '@/lib/cup'
 import { SFX, haptic } from '@/lib/sfx'
 import { readPrefs, writePrefs } from '@/lib/koup-prefs'
+import { usePullToRefresh } from '@/lib/use-pull-to-refresh'
 import { CATS as FALLBACK_CATS, TAGS, T, type Item } from '@/lib/menu'
 import { useKoupMenu } from '@/lib/koup-menu'
 
@@ -214,7 +215,29 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
      Auth arrives as a prop so this component never depends on Clerk being
      configured: with no keys the app simply runs open, which is what keeps
      local development working before the keys land. */
-  const { locked: authLocked, user, Gate, openProfile, Account, Phone, Install } = auth
+  const { locked: authLocked, user, Gate, openProfile, Account, Phone, Install, me, refreshMe } = auth
+
+  /* The real numbers. `me` is null while signed out, and briefly on a cold
+     first launch before the cache or the network answers — so every read
+     falls back to 0 rather than to a flattering invention. START_BEANS
+     survives only as the number the DRAWN cup fills to in the signed-out
+     teaser, where it is decoration, not a claim about anyone. */
+  const beans = me?.beans ?? 0
+  const toNext = me?.to_next_reward ?? 0
+  const streakWeeks = me?.streak_weeks ?? 0
+  const cupsThisYear = me?.cups_this_year ?? 0
+  const freeCups = me?.free_cups ?? 0
+
+  /* Pull down to refresh. The customer has just been to the counter and wants
+     to watch the number move; making them kill the app to see it is the kind
+     of small betrayal that gets a loyalty app deleted. */
+  const doRefresh = useCallback(async () => {
+    haptic([8])
+    await refreshMe?.()
+  }, [refreshMe])
+  const { pull, busy: refreshing, ready: pullReady } =
+    usePullToRefresh(scrollRef, doRefresh, !authLocked)
+
   const locked = authLocked && introDone
   const reduced = typeof window !== 'undefined'
     && window.matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -349,8 +372,25 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
   /* the cup follows whichever hero is on screen */
   useEffect(() => {
     if (!Cup.ok() || splashUp) return
-    Cup.mountTo(screen === 'wallet' ? walletHeroRef.current : screen === 'home' ? heroRef.current : null)
+    const target = screen === 'wallet' ? walletHeroRef.current
+      : screen === 'home' ? heroRef.current : null
+    /* mountTo(null) used to be a no-op — it returns early on a falsy element —
+       so on the menu, cart and rewards screens the canvas stayed attached to
+       the last hero and kept rendering behind them. Unmounting explicitly is
+       what actually stops the work; the render loop then ends itself on the
+       next frame. */
+    if (target) Cup.mountTo(target)
+    else Cup.unmount()
   }, [screen, splashUp])
+
+  /* The drawn cup fills to the customer's REAL balance. beansRef started at
+     the 248 literal, so the cup poured to a stranger's number. */
+  useEffect(() => {
+    if (!me) return
+    beansRef.current = me.beans
+    setBalance(me.beans)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [me?.beans])
 
   function restState() {
     Cup.setFill(FILL); Cup.ringTo(FILL, 0); Cup.steamTo(0.85, 0); Cup.streamTo(0, 0); Cup.beansIn()
@@ -536,7 +576,7 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
             <circle cx="49" cy="19" r="3" fill="#DDBC8A"/>
           </svg>
           <span className="tb-point"><Bean s={15} /></span>
-          <span className="tb-n num" ref={topBalRef}>{START_BEANS}</span>
+          <span className="tb-n num" ref={topBalRef}>{beans}</span>
           <span className="tb-u">{t('unit.points', 'نقطة')}</span>
         </header>
 
@@ -555,7 +595,14 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
 
         {/* ── HOME ─────────────────────────────────────────────────────── */}
         {screen === 'home' && (
-          <div className="app-scroll hero-mode koup-scroll" ref={scrollRef} onScroll={() => paintGloss()}>
+          <div className="app-scroll hero-mode koup-scroll" ref={scrollRef} onScroll={() => paintGloss()}
+            style={pull ? { transform: `translateY(${pull}px)`, transition: refreshing ? 'none' : undefined } : undefined}>
+            {pull > 0 && (
+              <div className="ptr" data-ready={pullReady ? 'true' : 'false'}
+                style={{ height: pull, opacity: Math.min(1, pull / 48) }}>
+                <span className={refreshing ? 'ptr-dot spin' : 'ptr-dot'} />
+              </div>
+            )}
             <div className="hero3d" ref={heroRef}
               onClick={() => { SFX.resume(); Cup.pop(); Cup.splash(.7) }}>
               <div className="topfade" />
@@ -594,14 +641,14 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
                     </p>
                   ) : (
                   <div className="balance">
-                    <span className="n num" ref={balRef}>{START_BEANS}</span>
+                    <span className="n num" ref={balRef}>{beans}</span>
                     <span className="u">{t('unit.points', 'نقطة')}</span>
                   </div>
                   )}
                   {!authLocked && (
                     <p className="tonext">
-                      {rtl ? 'باقي ' : ''}<b className="num" ref={gapRef as any}>12</b>
-                      {t('home.tonextTail', ' نقطة وآيس لاتيه الكراميل علينا 🎉')}
+                      {rtl ? 'باقي ' : ''}<b className="num" ref={gapRef as any}>{toNext}</b>
+                      {t('home.tonextTail', ' نقطة وكوب علينا 🎉')}
                     </p>
                   )}
                 </div>
@@ -610,7 +657,6 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
 
             <div className="panel" ref={panelRef}>
               {Install ? <Install /> : null}
-              {Phone ? <Phone armed={ordered} /> : null}
               <div className="cupcta">
                 <button className="btn-gold press"
                   onClick={e => { SFX.resume(); beanBurst(9, e.currentTarget) }}>
@@ -625,11 +671,11 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
               <div className="strip">
                 <div className="stat"><div className="v">
                   <svg width="15" height="15" className="flame" viewBox="0 0 24 24" fill="currentColor"><path d={P.flame} /></svg>
-                  <span className="num">6</span></div>
+                  <span className="num">{streakWeeks}</span></div>
                   <div className="k">{t('stat.streak', 'أسابيع متتالية')}</div></div>
-                <div className="stat"><div className="v num">34</div>
+                <div className="stat"><div className="v num">{cupsThisYear}</div>
                   <div className="k">{t('stat.cups', 'كوب هالسنة')}</div></div>
-                <div className="stat"><div className="v num">3</div>
+                <div className="stat"><div className="v num">{freeCups}</div>
                   <div className="k">{t('stat.free', 'كاسات مجانية')}</div></div>
               </div>
               )}
@@ -1018,6 +1064,12 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
         </div>
 
         {/* ── splash ───────────────────────────────────────────────────── */}
+        {/* The phone prompt lived inside the HOME panel, and placing an order
+            navigates to the tracking screen — so the one moment it exists to
+            catch was the one moment it was unmounted. It asks once, only when
+            Clerk has no number on file, and remembers a dismissal. */}
+        {Phone ? <Phone armed={ordered} /> : null}
+
         {splashUp && (
           <div className="splash">
             <div className="splash-in">

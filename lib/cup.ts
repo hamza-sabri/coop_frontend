@@ -17,7 +17,23 @@ import { gsap } from 'gsap'
 const T: any = THREE
 const G = gsap
 
+/* Is this a phone that will struggle? No API answers that, so this is the
+   usual triangulation: core count, reported memory, and the user's own
+   reduced-motion preference, which is also a "keep it calm" signal. Wrong
+   guesses are cheap in one direction (a slightly softer cup) and expensive in
+   the other (a café app that stutters), so it errs toward cheap. */
+function lowPower(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const nav = navigator as Navigator & { deviceMemory?: number };
+  if (typeof matchMedia === "function"
+      && matchMedia("(prefers-reduced-motion: reduce)").matches) return true;
+  if ((nav.hardwareConcurrency ?? 8) <= 4) return true;
+  if ((nav.deviceMemory ?? 8) <= 4) return true;
+  return false;
+}
+
 export const Cup = (() => {
+  let running = false;
 /* ══════════════════════════════════════════════════════════════════════════
  THE CUP — WebGL clay render of the كوب cup.
  Liquid = a column cut by a clipping plane + a sloshing shader surface.
@@ -88,7 +104,11 @@ function init(){
   try{ renderer = new T.WebGLRenderer({ antialias:true, alpha:true, powerPreference:'high-performance' }); }
   catch { return false; }
   if(!renderer) return false;
-  renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 1.75));
+  /* Shader cost scales with the square of this number, and it is the single
+     biggest lever on a phone. A 3x Android screen rendering at 1.75 is doing
+     three times the fragment work of one at 1.0 for a cup that is 40mm tall.
+     Weak devices get 1.15; everything else keeps the crisp 1.75. */
+  renderer.setPixelRatio(Math.min(devicePixelRatio || 1, lowPower() ? 1.15 : 1.75));
   renderer.toneMapping = T.ACESFilmicToneMapping;
   renderer.toneMappingExposure = .96;
   renderer.outputColorSpace = T.SRGBColorSpace;
@@ -319,7 +339,14 @@ let mount: HTMLElement | null = null;
 function mountTo(el: HTMLElement | null){
   if(!ok || !el || mount === el) return;
   mount = el; el.appendChild(renderer.domElement); resize();
+  kick();
 }
+
+/** Unhook the canvas. The loop stops itself on the next frame. */
+function unmount(){ mount = null; }
+
+/** Restart the loop if it stopped while nothing was mounted. */
+function kick(){ if(ok && mount && !running) tick(); }
 function resize(){
   if(!ok || !mount) return;
   const r = mount.getBoundingClientRect();
@@ -329,8 +356,14 @@ function resize(){
 }
 
 function tick(): void {
+  /* Only keep the loop alive while there is something to draw. The old
+     version called requestAnimationFrame unconditionally and then returned
+     early — so an unmounted cup still woke the compositor sixty times a
+     second, on every screen of the app, for nothing. On a mid-range Android
+     that is a measurable slice of the battery and the jank. */
+  if(!ok || !mount || document.hidden){ running = false; return; }
+  running = true;
   requestAnimationFrame(tick);
-  if(!ok || !mount || document.hidden) return;
   const t = (performance.now() - t0) / 1000;
   if(lerping){ fill += (targetFill - fill) * .09; applyFill(fill); }
   wobble += (0 - wobble) * .028;
@@ -364,7 +397,8 @@ function tick(): void {
 return {
   start(){ if(init()) tick(); return ok; },
   ok: () => ok,
-  mountTo, resize,
+  mountTo, unmount, resize, kick,
+  lowPower,
   /* ambient, lerped — used by the bean-drop */
   setFill(f: number){ targetFill = Math.max(0, Math.min(1, f)); lerping = true; },
   getFill: () => (lerping ? targetFill : fill),

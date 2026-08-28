@@ -14,9 +14,15 @@
 import { useEffect, useState } from "react"
 
 import { MENU as FALLBACK, type Item } from "@/lib/menu"
+import { getPharmacySlug } from "@/lib/site"
 
 const API = process.env.NEXT_PUBLIC_API_BASE_URL ?? ""
-const SLUG = process.env.NEXT_PUBLIC_PHARMACY_SLUG ?? ""
+/* The tenant comes from the HOST, not the build. NEXT_PUBLIC_PHARMACY_SLUG is
+   only the local-dev fallback inside getPharmacySlug(); reading it directly
+   here is how the app once asked for store "koup" while every other part of
+   the system had resolved "coop" from coop.clinixa.cloud — a 404 that looked
+   like an empty menu. */
+const MENU_CACHE_KEY = "koup.menu.v1"
 
 type ApiItem = {
   id: number
@@ -58,6 +64,16 @@ function toItem(r: ApiItem): Item {
     g: tone(r.category || r.name),
     t: [],
     image: r.image || undefined,
+    /* The real options, straight from the same rows the till sells. The
+       hard-coded الحجم / الحليب groups below them were prototype furniture
+       from before the menu existed — this menu has no sizes at all. */
+    v: r.variants.map((x) => ({
+      id: x.id,
+      label: (x as { label?: string; name?: string }).label
+        ?? (x as { name?: string }).name
+        ?? "",
+      price: Number(x.price) || price,
+    })),
   }
 }
 
@@ -67,6 +83,18 @@ export type KoupMenu = {
   live: boolean
 }
 
+type CachedMenu = { items: ApiItem[]; categories: { name: string; icon: string }[] }
+
+function readMenuCache(): CachedMenu | null {
+  if (typeof window === "undefined") return null
+  try {
+    const raw = window.localStorage.getItem(MENU_CACHE_KEY)
+    return raw ? (JSON.parse(raw) as CachedMenu) : null
+  } catch {
+    return null
+  }
+}
+
 export function useKoupMenu(): KoupMenu {
   const [menu, setMenu] = useState<KoupMenu>({
     items: FALLBACK,
@@ -74,17 +102,41 @@ export function useKoupMenu(): KoupMenu {
     live: false,
   })
 
+  /* THE SHOP'S menu, from cache, before the network is asked. Without this a
+     customer with no signal saw `lib/menu.ts` — a bundled list that is not
+     this café's menu and never will be. A stale real menu beats a fresh
+     fictional one. */
+  useEffect(() => {
+    const c = readMenuCache()
+    if (!c?.items?.length) return
+    setMenu({
+      items: c.items.map(toItem),
+      cats: c.categories.map((x) => ({ k: x.name, ar: x.name, en: x.name, he: x.name })),
+      live: true,
+    })
+  }, [])
+
   useEffect(() => {
     let alive = true
     ;(async () => {
       try {
-        const r = await fetch(`${API}/api/v1/public/menu/?store=${encodeURIComponent(SLUG)}`)
+        const slug = getPharmacySlug()
+        if (!slug) return
+        const r = await fetch(`${API}/api/v1/public/menu/?store=${encodeURIComponent(slug)}`)
         if (!r.ok) return
         const j = (await r.json()) as {
           categories: { name: string; icon: string }[]
           items: ApiItem[]
         }
         if (!alive || !j.items?.length) return
+        try {
+          window.localStorage.setItem(
+            MENU_CACHE_KEY,
+            JSON.stringify({ items: j.items, categories: j.categories ?? [] }),
+          )
+        } catch {
+          /* quota or private mode — the menu just won't survive a cold start */
+        }
         setMenu({
           items: j.items.map(toItem),
           // The category key IS the name: one less mapping to keep in sync,

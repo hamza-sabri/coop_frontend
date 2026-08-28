@@ -841,3 +841,19 @@ body:has(.koup){overflow:hidden}
 /* an order needs the shop to be reachable */
 .cta:disabled{opacity:.45;cursor:default;filter:grayscale(.4)}
 .cta:disabled::after{display:none}
+
+/* ── pull to refresh ─────────────────────────────────────────────────────
+   The indicator lives INSIDE the scroller and is sized by the pull itself,
+   so it pushes the content down exactly as far as the finger travelled — no
+   absolute positioning to keep in sync with the transform. */
+.ptr{display:flex;align-items:center;justify-content:center;overflow:hidden;
+  pointer-events:none}
+.ptr-dot{width:20px;height:20px;border-radius:50%;
+  border:2px solid var(--app-line);border-top-color:var(--app-gold);
+  transition:transform .18s ease}
+.ptr[data-ready="true"] .ptr-dot{transform:scale(1.18);border-top-color:var(--app-crema)}
+.ptr-dot.spin{animation:ptr-spin .7s linear infinite}
+@keyframes ptr-spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){
+  .ptr-dot,.ptr-dot.spin{animation:none;transition:none}
+}

@@ -9,6 +9,7 @@ import SignInGate from '@/components/koup/SignInGate'
 import AccountButton from '@/components/koup/AccountButton'
 import PhonePrompt from '@/components/koup/PhonePrompt'
 import InstallPrompt from '@/components/koup/InstallPrompt'
+import { useShopMe } from '@/lib/koup-me'
 
 const API = process.env.NEXT_PUBLIC_API_BASE_URL ?? ''
 
@@ -17,6 +18,9 @@ export default function KoupAppAuthed() {
   const { getToken } = useAuth()
   const clerk = useClerk()
   const synced = useRef<string | null>(null)
+  /* The home screen's numbers. Seeded from localStorage so a phone with no
+     signal still shows the balance it last knew. */
+  const { me, refresh: refreshMe } = useShopMe(user?.id, getToken)
 
   /* Tell Django who just walked in. The webhook is the durable path but it
      cannot reach a laptop without a tunnel, and in production it can land
@@ -64,6 +68,8 @@ export default function KoupAppAuthed() {
         Account: user ? AccountButton : undefined,
         Phone: PhonePrompt,
         Install: InstallPrompt,
+        me,
+        refreshMe,
       }}
     />
   )

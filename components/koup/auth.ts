@@ -1,4 +1,5 @@
 import type { ComponentType } from 'react'
+import type { ShopMe } from '@/lib/koup-me'
 
 /** What the app needs to know about who is holding the phone. */
 export type KoupAuth = {
@@ -15,6 +16,11 @@ export type KoupAuth = {
   Phone?: ComponentType<{ armed?: boolean }>
   /** "Add to your phone" — hides itself once installed. */
   Install?: ComponentType
+  /** This customer's real points, tier and history. Null while signed out or
+   *  before the first answer; the app must render something either way. */
+  me?: ShopMe | null
+  /** Re-read the balance — used by pull-to-refresh. */
+  refreshMe?: () => Promise<void> | void
 }
 
 /** Clerk is on only when a publishable key was built in. NEXT_PUBLIC_* is
