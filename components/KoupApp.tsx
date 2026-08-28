@@ -16,7 +16,7 @@ import { Cup } from '@/lib/cup'
 import { SFX, haptic } from '@/lib/sfx'
 import { readPrefs, writePrefs } from '@/lib/koup-prefs'
 import { usePullToRefresh } from '@/lib/use-pull-to-refresh'
-import { lowPower } from '@/lib/device'
+import { lowPower, probePerformance } from '@/lib/device'
 import { CATS as FALLBACK_CATS, TAGS, T, type Item } from '@/lib/menu'
 import { useKoupMenu } from '@/lib/koup-menu'
 
@@ -233,7 +233,12 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
      the life of the page, and re-reading them per render would only add work
      to the thing we are trying to make cheaper. */
   const [lite, setLite] = useState(false)
-  useEffect(() => { setLite(lowPower()) }, [])
+  useEffect(() => {
+    // Start from whatever we already know (remembered verdict, or the spec
+    // sheet), then correct it once real frames have been counted.
+    setLite(lowPower())
+    void probePerformance().then(setLite)
+  }, [])
 
   /* Pull down to refresh. The customer has just been to the counter and wants
      to watch the number move; making them kill the app to see it is the kind
