@@ -22,10 +22,21 @@ import { getPharmacySlug } from "@/lib/site"
 
 export type Branding = { name: string; logo: string }
 
-export const DEFAULT_BRAND_NAME = "المودة"
-export const DEFAULT_ICON_192 = "/icons/icon-192.png"
-export const DEFAULT_ICON_512 = "/icons/icon-512.png"
-export const DEFAULT_ICON_MASKABLE = "/icons/icon-maskable-512.png"
+/* The fallback shown before the store's own branding arrives, and whenever
+   the branding lookup fails. It must be GENERIC.
+   This used to be "المودة" — another client of this template — so any coop
+   screen whose branding call 404'd (a slug mismatch, a cold cache, offline)
+   displayed a different client's brand in the sidebar and on printed
+   receipts. A neutral word is a small cosmetic loss; the wrong client's name
+   in front of a customer is not. */
+export const DEFAULT_BRAND_NAME = "المتجر"
+/* كوب's own marks. /icons/* are the template's generic set and were another
+   client's artwork in practice — the sidebar and the installed PWA both wore
+   it. /koup/* ships with this app, so the default is right even before the
+   backend answers. */
+export const DEFAULT_ICON_192 = "/koup/icon-192.png"
+export const DEFAULT_ICON_512 = "/koup/icon-512.png"
+export const DEFAULT_ICON_MASKABLE = "/koup/icon-maskable-512.png"
 
 // Kept out of api/http.ts so server code doesn't drag in the client-only API
 // layer (tokens/localStorage/demo mocks). The VALUE still comes from the one
