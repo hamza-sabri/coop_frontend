@@ -277,11 +277,20 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
     const finish = () => {
       if (introRef.current) return
       introRef.current = true
+      writePrefs({ seenIntro: true })
       setSplashUp(false); setIntroDone(true)
       mount(); playIntro()
     }
 
-    if (!started || reduced) {
+    /* The opening is a WELCOME, so it only earns its four seconds when there
+       is someone to welcome and only the first time.
+         · signed out → skip it: the sign-in gate is what this visitor needs,
+           and OAuth reloads the page, so the intro still plays on the way
+           back in with an account.
+         · already seen → skip it: on the second launch a four-second lockout
+           in front of your own points is not delight, it is a loading screen. */
+    const skipIntro = authLocked || readPrefs().seenIntro === true
+    if (!started || reduced || skipIntro) {
       introRef.current = true
       setSplashUp(false); setIntroDone(true); restState(); mount(); return
     }

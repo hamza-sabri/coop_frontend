@@ -18,6 +18,8 @@ export type KoupLang = 'ar' | 'en' | 'he'
 export type KoupPrefs = {
   lang?: KoupLang
   sound?: boolean
+  /** The opening animation has been watched. It is a welcome, not a loader. */
+  seenIntro?: boolean
 }
 
 const KEY = 'koup.prefs.v1'
@@ -30,12 +32,13 @@ export function readPrefs(): KoupPrefs {
     if (!raw) return {}
     const parsed = JSON.parse(raw) as unknown
     if (!parsed || typeof parsed !== 'object') return {}
-    const { lang, sound } = parsed as KoupPrefs
+    const { lang, sound, seenIntro } = parsed as KoupPrefs
     // Validate rather than trust: a stale build, a hand-edited value or a
     // future key must not put an unknown language into the UI.
     return {
       lang: LANGS.includes(lang as KoupLang) ? (lang as KoupLang) : undefined,
       sound: typeof sound === 'boolean' ? sound : undefined,
+      seenIntro: seenIntro === true ? true : undefined,
     }
   } catch {
     return {}
