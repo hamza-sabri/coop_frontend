@@ -960,3 +960,13 @@ body:has(.koup){overflow:hidden}
    layer being recomposited for the life of the session. Lite mode keeps the
    gradients — they are the brand — and drops the blur and the drift. */
 .koup[data-lite="true"]::before{filter:none;animation:none}
+
+/* empty states — a basket with nothing in it, a day with no order */
+.empty{display:flex;flex-direction:column;align-items:center;gap:12px;
+  padding:34px 18px;border:1px dashed var(--app-line);border-radius:22px;
+  color:var(--app-ink2);text-align:center}
+.empty p{font-size:14px}
+/* remove-from-basket */
+.line .lx{margin-inline-start:8px;width:28px;height:28px;border-radius:50%;
+  color:var(--app-ink3);font-size:19px;line-height:1;flex:none}
+.line .lx:active{color:var(--app-rust)}

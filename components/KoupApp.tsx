@@ -24,7 +24,11 @@ type Lang = 'ar' | 'en' | 'he'
 type Screen = 'home' | 'menu' | 'cart' | 'track' | 'wallet' | 'rewards'
 
 const FILL = 0.76
-const START_BEANS = 248
+/* Zero, not 248. This constant seeded beansRef, which the cart and the ledger
+   render directly — so even after the hero read real data those two screens
+   still quoted a stranger's balance until /shop/me/ answered. There is no
+   honest default for someone else's points; the honest default is nothing. */
+const START_BEANS = 0
 
 /* ── tiny helpers ────────────────────────────────────────────────────────── */
 const nm = (o: any, l: Lang) => o[l] ?? o.en
@@ -159,6 +163,11 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
   const [view, setView] = useState<'grid' | 'carpet'>('grid')
   const [sheetItem, setSheetItem] = useState<Item | null>(null)
   const [qty, setQty] = useState(1)
+  /* Per-line note — "بدون سكر", "تيك أواي". Cleared with the sheet. */
+  const [pickNote, setPickNote] = useState('')
+  const [orderNote, setOrderNote] = useState('')
+  const [sending, setSending] = useState(false)
+  const [sendError, setSendError] = useState<string | null>(null)
   /* Which option of this drink is being ordered. Reset every time the sheet
      opens, or the last drink's flavour follows the next one in. */
   const [pickedVariant, setPickedVariant] =
@@ -189,7 +198,22 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
   const CATS = menuLive
     ? [{ k: 'all', ar: 'الكل', en: 'All', he: 'הכל' }, ...LIVE_CATS]
     : FALLBACK_CATS
-  const [cartCount, setCartCount] = useState(0)
+  /* The basket, for real. cartCount was a NUMBER and the three lines on the
+     cart screen were hardcoded arrays — so nothing anyone chose was ever
+     carried anywhere, and "أكّد الطلب" only set a boolean. */
+  type Line = {
+    key: string
+    name: string
+    unit_price: number
+    qty: number
+    note: string
+    /** Only present when the menu came from the API; the bundled fallback
+        has no ids and the server would reject them. */
+    product?: number
+    variant?: number
+  }
+  const [lines, setLines] = useState<Line[]>([])
+  const cartCount = lines.reduce((n, l) => n + l.qty, 0)
   const [cartBump, setCartBump] = useState(0)
   // Everything here works offline except placing an order — the menu, the
   // points, the profile all come from cache. Ordering needs the shop.
@@ -216,7 +240,8 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
      Auth arrives as a prop so this component never depends on Clerk being
      configured: with no keys the app simply runs open, which is what keeps
      local development working before the keys land. */
-  const { locked: authLocked, user, Gate, openProfile, Account, Phone, Install, me, refreshMe } = auth
+  const { locked: authLocked, user, Gate, openProfile, Account, Phone, Install, me, refreshMe,
+          liveOrder, pastOrders, placeOrder, refreshOrders } = auth
 
   /* The real numbers. `me` is null while signed out, and briefly on a cold
      first launch before the cache or the network answers — so every read
@@ -245,8 +270,8 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
      of small betrayal that gets a loyalty app deleted. */
   const doRefresh = useCallback(async () => {
     haptic([8])
-    await refreshMe?.()
-  }, [refreshMe])
+    await Promise.all([refreshMe?.(), refreshOrders?.()])
+  }, [refreshMe, refreshOrders])
   const { pull, busy: refreshing, ready: pullReady } =
     usePullToRefresh(scrollRef, doRefresh, !authLocked)
 
@@ -573,12 +598,32 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
     if (!sheetItem) { setPickedVariant(null); return }
     const vs = sheetItem.v ?? []
     setPickedVariant(vs.length === 1 ? vs[0] : null)
+    setPickNote('')
   }, [sheetItem])
 
   function addToCart() {
-    setCartCount(n => n + qty)
+    if (!sheetItem) return
+    const v = pickedVariant
+    const unit = v?.price ?? sheetItem.p
+    const name = v ? `${nm(sheetItem, lang)} — ${v.label}` : nm(sheetItem, lang)
+    const note = (pickNote ?? '').trim()
+    setLines(prev => {
+      /* Same drink, same option, same note = one line with a bigger number.
+         Three separate "آيس لاتيه ×1" rows is not a basket, it is a receipt
+         printed badly. */
+      const key = `${(sheetItem as any).id ?? name}|${v?.id ?? ''}|${note}`
+      const at = prev.findIndex(l => l.key === key)
+      if (at >= 0) {
+        const next = prev.slice()
+        next[at] = { ...next[at], qty: next[at].qty + qty }
+        return next
+      }
+      return [...prev, {
+        key, name, unit_price: unit, qty, note,
+        product: (sheetItem as any).id, variant: v?.id,
+      }]
+    })
     setCartBump(b => b + 1)
-    setOrdered(true)
     SFX.added()
     haptic([12, 40, 18])
   }
@@ -612,7 +657,7 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
   const itemTotal = sheetItem
     ? (pickedVariant?.price ?? sheetItem.p) * qty
     : 0
-  const cartSub = 72
+  const cartSub = lines.reduce((n, l) => n + l.unit_price * l.qty, 0)
   const beanDiscount = Math.round(beansSpent / 3.33)
   const cartTotal = Math.max(0, cartSub - beanDiscount)
 
@@ -906,7 +951,7 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
           <div className="app-scroll koup-scroll" onScroll={() => paintGloss()}>
             <div className="greet"><div>
               <h2>{t('cart.h', 'سلّتك')}</h2>
-              <p>{t('cart.sub', '٣ أصناف · كوب — شارع ٢٢')}</p>
+              <p><span className="num">{cartCount}</span> {t('cart.subN', 'صنف · كوب — شارع ٢٢')}</p>
             </div></div>
             <div className="otypes">
               {([['pickup', P.store, 'استلام'], ['dinein', P.table, 'على الطاولة'], ['delivery', P.bike, 'توصيل']] as const)
@@ -918,13 +963,24 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
                 ))}
             </div>
 
-            {[['آيس لاتيه كراميل', 'كبير · حليب لوز · شوت إضافي', 22],
-              ['فرنش توست بالقرفة', 'مع آيس كريم', 28],
-              ['مشروب الجوافة', 'بدون سكر مضاف', 22]].map(([n, m, p], i) => (
-              <div className="line" key={i}>
-                <span className="qbadge num">1</span>
-                <div className="t"><h4>{t(`ci${i + 1}.n`, n as string)}</h4><p>{t(`ci${i + 1}.m`, m as string)}</p></div>
-                <span className="p num">₪{p}</span>
+            {lines.length === 0 && (
+              <div className="empty">
+                <p>{t('cart.empty', 'سلّتك فاضية')}</p>
+                <button className="btn-ghost press" onClick={() => go('menu')}>
+                  {t('cart.browse', 'تصفّح المنيو')}
+                </button>
+              </div>
+            )}
+            {lines.map(l => (
+              <div className="line" key={l.key}>
+                <span className="qbadge num">{l.qty}</span>
+                <div className="t">
+                  <h4>{l.name}</h4>
+                  {l.note ? <p>{l.note}</p> : null}
+                </div>
+                <span className="p num">₪{l.unit_price * l.qty}</span>
+                <button className="lx press" aria-label={t('cart.remove', 'احذف')}
+                  onClick={() => { SFX.tap(); setLines(p => p.filter(x => x.key !== l.key)) }}>×</button>
               </div>
             ))}
 
@@ -955,9 +1011,28 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
               <span>{t('unit.points2', 'نقطة من هالطلب')}</span>
             </div>
             <div className="sheet-foot" style={{ borderTop: 0, marginTop: 18 }}>
-              <button className="cta press" disabled={!online} onClick={() => {
-                SFX.chime(); haptic([10, 50, 18]); setOrdered(true); go('track')
-              }}>
+              <button className="cta press" disabled={!online || !lines.length || sending}
+                onClick={async () => {
+                  if (!lines.length || sending) return
+                  setSending(true)
+                  try {
+                    /* Straight to Django. The old handler set a boolean and
+                       navigated — which is why nothing ever reached the admin. */
+                    await placeOrder?.(lines.map(l => ({
+                      name: l.name,
+                      unit_price: String(l.unit_price),
+                      quantity: String(l.qty),
+                      note: l.note,
+                      product: l.product ?? null,
+                      variant: l.variant ?? null,
+                    })), orderNote)
+                    setLines([]); setOrdered(true)
+                    SFX.chime(); haptic([10, 50, 18]); go('track')
+                  } catch {
+                    SFX.tap()
+                    setSendError(t('cart.failed', 'ما زبط الطلب — جرّب كمان مرة'))
+                  } finally { setSending(false) }
+                }}>
                 <span>{t('cart.confirm', 'أكّد الطلب')}</span> · <span className="price">₪{cartTotal}</span>
               </button>
             </div>
@@ -971,45 +1046,81 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
         )}
 
         {/* ── TRACK ────────────────────────────────────────────────────── */}
+        {/* ── طلباتي ───────────────────────────────────────────────────
+            Was a fabricated delivery: order #١٠٤٢, a courier called محمود,
+            "جاهز خلال ٣ دقائق". None of it existed, and there was no history
+            at all. This reads the customer's real orders — the live one at
+            the top with its actual status, everything before it underneath. */}
         {screen === 'track' && (
           <div className="app-scroll koup-scroll" onScroll={() => paintGloss()}>
             <div className="greet"><div>
-              <h2>{t('tr.h', 'طلب #١٠٤٢')}</h2><p>{t('tr.sub', 'توصيل · شارع ٢٢، قلقيلية')}</p>
+              <h2>{t('tr.h2', 'طلباتي')}</h2>
+              <p>{liveOrder
+                ? t('tr.subLive', 'طلبك الحالي وسجل طلباتك')
+                : t('tr.subNone', 'سجل طلباتك')}</p>
             </div></div>
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: 10, background: 'rgba(127,209,174,.1)',
-              border: '1px solid rgba(127,209,174,.26)', borderRadius: 16, padding: '13px 15px', marginBottom: 22,
-            }}>
-              <span style={{ color: 'var(--app-mint)' }}><Icon d={P.clock} s={19} /></span>
-              <b style={{ fontSize: 14, color: 'var(--app-mint)' }}>{t('tr.eta', 'جاهز خلال ٣ دقائق تقريباً')}</b>
-            </div>
-            <div className="steps">
-              <div className="fillline" style={{ height: 132 }} />
-              {([['done', 'tr.s1', 'تم استلام الطلب', '9:38'],
-                 ['done', 'tr.s2', 'الباريستا بدأ يحضّرلك', '9:40'],
-                 ['active', 'tr.s3', 'في الطريق إلك', 'محمود طلع من المحل'],
-                 ['pending', 'tr.s4', 'تم التسليم', '—']] as const).map(([st, k, ar, sub], i) => (
-                <div className={`step ${st}`} key={k}>
-                  <div className="node">
-                    {st === 'active' ? <Icon d={P.bike} s={16} /> : <Icon d={P.check} s={15} />}
+
+            {liveOrder ? (
+              <>
+                <div className="livecard" style={{ marginBottom: 18 }}>
+                  <div className="pulse"><Icon d={P.cup} s={19} /></div>
+                  <div className="t">
+                    <b>{t('tr.no', 'طلب')} #{liveOrder.id}</b>
+                    <span>{liveOrder.status_label}</span>
                   </div>
-                  <h4>{t(k, ar)}</h4><p>{t(`${k}t`, sub)}</p>
+                  <span className="p num">₪{liveOrder.total}</span>
                 </div>
-              ))}
-            </div>
-            <div className="sechead"><h3>{t('tr.driver', 'السائق')}</h3></div>
-            <div className="drivercard">
-              <div className="dphoto">م</div>
-              <div className="t">
-                <b>{t('dr.name', 'محمود أبو زيد')}</b>
-                <div className="stars"><span className="s">★★★★★</span>
-                  <span className="num">4.9</span> · <span className="num">312</span> {t('dr.deliv', 'توصيلة')}</div>
+                <div className="steps">
+                  {(['placed', 'accepted', 'preparing', 'ready'] as const).map((st) => {
+                    const order = ['placed', 'accepted', 'preparing', 'ready']
+                    const at = order.indexOf(liveOrder.status)
+                    const mine = order.indexOf(st)
+                    const cls = mine < at ? 'done' : mine === at ? 'active' : 'pending'
+                    const label: Record<string, string> = {
+                      placed: 'وصل الطلب', accepted: 'تم القبول',
+                      preparing: 'قيد التحضير', ready: 'جاهز للاستلام',
+                    }
+                    return (
+                      <div className={`step ${cls}`} key={st}>
+                        <div className="node"><Icon d={P.check} s={15} /></div>
+                        <h4>{t(`tr.${st}`, label[st])}</h4>
+                      </div>
+                    )
+                  })}
+                </div>
+                <div className="sechead"><h3>{t('tr.what', 'شو طلبت')}</h3></div>
+                {liveOrder.items.map((it, n) => (
+                  <div className="line" key={it.id ?? n}>
+                    <span className="qbadge num">{Math.round(Number(it.quantity))}</span>
+                    <div className="t"><h4>{it.name}</h4>{it.note ? <p>{it.note}</p> : null}</div>
+                    <span className="p num">₪{it.line_total ?? it.unit_price}</span>
+                  </div>
+                ))}
+              </>
+            ) : (
+              <div className="empty" style={{ marginBottom: 18 }}>
+                <p>{t('tr.none', 'ما في طلب شغّال هلق')}</p>
+                <button className="btn-ghost press" onClick={() => go('menu')}>
+                  {t('tr.start', 'ابدأ طلب')}
+                </button>
               </div>
-              <button className="callbtn press" aria-label="call"><Icon d={P.phone} s={18} /></button>
-            </div>
-            <div className="willearn" style={{ marginTop: 22 }}>
-              <Bean s={17} />{t('tr.pending', '١٨ نقطة محجوزة لك — بتنزل بالكوب لما يوصل الطلب')}
-            </div>
+            )}
+
+            {(pastOrders?.length ?? 0) > 0 && (
+              <>
+                <div className="sechead"><h3>{t('tr.past', 'طلبات سابقة')}</h3></div>
+                {pastOrders!.map(o => (
+                  <div className="line" key={o.id}>
+                    <span className="qbadge num">{o.items.length}</span>
+                    <div className="t">
+                      <h4>{t('tr.no', 'طلب')} #{o.id} · {o.status_label}</h4>
+                      <p>{new Date(o.created_at).toLocaleDateString('ar')}</p>
+                    </div>
+                    <span className="p num">₪{o.total}</span>
+                  </div>
+                ))}
+              </>
+            )}
           </div>
         )}
 
@@ -1170,7 +1281,7 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
           {([
             ['home', P.home, 'nav.home', 'نقاطي'],
             ['menu', P.list, 'nav.menu2', 'المنيو'],
-            ['cart', P.bag, 'nav.order', 'طلبي'],
+            ['cart', P.bag, 'nav.orders', 'طلباتي'],
           ] as const).map(([sc, d, k, ar]) => (
             <button key={sc} className="tab"
               aria-current={screen === sc || (sc === 'cart' && screen === 'track')}

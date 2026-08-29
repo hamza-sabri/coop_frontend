@@ -1,5 +1,6 @@
 import type { ComponentType } from 'react'
 import type { ShopMe } from '@/lib/koup-me'
+import type { Order, OrderItem } from '@/lib/koup-orders'
 
 /** What the app needs to know about who is holding the phone. */
 export type KoupAuth = {
@@ -21,6 +22,13 @@ export type KoupAuth = {
   me?: ShopMe | null
   /** Re-read the balance — used by pull-to-refresh. */
   refreshMe?: () => Promise<void> | void
+  /** The customer's real orders: the live one, and the ones before it. */
+  orders?: Order[]
+  liveOrder?: Order | null
+  pastOrders?: Order[]
+  /** Send the basket to the shop. Resolves with the created order. */
+  placeOrder?: (items: OrderItem[], note?: string) => Promise<Order | null>
+  refreshOrders?: () => Promise<void> | void
 }
 
 /** Clerk is on only when a publishable key was built in. NEXT_PUBLIC_* is

@@ -10,6 +10,7 @@ import AccountButton from '@/components/koup/AccountButton'
 import PhonePrompt from '@/components/koup/PhonePrompt'
 import InstallPrompt from '@/components/koup/InstallPrompt'
 import { useShopMe } from '@/lib/koup-me'
+import { useKoupOrders } from '@/lib/koup-orders'
 
 const API = process.env.NEXT_PUBLIC_API_BASE_URL ?? ''
 
@@ -21,6 +22,8 @@ export default function KoupAppAuthed() {
   /* The home screen's numbers. Seeded from localStorage so a phone with no
      signal still shows the balance it last knew. */
   const { me, refresh: refreshMe } = useShopMe(user?.id, getToken)
+  const { orders, live: liveOrder, past: pastOrders, place: placeOrder,
+          refresh: refreshOrders } = useKoupOrders(user?.id, getToken)
 
   /* Tell Django who just walked in. The webhook is the durable path but it
      cannot reach a laptop without a tunnel, and in production it can land
@@ -70,6 +73,11 @@ export default function KoupAppAuthed() {
         Install: InstallPrompt,
         me,
         refreshMe,
+        orders,
+        liveOrder,
+        pastOrders,
+        placeOrder,
+        refreshOrders,
       }}
     />
   )
