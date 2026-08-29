@@ -165,9 +165,32 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
   const [cat, setCat] = useState('all')
   const [view, setView] = useState<'grid' | 'carpet'>('grid')
   const [sheetItem, setSheetItem] = useState<Item | null>(null)
-  const [qty, setQty] = useState(1)
   /* Per-line note — "بدون سكر", "تيك أواي". Cleared with the sheet. */
-  const [pickNote, setPickNote] = useState('')
+  /* One entry PER CUP.
+     Quantity used to mean "N identical cups": a single variant and a single
+     note applied to the whole stepper, so "three juices, one lemonade, one
+     mango, one guava" was not expressible — you had to open the drink three
+     separate times and hunt for it in the menu again between each. Now the
+     stepper grows this array, and every cup carries its own flavour and its
+     own note. */
+  type Pick = { variant: { id: number; label: string; price: number } | null; note: string }
+  const [picks, setPicks] = useState<Pick[]>([{ variant: null, note: '' }])
+  const qty = picks.length
+
+  /* Growing copies the LAST cup, so "three of the same" is still one choice
+     and three taps of +, while "three different" is three choices. Shrinking
+     drops from the end, which is the one the customer just added. */
+  function setQty(next: number | ((n: number) => number)) {
+    setPicks(prev => {
+      const want = Math.max(1, Math.min(9,
+        typeof next === 'function' ? next(prev.length) : next))
+      if (want === prev.length) return prev
+      if (want < prev.length) return prev.slice(0, want)
+      const last = prev[prev.length - 1]
+      return [...prev, ...Array.from({ length: want - prev.length },
+        () => ({ variant: last?.variant ?? null, note: '' }))]
+    })
+  }
   const [orderNote, setOrderNote] = useState('')
   const [sending, setSending] = useState(false)
   const [sendError, setSendError] = useState<string | null>(null)
@@ -186,10 +209,6 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
      inferred that something had happened. */
   const [placedOrder, setPlacedOrder] = useState<import('@/lib/koup-orders').Order | null>(null)
   const justPlacedRef = useRef<import('@/lib/koup-orders').Order | null>(null)
-  /* Which option of this drink is being ordered. Reset every time the sheet
-     opens, or the last drink's flavour follows the next one in. */
-  const [pickedVariant, setPickedVariant] =
-    useState<{ id: number; label: string; price: number } | null>(null)
   const [beansSpent, setBeansSpent] = useState(0)
   /* Pickup or a table. Delivery was a third tile with no address field, no
      fee and no courier state behind it — a promise the shop cannot keep. */
@@ -622,35 +641,42 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
   /* The sheet closing was the only sign that anything happened, which reads as
      "did that work?" — so the add now answers in three channels at once: the
      count moves, the tab jumps, and it makes a noise you can feel. */
+  /* Reset to a single, unchosen cup whenever the sheet opens — otherwise the
+     previous drink's flavours and quantity follow the next one in. */
   useEffect(() => {
-    if (!sheetItem) { setPickedVariant(null); return }
+    if (!sheetItem) return
     const vs = sheetItem.v ?? []
-    /* Nothing preselected: the customer picks. */
-    setPickedVariant(vs.length === 1 ? vs[0] : null)
-    setPickNote('')
+    setPicks([{ variant: vs.length === 1 ? vs[0] : null, note: '' }])
   }, [sheetItem])
 
   function addToCart() {
     if (!sheetItem) return
-    const v = pickedVariant
-    const unit = v?.price ?? sheetItem.p
-    const name = v ? `${nm(sheetItem, lang)} — ${v.label}` : nm(sheetItem, lang)
-    const note = (pickNote ?? '').trim()
+    const base = nm(sheetItem, lang)
+    const pid = (sheetItem as any).id as number | undefined
+
     setLines(prev => {
-      /* Same drink, same option, same note = one line with a bigger number.
-         Three separate "آيس لاتيه ×1" rows is not a basket, it is a receipt
-         printed badly. */
-      const key = `${(sheetItem as any).id ?? name}|${v?.id ?? ''}|${note}`
-      const at = prev.findIndex(l => l.key === key)
-      if (at >= 0) {
-        const next = prev.slice()
-        next[at] = { ...next[at], qty: next[at].qty + qty }
-        return next
+      const next = prev.slice()
+      /* Each cup is added on its own, then identical cups collapse into one
+         line with a bigger number. So three lemonades become "×3", while a
+         lemonade, a mango and a guava stay three lines — which is what the
+         barista has to read off the ticket. */
+      for (const pick of picks) {
+        const v = pick.variant
+        const note = (pick.note ?? '').trim()
+        const unit = v?.price ?? sheetItem.p
+        const name = v ? `${base} — ${v.label}` : base
+        const key = `${pid ?? name}|${v?.id ?? v?.label ?? ''}|${note}`
+        const at = next.findIndex(l => l.key === key)
+        if (at >= 0) {
+          next[at] = { ...next[at], qty: next[at].qty + 1 }
+        } else {
+          next.push({
+            key, name, unit_price: unit, qty: 1, note,
+            product: pid, variant: v?.id,
+          })
+        }
       }
-      return [...prev, {
-        key, name, unit_price: unit, qty, note,
-        product: (sheetItem as any).id, variant: v?.id,
-      }]
+      return next
     })
     setCartBump(b => b + 1)
     SFX.added()
@@ -717,11 +743,15 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
   }
 
   const itemTotal = sheetItem
-    ? (pickedVariant?.price ?? sheetItem.p) * qty
+    ? picks.reduce((n, p) => n + (p.variant?.price ?? sheetItem.p), 0)
     : 0
   /* A drink sold in four flavours has no single price, so adding it without
      choosing one would put a guess in the basket and a guess on the ticket. */
-  const needsPick = !!sheetItem && (sheetItem.v?.length ?? 0) > 1 && !pickedVariant
+  /* Every cup needs an answer. Adding two chosen cups and one unchosen would
+     put a guess on the barista's ticket. */
+  const unchosen = !sheetItem ? 0
+    : (sheetItem.v?.length ?? 0) > 1 ? picks.filter(p => !p.variant).length : 0
+  const needsPick = unchosen > 0
   const cartSub = lines.reduce((n, l) => n + l.unit_price * l.qty, 0)
   /* What the customer may spend: never more than they have, never more than
      the basket is worth. The old slider ran to a hardcoded 240 regardless of
@@ -1314,52 +1344,71 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
             {sheetItem && (<>
               <h3>{nm(sheetItem, lang)}</h3>
               <p className="sub">{dsc(sheetItem, lang)}</p>
-              {/* The options this drink is really sold in. The الحجم / الحليب
-                  groups that used to sit here were prototype furniture from
-                  before the menu existed — كوب has no sizes at all, and the
-                  choice on almost every line is a flavour. */}
-              {sheetItem.v && sheetItem.v.length > 0 && (
-                <div className="optgrp">
-                  <div className="lbl"><span>{t('it.pick', 'اختر النوع')}</span></div>
-                  <div className="opts">
-                    {sheetItem.v.map(v => {
-                      const extra = v.price - sheetItem.p
-                      return (
-                        <button
-                          key={v.id ?? v.label}
-                          className="opt"
-                          /* Compare on the LABEL, not the id. The public
-                             menu endpoint was not returning variant ids, so
-                             `picked?.id === v.id` was `undefined === undefined`
-                             — true for every chip, which is why all four drew
-                             themselves gold at once. The backend now sends the
-                             id; this stays label-based so a missing id can
-                             never light up the whole row again. */
-                          aria-pressed={!!pickedVariant && pickedVariant.label === v.label}
-                          onClick={() => { SFX.tap(); setPickedVariant(v) }}
-                        >
-                          <span>{v.label}</span>
-                          {extra > 0 && <small>+₪{extra}</small>}
-                        </button>
-                      )
-                    })}
+              {/* One block per cup.
+                  A single flavour row with a quantity stepper beside it says
+                  "three of these" and cannot say "three, all different" —
+                  which is most of what a group order is. With more than one
+                  cup, each gets its own row, numbered, so the choice you are
+                  making is never ambiguous. */}
+              {(sheetItem.v?.length ?? 0) > 0 && picks.map((pick, i) => (
+                <div className="cupblock" key={i}>
+                  {picks.length > 1 && (
+                    <div className="cuphead">
+                      <span className="cupno num">{i + 1}</span>
+                      <span>{t('it.cup', 'كوب')} {i + 1}</span>
+                      <button className="cupdrop press"
+                        aria-label={t('it.drop', 'احذف هالكوب')}
+                        onClick={() => { SFX.tap(); setPicks(p => p.filter((_, k) => k !== i)) }}>×</button>
+                    </div>
+                  )}
+                  <div className="optgrp">
+                    {picks.length === 1 && (
+                      <div className="lbl"><span>{t('it.pick', 'اختر النوع')}</span></div>
+                    )}
+                    <div className="opts">
+                      {sheetItem.v!.map(v => {
+                        const extra = v.price - sheetItem.p
+                        return (
+                          <button
+                            key={v.id ?? v.label}
+                            className="opt"
+                            /* Label, not id: the menu endpoint shipped without
+                               variant ids for a while, and `undefined ===
+                               undefined` lit every chip at once. */
+                            aria-pressed={pick.variant?.label === v.label}
+                            onClick={() => {
+                              SFX.tap()
+                              setPicks(p => p.map((x, k) => k === i ? { ...x, variant: v } : x))
+                            }}
+                          >
+                            <span>{v.label}</span>
+                            {extra > 0 && <small>+₪{extra}</small>}
+                          </button>
+                        )
+                      })}
+                    </div>
                   </div>
+                  <input
+                    className="cupnote"
+                    type="text"
+                    value={pick.note}
+                    onChange={e => setPicks(p => p.map((x, k) =>
+                      k === i ? { ...x, note: e.target.value } : x))}
+                    placeholder={t('it.notePh', 'بدون سكر، تيك أواي…')}
+                    maxLength={120}
+                  />
                 </div>
-              )}
+              ))}
 
-              {/* A note per cup. `pickNote` state existed and was written into
-                  every basket line — but nothing ever rendered an input for
-                  it, so "بدون سكر" was simply impossible to say. */}
-              <label className="notefield">
-                <span>{t('it.note', 'ملاحظة (اختياري)')}</span>
-                <input
-                  type="text"
-                  value={pickNote}
-                  onChange={e => setPickNote(e.target.value)}
-                  placeholder={t('it.notePh', 'بدون سكر، تيك أواي…')}
-                  maxLength={120}
-                />
-              </label>
+              {/* No options at all — one note for the drink. */}
+              {(sheetItem.v?.length ?? 0) === 0 && (
+                <label className="notefield">
+                  <span>{t('it.note', 'ملاحظة (اختياري)')}</span>
+                  <input type="text" value={picks[0]?.note ?? ''}
+                    onChange={e => setPicks([{ variant: null, note: e.target.value }])}
+                    placeholder={t('it.notePh', 'بدون سكر، تيك أواي…')} maxLength={120} />
+                </label>
+              )}
 
               <div className="sheet-foot">
                 <div className="qty">
@@ -1373,8 +1422,12 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
                 <button className="cta press" disabled={needsPick}
                   onClick={() => { if (needsPick) return; closeSheet(); addToCart() }}>
                   <span>{needsPick
-                    ? t('it.pickfirst', 'اختر النوع أولاً')
-                    : t('it.add', 'أضف للسلة')}</span>
+                    ? (unchosen === 1
+                        ? t('it.pickfirst', 'اختر النوع أولاً')
+                        : `${t('it.pickn', 'باقي')} ${unchosen} ${t('it.pickn2', 'أكواب بدها نوع')}`)
+                    : picks.length > 1
+                      ? `${t('it.addn', 'أضف')} ${picks.length} ${t('it.addn2', 'أكواب')}`
+                      : t('it.add', 'أضف للسلة')}</span>
                   {!needsPick && <> · <span className="price">₪{itemTotal}</span></>}
                 </button>
               </div>
