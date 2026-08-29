@@ -191,7 +191,10 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
   const [pickedVariant, setPickedVariant] =
     useState<{ id: number; label: string; price: number } | null>(null)
   const [beansSpent, setBeansSpent] = useState(0)
-  const [orderType, setOrderType] = useState<'pickup' | 'dinein' | 'delivery'>('pickup')
+  /* Pickup or a table. Delivery was a third tile with no address field, no
+     fee and no courier state behind it — a promise the shop cannot keep. */
+  const [orderType, setOrderType] = useState<'pickup' | 'dinein'>('pickup')
+  const [tableNo, setTableNo] = useState('')
   /* The icon must show what SFX actually is, not a fresh `true`: the mute
      flag is restored from localStorage inside lib/sfx, so on a reload the
      button would otherwise draw 🔊 over a silenced app. Synced on mount for
@@ -673,9 +676,17 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
         note: l.note,
         product: l.product ?? null,
         variant: l.variant ?? null,
-      })), orderNote)
+      })), {
+        note: orderNote,
+        fulfilment: orderType,
+        table_number: orderType === 'dinein' ? tableNo.trim() : '',
+        beans_spent: beansSpent,
+      })
       setPlacedOrder(created ?? null)
-      setLines([]); setOrdered(true)
+      setLines([]); setOrdered(true); setBeansSpent(0); setOrderNote(''); setTableNo('')
+      /* The balance just changed on the server. Re-read it rather than
+         guessing, so the header and the cup agree with the ledger. */
+      void refreshMe?.()
       SFX.chime(); haptic([10, 50, 18])
     } catch (e) {
       SFX.tap()
@@ -712,7 +723,13 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
      choosing one would put a guess in the basket and a guess on the ticket. */
   const needsPick = !!sheetItem && (sheetItem.v?.length ?? 0) > 1 && !pickedVariant
   const cartSub = lines.reduce((n, l) => n + l.unit_price * l.qty, 0)
-  const beanDiscount = Math.round(beansSpent / 3.33)
+  /* What the customer may spend: never more than they have, never more than
+     the basket is worth. The old slider ran to a hardcoded 240 regardless of
+     balance and its discount was never sent — the order posted at full price
+     while the screen showed less. The server checks all of this again. */
+  const POINTS_PER_ILS = 3.33
+  const maxSpend = Math.min(beans, Math.round(cartSub * POINTS_PER_ILS))
+  const beanDiscount = Math.round(Math.min(beansSpent, maxSpend) / POINTS_PER_ILS)
   const cartTotal = Math.max(0, cartSub - beanDiscount)
 
   const list = MENU.filter(m => cat === 'all' || m.c === cat)
@@ -1062,7 +1079,7 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
                 items — the reason you are here — were pushed below the fold.
                 Small, quiet, and where a decision actually belongs. */}
             <div className="otypes otypes-sm">
-              {([['pickup', P.store, 'استلام'], ['dinein', P.table, 'على الطاولة'], ['delivery', P.bike, 'توصيل']] as const)
+              {([['pickup', P.store, 'استلام'], ['dinein', P.table, 'على الطاولة']] as const)
                 .map(([k, d, ar]) => (
                   <button key={k} className="otype" aria-pressed={orderType === k}
                     onClick={() => { SFX.tap(); setOrderType(k) }}>
@@ -1071,19 +1088,38 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
                 ))}
             </div>
 
+            {orderType === 'dinein' && (
+              <label className="notefield">
+                <span>{t('cart.table', 'رقم الطاولة')}</span>
+                <input type="text" value={tableNo} maxLength={32}
+                  placeholder={t('cart.tablePh', 'مثلاً ٣، أو برّا')}
+                  onChange={e => setTableNo(e.target.value)} />
+              </label>
+            )}
+
+            <label className="notefield">
+              <span>{t('cart.note', 'ملاحظة على الطلب كامل (اختياري)')}</span>
+              <input type="text" value={orderNote} maxLength={200}
+                placeholder={t('cart.notePh', 'أي شي لازم الباريستا يعرفه…')}
+                onChange={e => setOrderNote(e.target.value)} />
+            </label>
+
+            {maxSpend > 0 && (
             <div className="beanpay">
               <div className="beanpay-h">
                 <b><Bean s={17} />{t('cart.pay', 'ادفع بنقاطك')}</b>
-                <span className="avail">{t('cart.avail', 'عندك')} <span className="num">{beansRef.current}</span></span>
+                <span className="avail">{t('cart.avail', 'عندك')} <span className="num">{beans}</span></span>
               </div>
-              <input className="slider" type="range" min={0} max={240} step={10} value={beansSpent}
-                style={{ ['--fill' as any]: `${(beansSpent / 240) * 100}%` }}
+              <input className="slider" type="range" min={0} max={maxSpend} step={1}
+                value={Math.min(beansSpent, maxSpend)}
+                style={{ ['--fill' as any]: `${maxSpend ? (Math.min(beansSpent, maxSpend) / maxSpend) * 100 : 0}%` }}
                 onChange={e => setBeansSpent(Number(e.target.value))} aria-label="points" />
               <div className="beanpay-f">
-                <span className="used"><span className="num">{beansSpent}</span></span>
+                <span className="used"><span className="num">{Math.min(beansSpent, maxSpend)}</span></span>
                 <span className="save">{t('cart.saved', 'وفّرت')} ₪<span className="num">{beanDiscount}</span></span>
               </div>
             </div>
+            )}
 
             <div className="totals">
               <div><span>{t('cart.sub2', 'المجموع')}</span><span className="n">₪{cartSub}</span></div>
@@ -1401,6 +1437,14 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
                   <b className="num">{placedOrder.items.length}</b></div>
                 <div><span>{t('ok.total', 'الإجمالي')}</span>
                   <b className="num">₪{Number(placedOrder.total).toFixed(2)}</b></div>
+                {placedOrder.beans_spent ? (
+                  <div><span>{t('ok.spent', 'مدفوع بالنقاط')}</span>
+                    <b className="num">{placedOrder.beans_spent}</b></div>
+                ) : null}
+                <div><span>{t('ok.how', 'الاستلام')}</span>
+                  <b>{placedOrder.fulfilment === 'dinein'
+                    ? `${t('cart.dinein', 'على الطاولة')}${placedOrder.table_number ? ' · ' + placedOrder.table_number : ''}`
+                    : t('cart.pickup', 'استلام')}</b></div>
                 <div><span>{t('ok.status', 'الحالة')}</span>
                   <b>{placedOrder.status_label}</b></div>
               </div>

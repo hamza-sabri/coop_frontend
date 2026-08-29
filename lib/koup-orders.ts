@@ -22,8 +22,13 @@ export type OrderItem = {
   line_total?: string
 }
 
+export type Fulfilment = "pickup" | "dinein"
+
 export type Order = {
   id: number
+  fulfilment?: Fulfilment
+  table_number?: string
+  beans_spent?: number
   status: "placed" | "accepted" | "preparing" | "ready" | "collected" | "cancelled"
   status_label: string
   next_statuses: string[]
@@ -94,7 +99,16 @@ export function useKoupOrders(
 
   const place = useCallback(async (
     items: OrderItem[],
-    note = "",
+    opts: {
+      note?: string
+      fulfilment?: Fulfilment
+      table_number?: string
+      /** Points the customer asked to spend. The SERVER decides what actually
+       *  comes off — it checks the live balance and the order total inside the
+       *  same transaction, because a balance read on this phone thirty seconds
+       *  ago is not a balance. */
+      beans_spent?: number
+    } = {},
   ): Promise<Order | null> => {
     if (!uid || !getToken || !items.length) return null
     const token = await getToken()
@@ -107,7 +121,14 @@ export function useKoupOrders(
     const r = await fetch(`${API}/api/v1/shop/orders/`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ items, note, client_uuid }),
+      body: JSON.stringify({
+        items,
+        note: opts.note ?? "",
+        fulfilment: opts.fulfilment ?? "pickup",
+        table_number: opts.table_number ?? "",
+        beans_spent: opts.beans_spent ?? 0,
+        client_uuid,
+      }),
     })
     if (!r.ok) throw new Error(await r.text().catch(() => "order failed"))
     const order = (await r.json()) as Order

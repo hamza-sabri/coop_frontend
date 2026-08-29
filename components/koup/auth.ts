@@ -1,6 +1,6 @@
 import type { ComponentType } from 'react'
 import type { ShopMe } from '@/lib/koup-me'
-import type { Order, OrderItem } from '@/lib/koup-orders'
+import type { Fulfilment, Order, OrderItem } from '@/lib/koup-orders'
 
 /** What the app needs to know about who is holding the phone. */
 export type KoupAuth = {
@@ -32,7 +32,15 @@ export type KoupAuth = {
   liveOrder?: Order | null
   pastOrders?: Order[]
   /** Send the basket to the shop. Resolves with the created order. */
-  placeOrder?: (items: OrderItem[], note?: string) => Promise<Order | null>
+  placeOrder?: (
+    items: OrderItem[],
+    opts?: {
+      note?: string
+      fulfilment?: Fulfilment
+      table_number?: string
+      beans_spent?: number
+    },
+  ) => Promise<Order | null>
   refreshOrders?: () => Promise<void> | void
 }
 
