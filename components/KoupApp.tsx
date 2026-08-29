@@ -764,11 +764,13 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
 
             <div className="panel" ref={panelRef}>
               {Install ? <Install /> : null}
+              {/* "امسح عند الكاشير" was removed. It scanned nothing: the
+                  handler threw a decorative burst of beans and returned. A
+                  button that mimes an action the app cannot perform is worse
+                  than no button — it is the reason this flow was impossible
+                  to understand. When there is a real code for the till to
+                  scan, it comes back here and it will do something. */}
               <div className="cupcta">
-                <button className="btn-gold press"
-                  onClick={e => { SFX.resume(); beanBurst(9, e.currentTarget) }}>
-                  {t('home.scan', 'امسح عند الكاشير')}
-                </button>
                 {/* No longer a tab — نقاطي IS this screen now. What is left
                     behind that door is the ledger: every point that moved and
                     why. So it is named for what it holds. */}
@@ -879,29 +881,12 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
                 ))}
               </div>
 
-              <div className="sechead"><h3>{t('home.challenges', 'تحدّيات هالأسبوع')}</h3></div>
-              <div className="chal">
-                <div className="chal-top">
-                  <div className="chal-ic"><Icon d={P.target} s={19} /></div>
-                  <div className="t"><b>{t('ch1.t', '٣ زيارات هالأسبوع')}</b>
-                    <span>{t('ch1.s', 'زيارتين من ٣')}</span></div>
-                  <span className="reward">{t('ch1.r', '+٢٠')}</span>
-                </div>
-                <div className="mini"><i style={{ width: '66%' }} /></div>
-                <div className="chal-foot"><span>{t('ch1.a', '٢ / ٣')}</span>
-                  <span className="urgent">{t('ch1.b', 'باقي يومين')}</span></div>
-              </div>
-              <div className="chal">
-                <div className="chal-top">
-                  <div className="chal-ic"><Icon d={P.cup} s={19} /></div>
-                  <div className="t"><b>{t('ch2.t', 'جرّب مشروب جديد')}</b>
-                    <span>{t('ch2.s', 'أي صنف ما طلبته قبل')}</span></div>
-                  <span className="reward">{t('ch2.r', '+١٥')}</span>
-                </div>
-                <div className="mini"><i style={{ width: '0%' }} /></div>
-                <div className="chal-foot"><span>{t('ch2.a', '٠ / ١')}</span>
-                  <span>{t('ch2.b', 'باقي ٥ أيام')}</span></div>
-              </div>
+              {/* "تحدّيات هالأسبوع" removed. Both challenges were literals —
+                  "٢ / ٣ زيارات", "باقي يومين", a 66% progress bar — the same
+                  numbers for every customer, advancing for nobody. Two
+                  invented cards on the busiest screen in the app is exactly
+                  the clutter that made home hard to read. They come back the
+                  day the backend can actually count a challenge. */}
             </div>
           </div>
         )}
@@ -1265,37 +1250,37 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
         {locked && Gate ? <Gate /> : null}
 
         {/* ── tab bar ──────────────────────────────────────────────────
-            Three tabs, down from five.
-
-            What was here: الرئيسية · المنيو · [+ طلب جديد] · المكافآت · السلة.
-            Two of those five did the same thing — newOrder() was literally
-            go('menu') — so the biggest, most prominent control on the screen
-            was a second door into the room next to it. Meanwhile the order
-            tracking screen, the thing a waiting customer checks most, had no
-            tab at all and could only be reached by tapping a card on home.
-
-            Now: نقاطي is the cup, the balance and the rewards. المنيو is
-            where you order. طلبي is one place for "my order" — the basket
-            before you send it, the live status after. */}
+            Two tabs and a button. المنيو is not a place you go, it is what
+            you do — so it is the big glowing + in the middle where a thumb
+            lands without aiming, not a word competing with two others. */}
         <nav className="tabs">
-          {([
-            ['home', P.home, 'nav.home', 'نقاطي'],
-            ['menu', P.list, 'nav.menu2', 'المنيو'],
-            ['cart', P.bag, 'nav.orders', 'طلباتي'],
-          ] as const).map(([sc, d, k, ar]) => (
-            <button key={sc} className="tab"
-              aria-current={screen === sc || (sc === 'cart' && screen === 'track')}
-              onClick={() => go(sc as Screen)}>
-              <span className="tabic" key={sc === 'cart' ? cartBump : undefined}
-                data-jump={sc === 'cart' && cartBump > 0 ? '1' : undefined}>
-                <Icon d={d} />
-                {sc === 'cart' && cartCount > 0 && (
-                  <span className="tabcount num">{cartCount}</span>
-                )}
-              </span>
-              <span>{t(k, ar)}</span>
-            </button>
-          ))}
+          <button className="tab" aria-current={screen === 'home'}
+            onClick={() => go('home')}>
+            <Icon d={P.home} />
+            <span>{t('nav.home', 'نقاطي')}</span>
+          </button>
+
+          <button className="tab tab-new press"
+            aria-current={screen === 'menu'}
+            aria-label={t('nav.new', 'اطلب')}
+            onClick={() => { SFX.tap(); haptic(12); newOrder() }}>
+            <span className="newring" aria-hidden />
+            <span className="newdot">
+              <svg viewBox="0 0 24 24" aria-hidden><path d="M12 5v14M5 12h14" /></svg>
+            </span>
+            <span>{t('nav.new', 'اطلب')}</span>
+          </button>
+
+          <button className="tab"
+            aria-current={screen === 'cart' || screen === 'track'}
+            onClick={() => go('cart')}>
+            <span className="tabic" key={cartBump}
+              data-jump={cartBump > 0 ? '1' : undefined}>
+              <Icon d={P.bag} />
+              {cartCount > 0 && <span className="tabcount num">{cartCount}</span>}
+            </span>
+            <span>{t('nav.orders', 'طلباتي')}</span>
+          </button>
         </nav>
       </div>
     </div>
