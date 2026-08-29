@@ -606,10 +606,8 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
   useEffect(() => {
     if (!sheetItem) { setPickedVariant(null); return }
     const vs = sheetItem.v ?? []
-    /* Preselect the first option. With nothing selected every chip looked
-       identical and the sheet gave no clue that a choice was even required —
-       and the price shown belonged to no particular option. */
-    setPickedVariant(vs.length ? vs[0] : null)
+    /* Nothing preselected: the customer picks. */
+    setPickedVariant(vs.length === 1 ? vs[0] : null)
     setPickNote('')
   }, [sheetItem])
 
@@ -669,6 +667,9 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
   const itemTotal = sheetItem
     ? (pickedVariant?.price ?? sheetItem.p) * qty
     : 0
+  /* A drink sold in four flavours has no single price, so adding it without
+     choosing one would put a guess in the basket and a guess on the ticket. */
+  const needsPick = !!sheetItem && (sheetItem.v?.length ?? 0) > 1 && !pickedVariant
   const cartSub = lines.reduce((n, l) => n + l.unit_price * l.qty, 0)
   const beanDiscount = Math.round(beansSpent / 3.33)
   const cartTotal = Math.max(0, cartSub - beanDiscount)
@@ -1266,9 +1267,16 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
                       const extra = v.price - sheetItem.p
                       return (
                         <button
-                          key={v.id}
+                          key={v.id ?? v.label}
                           className="opt"
-                          aria-pressed={pickedVariant?.id === v.id}
+                          /* Compare on the LABEL, not the id. The public
+                             menu endpoint was not returning variant ids, so
+                             `picked?.id === v.id` was `undefined === undefined`
+                             — true for every chip, which is why all four drew
+                             themselves gold at once. The backend now sends the
+                             id; this stays label-based so a missing id can
+                             never light up the whole row again. */
+                          aria-pressed={!!pickedVariant && pickedVariant.label === v.label}
                           onClick={() => { SFX.tap(); setPickedVariant(v) }}
                         >
                           <span>{v.label}</span>
@@ -1289,8 +1297,12 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
                 {/* Adding is not ordering. Jumping to the cart after every
                     item meant a second drink cost you two extra taps to get
                     back — so it closes and leaves you where the menu is. */}
-                <button className="cta press" onClick={() => { closeSheet(); addToCart() }}>
-                  <span>{t('it.add', 'أضف للسلة')}</span> · <span className="price">₪{itemTotal}</span>
+                <button className="cta press" disabled={needsPick}
+                  onClick={() => { if (needsPick) return; closeSheet(); addToCart() }}>
+                  <span>{needsPick
+                    ? t('it.pickfirst', 'اختر النوع أولاً')
+                    : t('it.add', 'أضف للسلة')}</span>
+                  {!needsPick && <> · <span className="price">₪{itemTotal}</span></>}
                 </button>
               </div>
             </>)}
