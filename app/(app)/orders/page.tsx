@@ -51,6 +51,7 @@ import { DaySummaryCards } from "@/components/sales/day-summary-cards"
 import { SaleRevisions } from "@/components/sales/sale-revisions"
 import { SaleDetail } from "@/components/sales/sale-detail"
 import { PageHeader } from "@/components/page-header"
+import { LiveOrders } from "@/components/orders/live-orders"
 import { ReportsTeaser } from "@/components/reports/reports-teaser"
 
 gsap.registerPlugin(ScrollTrigger)
@@ -304,6 +305,10 @@ export default function SalesPage() {
               className={cn(buttonVariants({ variant: "outline" }), "gap-1.5 md:hidden")}
             >
               <ReceiptText className="size-4" />
+
+      {/* Orders customers sent from the app. Different table from the
+          sales history below — see api/orders.ts. */}
+      <LiveOrders />
               الديون
             </Link>
             {isOwner && count ? (

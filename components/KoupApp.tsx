@@ -1126,7 +1126,7 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
                     <b>{t('tr.no', 'طلب')} #{liveOrder.id}</b>
                     <span>{liveOrder.status_label}</span>
                   </div>
-                  <span className="p num">₪{liveOrder.total}</span>
+                  <span className="p num">₪{Number(liveOrder.total).toFixed(2)}</span>
                 </div>
                 <div className="steps">
                   {(['placed', 'accepted', 'preparing', 'ready'] as const).map((st) => {
@@ -1151,7 +1151,10 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
                   <div className="line" key={it.id ?? n}>
                     <span className="qbadge num">{Math.round(Number(it.quantity))}</span>
                     <div className="t"><h4>{it.name}</h4>{it.note ? <p>{it.note}</p> : null}</div>
-                    <span className="p num">₪{it.line_total ?? it.unit_price}</span>
+                    {/* The API sends Decimals as strings — "12.00000" — because
+                        that is what the database holds. Money is displayed to
+                        two places, always. */}
+                    <span className="p num">₪{Number(it.line_total ?? it.unit_price).toFixed(2)}</span>
                   </div>
                 ))}
               </>
@@ -1174,7 +1177,7 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
                       <h4>{t('tr.no', 'طلب')} #{o.id} · {o.status_label}</h4>
                       <p>{new Date(o.created_at).toLocaleDateString('ar')}</p>
                     </div>
-                    <span className="p num">₪{o.total}</span>
+                    <span className="p num">₪{Number(o.total).toFixed(2)}</span>
                   </div>
                 ))}
               </>
@@ -1330,7 +1333,7 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
                 <div><span>{t('ok.items', 'الأصناف')}</span>
                   <b className="num">{placedOrder.items.length}</b></div>
                 <div><span>{t('ok.total', 'الإجمالي')}</span>
-                  <b className="num">₪{placedOrder.total}</b></div>
+                  <b className="num">₪{Number(placedOrder.total).toFixed(2)}</b></div>
                 <div><span>{t('ok.status', 'الحالة')}</span>
                   <b>{placedOrder.status_label}</b></div>
               </div>
