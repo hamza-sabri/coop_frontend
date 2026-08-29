@@ -24,6 +24,9 @@ type Lang = 'ar' | 'en' | 'he'
 type Screen = 'home' | 'menu' | 'cart' | 'track' | 'wallet' | 'rewards'
 
 const FILL = 0.76
+/* A gear, inline — the icon set in this file has no settings glyph and adding
+   one to P would mean touching every consumer of it. */
+const GEAR = 'M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Zm7.4-3.5c0 .5-.05 1-.13 1.46l2.06 1.6-2 3.46-2.42-.98a7.6 7.6 0 0 1-2.53 1.47L14 21.7h-4l-.38-2.69a7.6 7.6 0 0 1-2.53-1.47l-2.42.98-2-3.46 2.06-1.6a7.7 7.7 0 0 1 0-2.92L2.67 8.94l2-3.46 2.42.98A7.6 7.6 0 0 1 9.62 5L10 2.3h4l.38 2.7c.92.31 1.77.81 2.53 1.46l2.42-.98 2 3.46-2.06 1.6c.08.47.13.96.13 1.46Z'
 /* Zero, not 248. This constant seeded beansRef, which the cart and the ledger
    render directly — so even after the hero read real data those two screens
    still quoted a stranger's balance until /shop/me/ answered. There is no
@@ -168,6 +171,12 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
   const [orderNote, setOrderNote] = useState('')
   const [sending, setSending] = useState(false)
   const [sendError, setSendError] = useState<string | null>(null)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  /* The receipt shown straight after ordering. Confirmation has to be
+     explicit: the old flow navigated to a tracking screen and hoped you
+     inferred that something had happened. */
+  const [placedOrder, setPlacedOrder] = useState<import('@/lib/koup-orders').Order | null>(null)
+  const justPlacedRef = useRef<import('@/lib/koup-orders').Order | null>(null)
   /* Which option of this drink is being ordered. Reset every time the sheet
      opens, or the last drink's flavour follows the next one in. */
   const [pickedVariant, setPickedVariant] =
@@ -597,7 +606,10 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
   useEffect(() => {
     if (!sheetItem) { setPickedVariant(null); return }
     const vs = sheetItem.v ?? []
-    setPickedVariant(vs.length === 1 ? vs[0] : null)
+    /* Preselect the first option. With nothing selected every chip looked
+       identical and the sheet gave no clue that a choice was even required —
+       and the price shown belonged to no particular option. */
+    setPickedVariant(vs.length ? vs[0] : null)
     setPickNote('')
   }, [sheetItem])
 
@@ -688,17 +700,48 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
         </header>
 
         {/* language + sound, top corner — dev affordances, not product chrome */}
-        <div className="koup-chrome">
-          <button className="koup-sfx" aria-pressed={sound}
-            onClick={() => { setSound(SFX.toggle()); SFX.tap() }} aria-label="Sound">
-            {sound ? '🔊' : '🔇'}
-          </button>
-          {(['ar', 'en', 'he'] as Lang[]).map(l => (
-            <button key={l} aria-pressed={lang === l} onClick={() => { setLang(l); SFX.tap() }}>
-              {l === 'ar' ? 'ع' : l === 'en' ? 'EN' : 'עב'}
-            </button>
-          ))}
-        </div>
+        {/* Language and sound used to float over every screen, including the
+            checkout — three language chips and a speaker sitting on top of the
+            confirm button. They are settings, used once, so they live behind
+            the avatar with everything else about "me". */}
+        {settingsOpen && (
+          <div className="koup-settings" role="dialog" aria-modal="true"
+            onClick={() => setSettingsOpen(false)}>
+            <div className="koup-settings-card" onClick={e => e.stopPropagation()}>
+              <h3>{t('set.h', 'الإعدادات')}</h3>
+
+              <div className="setrow">
+                <span>{t('set.lang', 'اللغة')}</span>
+                <div className="setseg">
+                  {(['ar', 'en', 'he'] as Lang[]).map(l => (
+                    <button key={l} aria-pressed={lang === l}
+                      onClick={() => { setLang(l); SFX.tap() }}>
+                      {l === 'ar' ? 'عربي' : l === 'en' ? 'EN' : 'עברית'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="setrow">
+                <span>{t('set.sound', 'الصوت')}</span>
+                <button className="setswitch" aria-pressed={sound}
+                  onClick={() => { setSound(SFX.toggle()); SFX.tap() }}>
+                  {sound ? t('set.on', 'مفتوح') : t('set.off', 'مكتوم')}
+                </button>
+              </div>
+
+              {openProfile && (
+                <button className="btn-ghost press" style={{ marginTop: 6 }}
+                  onClick={() => { setSettingsOpen(false); openProfile() }}>
+                  {t('set.account', 'إدارة الحساب')}
+                </button>
+              )}
+              <button className="btn-ghost press" onClick={() => setSettingsOpen(false)}>
+                {t('set.close', 'تمام')}
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* ── HOME ─────────────────────────────────────────────────────── */}
         {screen === 'home' && (
@@ -724,6 +767,15 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
                         ? t('home.subAnon', 'سجّل دخولك وابدأ تجمع نقاطك')
                         : t('home.sub', 'مكانك التاني جاهز لك')}</p>
                     </div>
+                    {/* The way into settings: a small gear beside the avatar.
+                        One place for "things about me", instead of controls
+                        floating over the app on every screen. */}
+                    {!authLocked && (
+                      <button className="gearbtn press" aria-label={t('set.h', 'الإعدادات')}
+                        onClick={() => { SFX.tap(); setSettingsOpen(true) }}>
+                        <Icon d={GEAR} s={18} />
+                      </button>
+                    )}
                     {Account ? (
                       <div className="avatar avatar-slot">
                         <Account />
@@ -938,15 +990,6 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
               <h2>{t('cart.h', 'سلّتك')}</h2>
               <p><span className="num">{cartCount}</span> {t('cart.subN', 'صنف · كوب — شارع ٢٢')}</p>
             </div></div>
-            <div className="otypes">
-              {([['pickup', P.store, 'استلام'], ['dinein', P.table, 'على الطاولة'], ['delivery', P.bike, 'توصيل']] as const)
-                .map(([k, d, ar]) => (
-                  <button key={k} className="otype" aria-pressed={orderType === k}
-                    onClick={() => { SFX.tap(); setOrderType(k) }}>
-                    <Icon d={d} s={21} /><span>{t(`cart.${k}`, ar)}</span>
-                  </button>
-                ))}
-            </div>
 
             {lines.length === 0 && (
               <div className="empty">
@@ -968,6 +1011,21 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
                   onClick={() => { SFX.tap(); setLines(p => p.filter(x => x.key !== l.key)) }}>×</button>
               </div>
             ))}
+
+            {/* How you want it, AFTER what you are having. The three big
+                tiles used to sit above the basket, so the first thing on the
+                checkout screen was a question nobody had asked yet and the
+                items — the reason you are here — were pushed below the fold.
+                Small, quiet, and where a decision actually belongs. */}
+            <div className="otypes otypes-sm">
+              {([['pickup', P.store, 'استلام'], ['dinein', P.table, 'على الطاولة'], ['delivery', P.bike, 'توصيل']] as const)
+                .map(([k, d, ar]) => (
+                  <button key={k} className="otype" aria-pressed={orderType === k}
+                    onClick={() => { SFX.tap(); setOrderType(k) }}>
+                    <Icon d={d} s={16} /><span>{t(`cart.${k}`, ar)}</span>
+                  </button>
+                ))}
+            </div>
 
             <div className="beanpay">
               <div className="beanpay-h">
@@ -995,6 +1053,11 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
               <b className="num">{Math.round((cartTotal / 5) * 1.25)}</b>&nbsp;
               <span>{t('unit.points2', 'نقطة من هالطلب')}</span>
             </div>
+            {sendError && (
+              <p style={{ color: 'var(--app-rust)', fontSize: 12.5, textAlign: 'center', marginTop: 10 }}>
+                {sendError}
+              </p>
+            )}
             <div className="sheet-foot" style={{ borderTop: 0, marginTop: 18 }}>
               <button className="cta press" disabled={!online || !lines.length || sending}
                 onClick={async () => {
@@ -1003,7 +1066,7 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
                   try {
                     /* Straight to Django. The old handler set a boolean and
                        navigated — which is why nothing ever reached the admin. */
-                    await placeOrder?.(lines.map(l => ({
+                    const created = await placeOrder?.(lines.map(l => ({
                       name: l.name,
                       unit_price: String(l.unit_price),
                       quantity: String(l.qty),
@@ -1011,14 +1074,23 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
                       product: l.product ?? null,
                       variant: l.variant ?? null,
                     })), orderNote)
+                    justPlacedRef.current = created ?? null
+                    setPlacedOrder(created ?? null)
+                    const placed = await Promise.resolve(justPlacedRef.current)
                     setLines([]); setOrdered(true)
-                    SFX.chime(); haptic([10, 50, 18]); go('track')
-                  } catch {
+                    SFX.chime(); haptic([10, 50, 18])
+                    void placed
+                  } catch (e) {
                     SFX.tap()
-                    setSendError(t('cart.failed', 'ما زبط الطلب — جرّب كمان مرة'))
+                    /* Show it. The first version of this swallowed the error
+                       and left the basket looking untouched, which is exactly
+                       how "nothing happens when I order" felt from outside. */
+                    setSendError(String((e as Error)?.message || '')
+                      .slice(0, 140) || t('cart.failed', 'ما زبط الطلب — جرّب كمان مرة'))
                   } finally { setSending(false) }
                 }}>
-                <span>{t('cart.confirm', 'أكّد الطلب')}</span> · <span className="price">₪{cartTotal}</span>
+                <span>{sending ? t('cart.sending', 'عم نبعت…') : t('cart.confirm', 'أكّد الطلب')}</span>
+                {' · '}<span className="price">₪{cartTotal}</span>
               </button>
             </div>
             <p style={{ fontSize: 11.5, textAlign: 'center', marginTop: 10,
@@ -1221,9 +1293,6 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
                   <span>{t('it.add', 'أضف للسلة')}</span> · <span className="price">₪{itemTotal}</span>
                 </button>
               </div>
-              <p style={{ fontSize: 11.5, color: 'var(--app-gold)', textAlign: 'center', marginTop: 11 }}>
-                {t('it.or', 'أو بـ')} <b className="num">{Math.round(itemTotal * 3.33)}</b>
-              </p>
             </>)}
           </div>
         </div>
@@ -1234,6 +1303,32 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
             catch was the one moment it was unmounted. It asks once, only when
             Clerk has no number on file, and remembers a dismissal. */}
         {Phone ? <Phone armed={ordered} /> : null}
+
+        {/* Order placed — say so, plainly, with the number the counter will
+            call. "Navigate to a tracking screen" is not confirmation; the
+            customer needs to see that the shop has it. */}
+        {placedOrder && (
+          <div className="koup-settings" role="dialog" aria-modal="true"
+            onClick={() => { setPlacedOrder(null); go('track') }}>
+            <div className="koup-settings-card placed" onClick={e => e.stopPropagation()}>
+              <div className="placed-tick"><Icon d={P.check} s={26} /></div>
+              <h3>{t('ok.h', 'وصل طلبك للكاشير')}</h3>
+              <p className="placed-no">{t('tr.no', 'طلب')} <b className="num">#{placedOrder.id}</b></p>
+              <div className="placed-rows">
+                <div><span>{t('ok.items', 'الأصناف')}</span>
+                  <b className="num">{placedOrder.items.length}</b></div>
+                <div><span>{t('ok.total', 'الإجمالي')}</span>
+                  <b className="num">₪{placedOrder.total}</b></div>
+                <div><span>{t('ok.status', 'الحالة')}</span>
+                  <b>{placedOrder.status_label}</b></div>
+              </div>
+              <button className="cta press"
+                onClick={() => { setPlacedOrder(null); go('track') }}>
+                {t('ok.track', 'تابع الطلب')}
+              </button>
+            </div>
+          </div>
+        )}
 
         {splashUp && (
           <div className="splash">

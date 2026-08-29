@@ -338,9 +338,14 @@ body:has(.koup){overflow:hidden}
   background:linear-gradient(158deg,var(--app-surf2),var(--app-surf));border:1px solid var(--app-line);
   color:var(--app-ink2);box-shadow:var(--clay-sm);display:flex;align-items:center;gap:6px;
   transition:all var(--d2) var(--ease)}
-.opt[aria-pressed="true"]{background:linear-gradient(158deg,rgba(240,216,176,.3),rgba(221,188,138,.14));
-  border-color:var(--app-gold);color:var(--app-gold);font-weight:600;
-  box-shadow:inset 0 1.5px 0 rgba(255,255,255,.25), 0 0 16px -4px rgba(221,188,138,.5)}
+/* The selected option has to be unmistakable at arm's length in a café. The
+   old treatment was a 30%-opacity wash and a gold border — on a dark screen,
+   at a glance, four chips that all looked the same. Solid fill, dark text. */
+.opt[aria-pressed="true"]{background:var(--app-gold);border-color:var(--app-gold);
+  color:#1B1200;font-weight:700;
+  box-shadow:0 0 0 3px rgba(221,188,138,.22), 0 8px 18px -10px rgba(221,188,138,.9)}
+.opt[aria-pressed="true"] small{opacity:.8;color:#1B1200}
+.opt:active{transform:scale(.96)}
 .opt small{font-size:10.5px;opacity:.72;font-variant-numeric:tabular-nums;font-family:var(--koup-fs-dis)}
 .sheet-foot{display:flex;align-items:center;gap:12px;margin-top:22px;padding-top:16px;border-top:1px solid var(--app-line)}
 .qty{display:flex;align-items:center;gap:11px;background:rgba(0,0,0,.28);border:1px solid var(--app-line);
@@ -970,3 +975,44 @@ body:has(.koup){overflow:hidden}
 .line .lx{margin-inline-start:8px;width:28px;height:28px;border-radius:50%;
   color:var(--app-ink3);font-size:19px;line-height:1;flex:none}
 .line .lx:active{color:var(--app-rust)}
+
+/* ── settings, behind the avatar ─────────────────────────────────────────
+   These were three language chips and a speaker floating over every screen,
+   including on top of the checkout button. They are settings — touched once
+   and then never — so they belong in one place with everything else about
+   "me", not in the way of ordering coffee. */
+.koup-settings{position:absolute;inset:0;z-index:80;display:flex;align-items:flex-end;
+  background:rgba(5,8,20,.7)}
+.koup-settings-card{width:100%;border-radius:26px 26px 0 0;padding:22px 18px
+  calc(20px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:14px;
+  background:linear-gradient(180deg,var(--app-surf2),var(--app-surf) 60%);
+  border-top:1px solid var(--app-line)}
+.koup-settings-card h3{font-size:17px}
+.setrow{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.setrow > span{font-size:14px;color:var(--app-ink2)}
+.setseg{display:flex;gap:6px}
+.setseg button,.setswitch{padding:7px 13px;border-radius:999px;font-size:13px;
+  border:1px solid var(--app-line);color:var(--app-ink2)}
+.setseg button[aria-pressed="true"],.setswitch[aria-pressed="true"]{
+  background:var(--app-gold);color:#1b1200;border-color:transparent;font-weight:600}
+.gearbtn{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;
+  color:var(--app-ink3);border:1px solid var(--app-line);flex:none}
+
+/* compact order-type row — a segmented control, not three hero tiles */
+.otypes-sm{display:flex;gap:8px;margin:14px 0 4px}
+.otypes-sm .otype{flex:1;flex-direction:row;gap:7px;padding:9px 10px;border-radius:14px;
+  font-size:12.5px;min-height:0}
+.otypes-sm .otype[aria-pressed="true"]{background:var(--app-gold);color:#1B1200;
+  border-color:transparent;font-weight:700}
+
+/* order placed — the receipt moment */
+.koup-settings-card.placed{align-items:center;text-align:center;gap:10px;padding-top:26px}
+.placed-tick{width:56px;height:56px;border-radius:50%;display:grid;place-items:center;
+  color:var(--app-mint);background:rgba(127,209,174,.12);
+  border:1px solid rgba(127,209,174,.3)}
+.placed-no{color:var(--app-ink2);font-size:14px}
+.placed-no b{color:var(--app-gold);font-size:19px;margin-inline-start:4px}
+.placed-rows{width:100%;display:flex;flex-direction:column;gap:9px;margin:6px 0 4px}
+.placed-rows > div{display:flex;justify-content:space-between;font-size:13.5px;
+  color:var(--app-ink2)}
+.placed-rows b{color:var(--app-ink)}
