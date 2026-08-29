@@ -268,10 +268,18 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
      to the thing we are trying to make cheaper. */
   const [lite, setLite] = useState(false)
   useEffect(() => {
-    // Start from whatever we already know (remembered verdict, or the spec
-    // sheet), then correct it once real frames have been counted.
+    /* Decided ONCE, at mount, from what we already know. The measurement runs
+       too, but its verdict is only remembered for the NEXT launch — it must
+       not be applied now.
+
+       Flipping this mid-session was the other half of "animations sometimes
+       play, sometimes half play": lite mode sets `animation:none` on a whole
+       family of elements, so a probe that landed 600ms after mount would
+       stop every animation already in flight, halfway through. And because a
+       borderline phone measures differently from one launch to the next, the
+       same screen behaved differently every time it was opened. */
     setLite(lowPower())
-    void probePerformance().then(setLite)
+    void probePerformance()
   }, [])
 
   /* Pull down to refresh. The customer has just been to the counter and wants
@@ -281,8 +289,7 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
     haptic([8])
     await Promise.all([refreshMe?.(), refreshOrders?.()])
   }, [refreshMe, refreshOrders])
-  const { pull, busy: refreshing, ready: pullReady } =
-    usePullToRefresh(scrollRef, doRefresh, !authLocked)
+  usePullToRefresh(scrollRef, doRefresh, !authLocked)
 
   const locked = authLocked && introDone
   const reduced = typeof window !== 'undefined'
@@ -746,14 +753,7 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
 
         {/* ── HOME ─────────────────────────────────────────────────────── */}
         {screen === 'home' && (
-          <div className="app-scroll hero-mode koup-scroll" ref={scrollRef} onScroll={() => paintGloss()}
-            style={pull ? { transform: `translateY(${pull}px)`, transition: refreshing ? 'none' : undefined } : undefined}>
-            {pull > 0 && (
-              <div className="ptr" data-ready={pullReady ? 'true' : 'false'}
-                style={{ height: pull, opacity: Math.min(1, pull / 48) }}>
-                <span className={refreshing ? 'ptr-dot spin' : 'ptr-dot'} />
-              </div>
-            )}
+          <div className="app-scroll hero-mode koup-scroll" ref={scrollRef} onScroll={() => paintGloss()}>
             <div className="hero3d" ref={heroRef}
               onClick={() => { SFX.resume(); Cup.pop(); Cup.splash(.7) }}>
               <div className="topfade" />

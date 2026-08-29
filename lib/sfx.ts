@@ -40,7 +40,7 @@ export const SFX = (() => {
      to synthesise instead — the first play of a session is usually the synth. */
   function playSample(c: any, name: string, dur: number, peak = .9){
     const b = buffers[name]; if (!b) return false
-    const t = c.currentTime
+    const t = c.currentTime + LEAD
     const src = c.createBufferSource(); src.buffer = b
     const g = c.createGain()
     g.gain.setValueAtTime(.0001, t)
@@ -63,6 +63,14 @@ export const SFX = (() => {
      instant the context starts, so the first tap makes a sound instead of
      being swallowed. */
   let resuming = false
+  /* One more reason sounds went missing: every call here schedules at
+     c.currentTime + LEAD, which is the AUDIO clock. When the main thread stalls —
+     and it did, badly, while pull-to-refresh was re-rendering the whole app
+     per touchmove — that timestamp is already in the past by the time the
+     nodes are wired up, and the browser drops the sound rather than playing
+     it late. Scheduling a hair ahead costs nothing perceptible and makes the
+     call survive a busy frame. */
+  const LEAD = 0.012
   function live(){ const c = boot(); if(!c || !on) return null;
     if(c.state === 'suspended' && !resuming){
       resuming = true
@@ -108,14 +116,14 @@ export const SFX = (() => {
     /** Set the mute state explicitly (and remember it). */
     setEnabled(next: boolean){ on = next; writePrefs({ sound: on }); if(on) live(); return on; },
     resume(){ live(); },
-    tap(){ const c = live(); if(!c) return; tone(1180, c.currentTime, .05, .05, 'triangle'); },
-    tick(){ const c = live(); if(!c) return; tone(1560, c.currentTime, .035, .022, 'sine'); },
-    whoosh(){ const c = live(); if(!c) return; noiseBurst(c.currentTime, .55, 260, 1500, .8, .045); },
-    settle(){ const c = live(); if(!c) return; const t = c.currentTime;
+    tap(){ const c = live(); if(!c) return; tone(1180, c.currentTime + LEAD, .05, .05, 'triangle'); },
+    tick(){ const c = live(); if(!c) return; tone(1560, c.currentTime + LEAD, .035, .022, 'sine'); },
+    whoosh(){ const c = live(); if(!c) return; noiseBurst(c.currentTime + LEAD, .55, 260, 1500, .8, .045); },
+    settle(){ const c = live(); if(!c) return; const t = c.currentTime + LEAD;
       const o = tone(120, t, .34, .16, 'sine'); if(o) o.frequency.exponentialRampToValueAtTime(52, t + .3);
       noiseBurst(t, .09, 1600, 500, 1.6, .05); },
     pour(dur: number){
-      const c = live(); if(!c) return; const t = c.currentTime;
+      const c = live(); if(!c) return; const t = c.currentTime + LEAD;
       void loadSample(c, 'pour');
       if (playSample(c, 'pour', dur)) return;
       // A pour is three things at once. The hiss of liquid is broadband noise.
@@ -149,7 +157,7 @@ export const SFX = (() => {
     },
     /* The bead of coffee landing back in the cup. */
     drop(){
-      const c = live(); if(!c) return; const t = c.currentTime;
+      const c = live(); if(!c) return; const t = c.currentTime + LEAD;
       void loadSample(c, 'drop');
       if (playSample(c, 'drop', .24, .45)) return;
       /* Small, bright, short and dry. The same shape an octave lower with a
@@ -167,7 +175,7 @@ export const SFX = (() => {
     /* Kept, but no longer part of the opening — the pour ends on its own.
        Call it from anywhere that wants a drink sound. */
     sip(){
-      const c = live(); if(!c) return; const t = c.currentTime;
+      const c = live(); if(!c) return; const t = c.currentTime + LEAD;
       void loadSample(c, 'sip');
       if (playSample(c, 'sip', .8, .85)) return;
       // Air drawn through liquid: a formant that climbs as the gap narrows,
@@ -189,18 +197,18 @@ export const SFX = (() => {
     /* Two rising blips — a confirmation, not an alert. Short enough to fire
        on every add without becoming the sound of the app. */
     added(){
-      const c = live(); if(!c) return; const t = c.currentTime;
+      const c = live(); if(!c) return; const t = c.currentTime + LEAD;
       tone(660, t, .09, .045, 'sine');
       tone(990, t + .055, .12, .038, 'sine');
       tone(1320, t + .10, .10, .020, 'triangle');
     },
-    sweep(){ const c = live(); if(!c) return; const t = c.currentTime;
+    sweep(){ const c = live(); if(!c) return; const t = c.currentTime + LEAD;
       const o = tone(520, t, .5, .05, 'sine'); if(o) o.frequency.exponentialRampToValueAtTime(1240, t + .42); },
-    chime(){ const c = live(); if(!c) return; const t = c.currentTime;
+    chime(){ const c = live(); if(!c) return; const t = c.currentTime + LEAD;
       [[784,0],[1046.5,.08],[1318.5,.16]].forEach(([f,d]: number[]) => tone(f, t + d, .75, .07, 'sine')); },
     /* One tick per point landing in the cup. */
     point(i: number){ const c = live(); if(!c) return;
-      tone(880 + (i % 4) * 110, c.currentTime, .12, .045, 'triangle'); }
+      tone(880 + (i % 4) * 110, c.currentTime + LEAD, .12, .045, 'triangle'); }
   };
 })();
 /* Chrome refuses (and logs) a vibrate before the user has tapped the page, so

@@ -622,6 +622,11 @@ body:has(.koup){overflow:hidden}
    a scroll that never catches up. With it, off-screen cards cost nothing
    until they approach the viewport. contain-intrinsic-size keeps the
    scrollbar honest so the list does not jump as they realise their size. */
+/* NOTE on animations: a card skipped by content-visibility does not run its
+   animations at all, and picks them up mid-cycle when it scrolls in. That is
+   correct behaviour and it is also why the two decorative per-card animations
+   were removed rather than left to start at random offsets — an effect that
+   plays only sometimes reads as a bug, not as a detail. */
 .pcard{content-visibility:auto;contain-intrinsic-size:auto 320px;
   position:relative;aspect-ratio:3/4.05;border-radius:28px;overflow:hidden;cursor:pointer;
   border:1px solid rgba(255,255,255,.10);isolation:isolate;
