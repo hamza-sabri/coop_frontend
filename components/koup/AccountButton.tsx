@@ -8,8 +8,9 @@
    the app rather than dropped in looking like someone else's component.
    ========================================================================== */
 import { UserButton } from '@clerk/nextjs'
+import { Settings2 } from 'lucide-react'
 
-export default function AccountButton() {
+export default function AccountButton({ onSettings }: { onSettings?: () => void }) {
   /* Where sign-out lands is set once on <ClerkProvider afterSignOutUrl>.
      Passing it here as well is not a prop of UserButton — it type-errors and
      is dropped, so the redirect quietly came from the provider anyway. */
@@ -39,6 +40,18 @@ export default function AccountButton() {
           userButtonPopoverFooter: { display: 'none' },
         },
       }}
-    />
+    >
+      {/* Language and sound live HERE, in the account menu, beside "Manage
+          account" and "Sign out" — the one place a person already looks for
+          things about themselves. A separate gear beside the avatar was a
+          second, competing entry point for the same idea. */}
+      <UserButton.MenuItems>
+        <UserButton.Action
+          label="الإعدادات"
+          labelIcon={<Settings2 size={15} />}
+          onClick={() => onSettings?.()}
+        />
+      </UserButton.MenuItems>
+    </UserButton>
   )
 }

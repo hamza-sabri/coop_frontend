@@ -11,10 +11,15 @@ export type KoupAuth = {
   Gate?: ComponentType
   /** Opens Clerk's account UI: profile, connected accounts, security. */
   openProfile?: () => void
-  /** Clerk's UserButton — the avatar plus manage-account and sign-out. */
-  Account?: ComponentType
-  /** Asks once for a phone number, after an order. Renders nothing otherwise. */
-  Phone?: ComponentType<{ armed?: boolean }>
+  /** Clerk's UserButton — the avatar plus manage-account, settings and
+   *  sign-out. */
+  Account?: ComponentType<{ onSettings?: () => void }>
+  /** Does Clerk already have a number for this customer? */
+  hasPhone?: boolean
+  /** Save one. Resolves true on success. Used as a step INSIDE checkout —
+   *  the counter cannot call out an order it has no way to attach to a
+   *  person, so this is asked before the order is sent, not after. */
+  savePhone?: (phone: string) => Promise<boolean>
   /** "Add to your phone" — hides itself once installed. */
   Install?: ComponentType
   /** This customer's real points, tier and history. Null while signed out or

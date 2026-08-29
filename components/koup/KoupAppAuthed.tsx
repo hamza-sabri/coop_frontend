@@ -7,7 +7,6 @@ import { useAuth, useClerk, useUser } from '@clerk/nextjs'
 import KoupApp from '@/components/KoupApp'
 import SignInGate from '@/components/koup/SignInGate'
 import AccountButton from '@/components/koup/AccountButton'
-import PhonePrompt from '@/components/koup/PhonePrompt'
 import InstallPrompt from '@/components/koup/InstallPrompt'
 import { useShopMe } from '@/lib/koup-me'
 import { useKoupOrders } from '@/lib/koup-orders'
@@ -69,7 +68,23 @@ export default function KoupAppAuthed() {
            ~830KB of it — to render an avatar for a user who does not exist
            yet, on the one screen where the customer is already waiting. */
         Account: user ? AccountButton : undefined,
-        Phone: PhonePrompt,
+        hasPhone: Boolean(user?.primaryPhoneNumber?.phoneNumber),
+        savePhone: async (phone: string) => {
+          const token = await getToken()
+          if (!token) return false
+          const res = await fetch(`${API}/api/v1/clerk/sync/`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({
+              phone,
+              first_name: user?.firstName ?? '',
+              last_name: user?.lastName ?? '',
+              image_url: user?.imageUrl ?? '',
+              email: user?.primaryEmailAddress?.emailAddress ?? '',
+            }),
+          })
+          return res.ok
+        },
         Install: InstallPrompt,
         me,
         refreshMe,

@@ -1021,3 +1021,21 @@ body:has(.koup){overflow:hidden}
 .placed-rows > div{display:flex;justify-content:space-between;font-size:13.5px;
   color:var(--app-ink2)}
 .placed-rows b{color:var(--app-ink)}
+
+/* note on a drink, in the sheet */
+.notefield{display:block;margin-top:16px}
+.notefield > span{display:block;font-size:12px;color:var(--app-ink3);margin-bottom:7px}
+.notefield input{width:100%;padding:12px 14px;border-radius:15px;font:inherit;font-size:14px;
+  background:rgba(255,255,255,.05);border:1px solid var(--app-line);color:var(--app-ink)}
+.notefield input::placeholder{color:var(--app-ink3)}
+
+/* an editable basket line: quantity, note, price, remove */
+.line-edit{align-items:flex-start;gap:10px}
+.lineqty{display:flex;align-items:center;gap:8px;flex:none;
+  border:1px solid var(--app-line);border-radius:14px;padding:4px 8px}
+.lineqty button{width:24px;height:24px;font-size:17px;line-height:1;color:var(--app-ink2)}
+.lineqty span{min-width:16px;text-align:center;font-size:14px}
+.linenote{width:100%;margin-top:4px;padding:6px 0;font:inherit;font-size:12px;
+  background:none;border:0;border-bottom:1px dashed var(--app-line);color:var(--app-ink2)}
+.linenote::placeholder{color:var(--app-ink3)}
+.linenote:focus{outline:none;border-bottom-color:var(--app-gold)}

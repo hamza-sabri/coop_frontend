@@ -172,6 +172,15 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
   const [sending, setSending] = useState(false)
   const [sendError, setSendError] = useState<string | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  /* The phone step. It used to be an ambient card at the root of the app,
+     rendered after the fixed tab bar in the flow — so on a phone the input
+     sat behind the bar and could not be tapped at all. It is now a step in
+     checkout: asked before the order is sent, because a counter cannot call
+     out an order it has no way to attach to a person. */
+  const [phoneStep, setPhoneStep] = useState(false)
+  const [phoneVal, setPhoneVal] = useState('')
+  const [phoneErr, setPhoneErr] = useState<string | null>(null)
+  const [phoneSaving, setPhoneSaving] = useState(false)
   /* The receipt shown straight after ordering. Confirmation has to be
      explicit: the old flow navigated to a tracking screen and hoped you
      inferred that something had happened. */
@@ -249,7 +258,7 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
      Auth arrives as a prop so this component never depends on Clerk being
      configured: with no keys the app simply runs open, which is what keeps
      local development working before the keys land. */
-  const { locked: authLocked, user, Gate, openProfile, Account, Phone, Install, me, refreshMe,
+  const { locked: authLocked, user, Gate, openProfile, Account, Install, me, refreshMe, hasPhone, savePhone,
           liveOrder, pastOrders, placeOrder, refreshOrders } = auth
 
   /* The real numbers. `me` is null while signed out, and briefly on a cold
@@ -650,6 +659,31 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
      throw away what someone had spent five taps choosing. Starting an order
      and abandoning one are different intentions and should not share a
      button — the cart has its own empty control. */
+  /* One submit path, used by the confirm button and by the phone step that
+     may precede it. Kept out of the JSX so both callers cannot drift. */
+  async function submitOrder() {
+    if (!lines.length || sending) return
+    setSending(true)
+    setSendError(null)
+    try {
+      const created = await placeOrder?.(lines.map(l => ({
+        name: l.name,
+        unit_price: String(l.unit_price),
+        quantity: String(l.qty),
+        note: l.note,
+        product: l.product ?? null,
+        variant: l.variant ?? null,
+      })), orderNote)
+      setPlacedOrder(created ?? null)
+      setLines([]); setOrdered(true)
+      SFX.chime(); haptic([10, 50, 18])
+    } catch (e) {
+      SFX.tap()
+      setSendError(String((e as Error)?.message || '').slice(0, 140)
+        || t('cart.failed', 'ما زبط الطلب — جرّب كمان مرة'))
+    } finally { setSending(false) }
+  }
+
   function newOrder() {
     setSheetItem(null)
     setQty(1)
@@ -768,18 +802,9 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
                         ? t('home.subAnon', 'سجّل دخولك وابدأ تجمع نقاطك')
                         : t('home.sub', 'مكانك التاني جاهز لك')}</p>
                     </div>
-                    {/* The way into settings: a small gear beside the avatar.
-                        One place for "things about me", instead of controls
-                        floating over the app on every screen. */}
-                    {!authLocked && (
-                      <button className="gearbtn press" aria-label={t('set.h', 'الإعدادات')}
-                        onClick={() => { SFX.tap(); setSettingsOpen(true) }}>
-                        <Icon d={GEAR} s={18} />
-                      </button>
-                    )}
                     {Account ? (
                       <div className="avatar avatar-slot">
-                        <Account />
+                        <Account onSettings={() => setSettingsOpen(true)} />
                       </div>
                     ) : (
                       <button className="avatar press" aria-label={t('home.account', 'حسابي')}
@@ -1000,14 +1025,32 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
                 </button>
               </div>
             )}
+            {/* Each line is one configuration: this flavour, this note. Two
+                cups of the same drink with different flavours are two lines,
+                which is how every delivery app works and the only way the
+                barista's ticket can be right. The quantity here applies to
+                identical cups. */}
             {lines.map(l => (
-              <div className="line" key={l.key}>
-                <span className="qbadge num">{l.qty}</span>
+              <div className="line line-edit" key={l.key}>
+                <div className="lineqty">
+                  <button aria-label="−" onClick={() => { SFX.tap(); setLines(p => p
+                    .map(x => x.key === l.key ? { ...x, qty: Math.max(1, x.qty - 1) } : x)) }}>−</button>
+                  <span className="num">{l.qty}</span>
+                  <button aria-label="+" onClick={() => { SFX.tap(); setLines(p => p
+                    .map(x => x.key === l.key ? { ...x, qty: Math.min(20, x.qty + 1) } : x)) }}>+</button>
+                </div>
                 <div className="t">
                   <h4>{l.name}</h4>
-                  {l.note ? <p>{l.note}</p> : null}
+                  <input
+                    className="linenote"
+                    value={l.note}
+                    placeholder={t('cart.addnote', 'أضف ملاحظة…')}
+                    maxLength={120}
+                    onChange={e => setLines(p => p
+                      .map(x => x.key === l.key ? { ...x, note: e.target.value } : x))}
+                  />
                 </div>
-                <span className="p num">₪{l.unit_price * l.qty}</span>
+                <span className="p num">₪{(l.unit_price * l.qty).toFixed(2)}</span>
                 <button className="lx press" aria-label={t('cart.remove', 'احذف')}
                   onClick={() => { SFX.tap(); setLines(p => p.filter(x => x.key !== l.key)) }}>×</button>
               </div>
@@ -1061,34 +1104,11 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
             )}
             <div className="sheet-foot" style={{ borderTop: 0, marginTop: 18 }}>
               <button className="cta press" disabled={!online || !lines.length || sending}
-                onClick={async () => {
+                onClick={() => {
                   if (!lines.length || sending) return
-                  setSending(true)
-                  try {
-                    /* Straight to Django. The old handler set a boolean and
-                       navigated — which is why nothing ever reached the admin. */
-                    const created = await placeOrder?.(lines.map(l => ({
-                      name: l.name,
-                      unit_price: String(l.unit_price),
-                      quantity: String(l.qty),
-                      note: l.note,
-                      product: l.product ?? null,
-                      variant: l.variant ?? null,
-                    })), orderNote)
-                    justPlacedRef.current = created ?? null
-                    setPlacedOrder(created ?? null)
-                    const placed = await Promise.resolve(justPlacedRef.current)
-                    setLines([]); setOrdered(true)
-                    SFX.chime(); haptic([10, 50, 18])
-                    void placed
-                  } catch (e) {
-                    SFX.tap()
-                    /* Show it. The first version of this swallowed the error
-                       and left the basket looking untouched, which is exactly
-                       how "nothing happens when I order" felt from outside. */
-                    setSendError(String((e as Error)?.message || '')
-                      .slice(0, 140) || t('cart.failed', 'ما زبط الطلب — جرّب كمان مرة'))
-                  } finally { setSending(false) }
+                  /* No number on file → ask for it first. */
+                  if (!hasPhone) { setPhoneErr(null); setPhoneStep(true); return }
+                  void submitOrder()
                 }}>
                 <span>{sending ? t('cart.sending', 'عم نبعت…') : t('cart.confirm', 'أكّد الطلب')}</span>
                 {' · '}<span className="price">₪{cartTotal}</span>
@@ -1291,6 +1311,20 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
                 </div>
               )}
 
+              {/* A note per cup. `pickNote` state existed and was written into
+                  every basket line — but nothing ever rendered an input for
+                  it, so "بدون سكر" was simply impossible to say. */}
+              <label className="notefield">
+                <span>{t('it.note', 'ملاحظة (اختياري)')}</span>
+                <input
+                  type="text"
+                  value={pickNote}
+                  onChange={e => setPickNote(e.target.value)}
+                  placeholder={t('it.notePh', 'بدون سكر، تيك أواي…')}
+                  maxLength={120}
+                />
+              </label>
+
               <div className="sheet-foot">
                 <div className="qty">
                   <button onClick={() => { SFX.tap(); setQty(q => Math.max(1, q - 1)) }}>−</button>
@@ -1313,11 +1347,44 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
         </div>
 
         {/* ── splash ───────────────────────────────────────────────────── */}
-        {/* The phone prompt lived inside the HOME panel, and placing an order
-            navigates to the tracking screen — so the one moment it exists to
-            catch was the one moment it was unmounted. It asks once, only when
-            Clerk has no number on file, and remembers a dismissal. */}
-        {Phone ? <Phone armed={ordered} /> : null}
+        {/* The phone step, as a real modal above everything — not a card in
+            the page flow that the fixed tab bar covered. */}
+        {phoneStep && (
+          <div className="koup-settings" role="dialog" aria-modal="true">
+            <div className="koup-settings-card" onClick={e => e.stopPropagation()}>
+              <h3>{t('ph.h', 'رقمك؟')}</h3>
+              <p style={{ fontSize: 12.5, color: 'var(--app-ink3)', lineHeight: 1.6 }}>
+                {t('ph.s', 'عشان الكاشير يعرف الطلب إلك، ونربط نقاطك فيه.')}
+              </p>
+              <input
+                className="phoneask-in num"
+                type="tel" inputMode="numeric" dir="ltr" autoFocus
+                placeholder="059 000 0000"
+                value={phoneVal}
+                onChange={e => { setPhoneVal(e.target.value); setPhoneErr(null) }}
+              />
+              {phoneErr && <p className="phoneask-err">{phoneErr}</p>}
+              <button className="cta press" disabled={phoneSaving || !phoneVal.trim()}
+                onClick={async () => {
+                  const digits = phoneVal.replace(/\D/g, '')
+                  if (digits.length < 9) {
+                    setPhoneErr(t('ph.bad', 'رقم غير صحيح — مثال: 0597020201')); return
+                  }
+                  setPhoneSaving(true)
+                  const ok = await savePhone?.(digits)
+                  setPhoneSaving(false)
+                  if (!ok) { setPhoneErr(t('ph.fail', 'ما زبطت. جرّب كمان شوي.')); return }
+                  setPhoneStep(false)
+                  void submitOrder()
+                }}>
+                {phoneSaving ? t('ph.saving', 'لحظة…') : t('ph.go', 'احفظ وأكّد الطلب')}
+              </button>
+              <button className="btn-ghost press" onClick={() => setPhoneStep(false)}>
+                {t('ph.back', 'رجوع')}
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Order placed — say so, plainly, with the number the counter will
             call. "Navigate to a tracking screen" is not confirmation; the
