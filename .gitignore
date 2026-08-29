@@ -33,6 +33,9 @@ e2e/.e2e-db.sqlite3
 !.env.local.example
 
 # Working files from the build, not part of the app:
-_to_delete/          # route parked for deletion; never meant to ship
-.sfx-src/            # the original downloaded audio the sounds were cut from
-public/koup/sfx/alts/  # sound candidates for auditioning
+# route parked for deletion; never meant to ship
+_to_delete/
+# the original downloaded audio the sounds were cut from
+.sfx-src/
+# sound candidates kept for auditioning
+public/koup/sfx/alts/

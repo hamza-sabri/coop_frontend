@@ -19,6 +19,7 @@ import { ArrowLeft, Coffee, Pencil, Receipt, Sparkles, StickyNote, TrendingUp } 
 
 import { customersRetrieve } from "@/api/generated/customers/customers"
 import { salesList } from "@/api/generated/sales/sales"
+import { CustomerAppOrders } from "@/components/orders/customer-app-orders"
 import { SaleDetail } from "@/components/sales/sale-detail"
 import type { Customer, Sale } from "@/api/generated/model"
 import { usePagedList } from "@/hooks/use-paged-list"
@@ -298,9 +299,13 @@ export default function CustomerDetailPage() {
         </div>
       )}
 
-      {/* what they ordered */}
+      {/* Orders sent from the app. Separate table from the till history
+          below — see api/orders.ts. Renders nothing when there are none. */}
+      <CustomerAppOrders customerId={Number(id)} />
+
+      {/* what they bought at the counter */}
       <div>
-        <h3 className="mb-3 font-heading text-lg font-bold">الطلبات</h3>
+        <h3 className="mb-3 font-heading text-lg font-bold">مبيعات الكاشير</h3>
         {ordersLoading && (
           <div className="space-y-3">
             {Array.from({ length: 4 }).map((_, i) => (
