@@ -449,6 +449,12 @@ function buildPayload(pos: Pos): CheckoutInput | null {
       discounted != null && discounted !== total
         ? discounted.toFixed(2)
         : undefined,
+    // Points the customer is putting towards this sale. Only ever sent with a
+    // customer attached — points belong to a person, not to a till.
+    beans_spent:
+      active.customerId != null && (active.beansSpent ?? 0) > 0
+        ? active.beansSpent
+        : undefined,
   }
   const snapshot: SaleSnapshot = {
     receiptCode: body.receipt_code || active.editingReceipt || "",
@@ -715,6 +721,68 @@ function SaleControls({ pos }: { pos: Pos }) {
   )
 }
 
+/** Points that make one shekel. Mirrors POINTS_PER_ILS on the server; the
+ *  server is the authority and re-clamps whatever the till sends. */
+const POINTS_PER_ILS = 10
+
+/**
+ * "The customer says use my points."
+ *
+ * Only appears when a customer is attached AND has a balance, because a row
+ * that is empty nine times out of ten is a row the cashier learns to ignore.
+ * One tap applies the most that can be applied; the amount stays editable for
+ * "just take ten shekels off it".
+ */
+function PointsRow({ pos }: { pos: Pos }) {
+  const { customers } = useCustomersCatalog()
+  const active = pos.active
+  if (!active || active.customerId == null || active.isReturn) return null
+
+  // The catalogue is undefined until the first fetch lands. A cashier who
+  // opens the till and selects a customer within that window must not crash
+  // the whole POS over a loyalty row.
+  const customer = (customers ?? []).find((c) => c.id === active.customerId)
+  const balance = customer?.beans ?? 0
+  if (balance <= 0) return null
+
+  const total = cartTotal(active)
+  // Bounded by the balance AND the bill: points cannot buy more than the
+  // coffee costs. Floor, never round up.
+  const maxUsable = Math.min(balance, Math.floor(total * POINTS_PER_ILS))
+  const spending = Math.min(active.beansSpent ?? 0, maxUsable)
+  const worth = (spending / POINTS_PER_ILS).toFixed(2)
+
+  return (
+    <div className="flex items-center justify-between gap-2 rounded-2xl border border-dashed px-4 py-2.5">
+      <div className="flex flex-col">
+        <span className="text-sm font-medium">نقاط الزبون</span>
+        <span className="text-xs text-muted-foreground">
+          {balance} نقطة · تساوي {(balance / POINTS_PER_ILS).toFixed(2)} ₪
+        </span>
+      </div>
+      {spending > 0 ? (
+        <button
+          type="button"
+          onClick={() => pos.patchActive({ beansSpent: 0 })}
+          className="rounded-xl bg-emerald-600/15 px-3 py-2 text-sm font-semibold text-emerald-700 dark:text-emerald-400"
+          title="اضغط للإلغاء"
+        >
+          − {worth} ₪ ({spending} نقطة) ✕
+        </button>
+      ) : (
+        <button
+          type="button"
+          disabled={maxUsable <= 0}
+          onClick={() => pos.patchActive({ beansSpent: maxUsable })}
+          className="rounded-xl border px-3 py-2 text-sm font-semibold disabled:opacity-40"
+        >
+          استخدم {maxUsable} نقطة
+        </button>
+      )}
+    </div>
+  )
+}
+
 function TotalRow({
   pos,
   onSubmitSale,
@@ -732,6 +800,8 @@ function TotalRow({
       ? toNumber(active.discounted)
       : null
   return (
+    <div className="flex flex-col gap-2">
+    <PointsRow pos={pos} />
     <div className="flex items-baseline justify-between rounded-2xl bg-muted/60 px-4 py-2.5">
       <span className="text-sm text-muted-foreground">الإجمالي</span>
       <span className="flex items-baseline gap-2 font-heading text-2xl font-bold">
@@ -758,6 +828,7 @@ function TotalRow({
           onSubmitSale={onSubmitSale}
         />
       </span>
+    </div>
     </div>
   )
 }

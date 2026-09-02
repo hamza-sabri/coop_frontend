@@ -100,6 +100,13 @@ export type SalePayload = {
     quantity: number
   }>
   discounted_total?: string
+  /**
+   * Loyalty points the customer is putting towards this sale. The server
+   * clamps this against their LIVE balance and the bill before applying it,
+   * so a stale number from the till can under-charge but never over-credit.
+   * Backend: Sale.beans_spent.
+   */
+  beans_spent?: number
   note?: string
   /**
    * The number printed as a barcode on the receipt (12 digits, YYMMDD + 6).

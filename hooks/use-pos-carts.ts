@@ -105,6 +105,9 @@ export type Cart = {
    *  edits it (tracked by `discountTouched`). */
   discounted: string
   discountTouched?: boolean
+  /** Loyalty points the customer is spending on this sale. Rides with the cart
+   *  so parking a sale and coming back does not silently drop the redemption. */
+  beansSpent?: number
   /**
    * The pinned amount came from the sale being CORRECTED, not from the
    * cashier typing it now.
@@ -160,6 +163,7 @@ function freshCart(): Cart {
     saleUuid: uuid(),
     customerId: null,
     customerName: "",
+    beansSpent: 0,
     payment: "cash",
     isReturn: false,
     discounted: "",
