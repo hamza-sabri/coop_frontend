@@ -435,19 +435,16 @@ function MedicationsPageInner() {
     units,
   ])
 
-  const [presetBarcode, setPresetBarcode] = useState("")
-
   function openAdd() {
     setEditing(null)
-    setPresetBarcode("")
     setFormOpen(true)
   }
 
-  /** Scan-to-create: a scanned barcode with no match becomes a new product
-   *  with the barcode already filled — the cashier types name + price only. */
-  function openAddWithBarcode(code: string) {
+  /** A scan with no match opens the "new drink" form. The code itself is not
+   *  carried over any more: the café form has no barcode field, because a
+   *  café finds a latte by name. */
+  function openAddWithBarcode(_code: string) {
     setEditing(null)
-    setPresetBarcode(code)
     setFormOpen(true)
   }
 
@@ -478,7 +475,6 @@ function MedicationsPageInner() {
     const hits = items.filter((m) => productCodes(m).includes(openBarcode))
     if (hits.length === 1) {
       setEditing(hits[0])
-      setPresetBarcode("")
       setFormOpen(true)
     } else if (hits.length === 0) {
       openAddWithBarcode(openBarcode)
@@ -785,7 +781,6 @@ function MedicationsPageInner() {
         open={formOpen}
         onOpenChange={setFormOpen}
         product={editing}
-        initialBarcode={presetBarcode || undefined}
       />
       <VariantsManager
         open={Boolean(toVariants)}

@@ -68,9 +68,6 @@ const KINDS: { k: Kind; label: string }[] = [
   { k: "pack", label: "عبوة" },
 ]
 
-/** Starter rows, so "add sizes" is one click rather than six. */
-const SIZE_PRESET = ["صغير", "وسط", "كبير"]
-
 const newKey = () =>
   typeof crypto !== "undefined" && "randomUUID" in crypto
     ? crypto.randomUUID()
@@ -277,19 +274,6 @@ function OptionRow({
         </div>
       )}
 
-      <div className="flex items-stretch overflow-hidden rounded-xl border">
-        <span className="grid place-items-center bg-muted px-2.5 text-[11px] font-semibold">
-          مخزون
-        </span>
-        <Input
-          inputMode="decimal"
-          value={o.stock}
-          onChange={(e) => onChange({ stock: e.target.value })}
-          placeholder="0"
-          className="h-10 w-20 rounded-none border-0 text-center"
-        />
-      </div>
-
       <button
         type="button"
         onClick={() => onChange({ active: !o.active })}
@@ -326,14 +310,10 @@ export function DrinkForm({
   open,
   onOpenChange,
   product,
-  initialBarcode,
 }: {
   open: boolean
   onOpenChange: (o: boolean) => void
   product?: Product | null
-  /** Scan-to-create: a scanned code with no match opens this form with the
-   *  barcode already filled, so the owner types a name and a price only. */
-  initialBarcode?: string
 }) {
   const qc = useQueryClient()
   const editing = Boolean(product)
@@ -341,9 +321,6 @@ export function DrinkForm({
   const [name, setName] = useState("")
   const [category, setCategory] = useState("")
   const [price, setPrice] = useState("")
-  const [cost, setCost] = useState("")
-  const [stock, setStock] = useState("")
-  const [barcode, setBarcode] = useState("")
   const [notes, setNotes] = useState("")
   const [available, setAvailable] = useState(true)
   const [imageUrl, setImageUrl] = useState("")
@@ -389,9 +366,6 @@ export function DrinkForm({
       setName(product.name ?? "")
       setCategory(product.category ?? "")
       setPrice(product.price ?? "")
-      setCost(product.cost && product.cost !== "0.00" ? product.cost : "")
-      setStock(product.stock != null ? String(product.stock) : "")
-      setBarcode(product.barcode ?? "")
       setNotes(product.notes ?? "")
       setAvailable((product as unknown as { is_active?: boolean }).is_active !== false)
       setImageUrl(product.image ?? "")
@@ -401,16 +375,13 @@ export function DrinkForm({
       setName("")
       setCategory("")
       setPrice("")
-      setCost("")
-      setStock("")
-      setBarcode(initialBarcode ?? "")
       setNotes("")
       setAvailable(true)
       setImageUrl("")
       setImageFile(null)
       setOptions([])
     }
-  }, [open, product, loadOptions, initialBarcode])
+  }, [open, product, loadOptions])
 
   const base = num(price)
 
@@ -455,10 +426,7 @@ export function DrinkForm({
         {
           name: name.trim(),
           category: category.trim(),
-          barcode: barcode.trim(),
           price: price.trim() || "0",
-          cost: cost.trim() || "0",
-          stock: stock === "" ? 0 : Number(stock),
           notes: notes.trim(),
           is_active: available,
           image: imageFile ? undefined : imageUrl.trim(),
@@ -595,25 +563,6 @@ export function DrinkForm({
             </Field>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="التكلفة (₪)" hint="اختياري — للربح">
-              <Input
-                inputMode="decimal"
-                value={cost}
-                onChange={(e) => setCost(e.target.value)}
-                placeholder="0.00"
-              />
-            </Field>
-            <Field label="المخزون" hint="اتركه فارغاً لمشروب يُحضّر عند الطلب">
-              <Input
-                inputMode="decimal"
-                value={stock}
-                onChange={(e) => setStock(e.target.value)}
-                placeholder="0"
-              />
-            </Field>
-          </div>
-
           <Field label="الوصف" hint="يظهر تحت اسم المشروب في التطبيق">
             <Textarea
               rows={2}
@@ -635,29 +584,13 @@ export function DrinkForm({
               الكامل.
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              onClick={() => SIZE_PRESET.forEach((l) => addOption("size", l))}
-            >
-              أحجام جاهزة
-            </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              onClick={() => addOption("flavour")}
-            >
-              <Plus className="size-4" />
-              نكهة
-            </Button>
-            <Button type="button" size="sm" onClick={() => addOption("size")}>
-              <Plus className="size-4" />
-              حجم
-            </Button>
-          </div>
+          {/* One button. The row itself says whether it is a size, a flavour
+              or a box — three buttons that all add the same row were three
+              ways to start the same sentence. */}
+          <Button type="button" size="sm" onClick={() => addOption("size")}>
+            <Plus className="size-4" />
+            إضافة خيار
+          </Button>
         </div>
 
         {options.length === 0 ? (
@@ -679,20 +612,6 @@ export function DrinkForm({
         )}
       </div>
 
-      {/* One line, at the bottom, for the few things that do have a barcode:
-          a bottle of water, a canned drink. Everything else the till finds by
-          name. No alternate codes, no scanner dialog — a second modal on top
-          of this one is exactly what this form exists to stop. */}
-      <div className="mt-4">
-        <Field label="باركود (اختياري)">
-          <Input
-            dir="ltr"
-            value={barcode}
-            onChange={(e) => setBarcode(e.target.value)}
-            placeholder="للمشروبات المعلّبة فقط"
-          />
-        </Field>
-      </div>
     </FormModal>
   )
 }
