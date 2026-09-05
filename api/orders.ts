@@ -28,8 +28,17 @@ export type Order = {
   next_statuses: OrderStatus[]
   customer: number | null
   customer_name: string
+  /** What the drinks cost, before any points came off. */
   total: string
+  /** Points redeemed against this order. */
+  beans_spent: number
+  /** Those points' worth in shekels — the server does the division. */
+  beans_value: string
+  /** What the customer actually hands over: total − beans_value. */
+  cash_total: string
   note: string
+  fulfilment?: "pickup" | "dinein"
+  table_number?: string
   items: OrderItem[]
   created_at: string
 }

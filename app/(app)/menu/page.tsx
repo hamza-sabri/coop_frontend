@@ -49,7 +49,7 @@ import { Fab } from "@/components/fab"
 import { RowActions } from "@/components/row-actions"
 import { EmptyState, ErrorState } from "@/components/states"
 import { NoMedsArt } from "@/components/illustrations"
-import { MedicationForm } from "@/components/forms/product-form"
+import { DrinkForm } from "@/components/forms/drink-form"
 import { VariantsManager } from "@/components/variants-manager"
 import { PrintLabelDialog } from "@/components/print/print-label-dialog"
 import { ConfirmDelete } from "@/components/confirm-delete"
@@ -776,20 +776,16 @@ function MedicationsPageInner() {
       {/* Also on desktop: on a long list the toolbar's "إضافة منتج" scrolls
           away, and this is the page the owner adds things from all day. */}
       <Fab onClick={openAdd} label="إضافة منتج" always />
-      <MedicationForm
+      {/* Sizes and flavours live INSIDE this form now, so there is no
+          "manage variants" hand-off to a second dialog. VariantsManager is
+          still mounted below because the card's own ⋯ menu opens it, and for
+          the odd product with twenty sub-SKUs a dedicated table is still the
+          better tool. */}
+      <DrinkForm
         open={formOpen}
         onOpenChange={setFormOpen}
         product={editing}
         initialBarcode={presetBarcode || undefined}
-        onManageVariants={
-          editing
-            ? () => {
-                const target = editing
-                setFormOpen(false)
-                setToVariants(target)
-              }
-            : undefined
-        }
       />
       <VariantsManager
         open={Boolean(toVariants)}

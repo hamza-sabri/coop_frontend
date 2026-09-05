@@ -15,6 +15,7 @@ export function FormModal({
   icon,
   children,
   footer,
+  wide,
 }: {
   open: boolean
   onOpenChange: (o: boolean) => void
@@ -22,6 +23,9 @@ export function FormModal({
   icon?: React.ReactNode
   children: React.ReactNode
   footer: React.ReactNode
+  /** Two columns instead of one. For forms that would otherwise need an
+   *  accordion to fit — the accordion being the thing worth avoiding. */
+  wide?: boolean
 }) {
   /* Enter saves, from any field in the dialog.
      These forms hang their save off `onClick={handleSubmit(...)}` rather than
@@ -53,7 +57,10 @@ export function FormModal({
       <DialogContent
         showCloseButton={false}
         onKeyDown={onKeyDown}
-        className="flex max-h-[92dvh] w-full flex-col gap-0 overflow-hidden rounded-3xl p-0 sm:max-w-xl"
+        className={
+          "flex max-h-[92dvh] w-full flex-col gap-0 overflow-hidden rounded-3xl p-0 " +
+          (wide ? "sm:max-w-3xl" : "sm:max-w-xl")
+        }
       >
         <DialogHeader className="bg-brand-soft relative overflow-hidden border-b border-border/70 px-6 py-4.5 text-start">
           <div

@@ -745,10 +745,16 @@ function PointsRow({ pos }: { pos: Pos }) {
   const balance = customer?.beans ?? 0
   if (balance <= 0) return null
 
-  const total = cartTotal(active)
+  // The bill as the cashier has it — after any manual rounding, because that
+  // is the number the points come off.
+  const raw = cartTotal(active)
+  const total =
+    active.discountTouched && active.discounted.trim()
+      ? toNumber(active.discounted)
+      : raw
   // Bounded by the balance AND the bill: points cannot buy more than the
   // coffee costs. Floor, never round up.
-  const maxUsable = Math.min(balance, Math.floor(total * POINTS_PER_ILS))
+  const maxUsable = Math.max(0, Math.min(balance, Math.floor(total * POINTS_PER_ILS)))
   const spending = Math.min(active.beansSpent ?? 0, maxUsable)
   const worth = (spending / POINTS_PER_ILS).toFixed(2)
 
@@ -799,36 +805,74 @@ function TotalRow({
     active.discountTouched && active.discounted.trim()
       ? toNumber(active.discounted)
       : null
+  const billed = discounted != null ? discounted : total
+
+  // Points come off the bill on the server — `discounted_total` is written
+  // back with their value already subtracted. The till used to send them and
+  // then print the un-reduced number, so the cashier asked for 143 ₪ on a
+  // 140.10 ₪ bill and the customer's points appeared to do nothing at all.
+  // Clamped against the bill for the same reason the server clamps it: the
+  // cashier may have rounded the total DOWN after the points were applied.
+  const beans =
+    active.customerId != null
+      ? Math.max(0, Math.min(active.beansSpent ?? 0, Math.floor(billed * POINTS_PER_ILS)))
+      : 0
+  const beansWorth = beans / POINTS_PER_ILS
+  const due = Math.max(0, billed - beansWorth)
+
   return (
     <div className="flex flex-col gap-2">
-    <PointsRow pos={pos} />
-    <div className="flex items-baseline justify-between rounded-2xl bg-muted/60 px-4 py-2.5">
-      <span className="text-sm text-muted-foreground">الإجمالي</span>
-      <span className="flex items-baseline gap-2 font-heading text-2xl font-bold">
-        {discounted != null && discounted !== total && (
-          <span className="text-sm text-muted-foreground line-through">
-            {formatMoney(total)}
+      <PointsRow pos={pos} />
+      <div className="flex flex-col gap-1 rounded-2xl bg-muted/60 px-4 py-2.5">
+        <div className="flex items-baseline justify-between">
+          <span className="text-sm text-muted-foreground">
+            {beans > 0 ? "قبل النقاط" : "الإجمالي"}
           </span>
+          <span className="flex items-baseline gap-2 font-heading text-2xl font-bold">
+            {discounted != null && discounted !== total && (
+              <span className="text-sm text-muted-foreground line-through">
+                {formatMoney(total)}
+              </span>
+            )}
+            {/* Editable: the cashier rounds the bill in front of the customer.
+                Writing here sets the cart's discounted total, which the sale
+                already stores alongside the un-discounted one. NOTE this edits
+                the bill BEFORE points — writing the after-points figure here
+                would have the server take the points off a second time. */}
+            <MoneyEditor
+              value={billed}
+              edited={discounted != null && discounted !== total}
+              title="اضغط لتعديل الإجمالي"
+              className="h-9 w-28 text-xl"
+              onCommit={(v) =>
+                pos.patchActive({
+                  discounted: v.toFixed(2),
+                  discountTouched: true,
+                  discountFromOriginal: false,
+                })
+              }
+              onSubmitSale={onSubmitSale}
+            />
+          </span>
+        </div>
+
+        {beans > 0 && (
+          <>
+            <div className="flex items-baseline justify-between text-sm text-emerald-700 dark:text-emerald-400">
+              <span>نقاط ({beans} نقطة)</span>
+              <span className="font-semibold tabular-nums">
+                − {formatMoney(beansWorth)}
+              </span>
+            </div>
+            <div className="mt-1 flex items-baseline justify-between border-t pt-2">
+              <span className="text-sm font-semibold">المطلوب</span>
+              <span className="font-heading text-2xl font-bold tabular-nums">
+                {formatMoney(due)}
+              </span>
+            </div>
+          </>
         )}
-        {/* Editable: the cashier rounds the bill in front of the customer.
-            Writing here sets the cart's discounted total, which the sale
-            already stores alongside the un-discounted one. */}
-        <MoneyEditor
-          value={discounted != null ? discounted : total}
-          edited={discounted != null && discounted !== total}
-          title="اضغط لتعديل الإجمالي"
-          className="h-9 w-28 text-xl"
-          onCommit={(v) =>
-            pos.patchActive({
-              discounted: v.toFixed(2),
-              discountTouched: true,
-              discountFromOriginal: false,
-            })
-          }
-          onSubmitSale={onSubmitSale}
-        />
-      </span>
-    </div>
+      </div>
     </div>
   )
 }

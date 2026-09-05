@@ -49,10 +49,32 @@ export function CustomerAppOrders({ customerId }: { customerId: number }) {
           >
             <div className="flex items-baseline justify-between gap-3">
               <b className="font-heading text-sm">طلب #{o.id}</b>
-              <span className="text-sm font-bold tabular-nums">
-                {formatMoney(Number(o.total))}
+              <span className="flex items-baseline gap-2">
+                {/* When points paid part of the bill, the un-reduced total is
+                    struck through and the cash figure is the one in bold —
+                    "how much did he actually pay" has to be readable at a
+                    glance, not computed by the person reading it. */}
+                {Number(o.beans_spent ?? 0) > 0 && (
+                  <span className="text-xs text-muted-foreground line-through tabular-nums">
+                    {formatMoney(Number(o.total))}
+                  </span>
+                )}
+                <span className="text-sm font-bold tabular-nums">
+                  {formatMoney(Number(o.cash_total ?? o.total))}
+                </span>
               </span>
             </div>
+
+            {Number(o.beans_spent ?? 0) > 0 && (
+              <div className="mt-1 flex items-baseline justify-between gap-3 text-xs">
+                <span className="text-muted-foreground">
+                  دفع بالنقاط · {o.beans_spent} نقطة
+                </span>
+                <span className="font-semibold tabular-nums text-lime">
+                  − {formatMoney(Number(o.beans_value ?? 0))}
+                </span>
+              </div>
+            )}
 
             <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
               <span

@@ -20,6 +20,7 @@ import { ArrowLeft, Coffee, Pencil, Receipt, Sparkles, StickyNote, TrendingUp } 
 import { customersRetrieve } from "@/api/generated/customers/customers"
 import { salesList } from "@/api/generated/sales/sales"
 import { CustomerAppOrders } from "@/components/orders/customer-app-orders"
+import { PointsCard } from "@/components/customers/points-card"
 import { SaleDetail } from "@/components/sales/sale-detail"
 import type { Customer, Sale } from "@/api/generated/model"
 import { usePagedList } from "@/hooks/use-paged-list"
@@ -41,6 +42,9 @@ const PAGE_SIZE = 10
 type LoyaltyFields = { points?: number; tier?: string; signed_up?: boolean }
 type Order = Sale & {
   beans_earned?: number
+  /** Points redeemed against this bill, and what they were worth. */
+  beans_spent?: number
+  beans_value?: string
   is_paid?: boolean
   /** On the serializer; regenerate with `npm run api` to type it properly. */
   receipt_code?: string | null
@@ -78,6 +82,7 @@ function OrderRow({ order, onOpen }: { order: Order; onOpen: () => void }) {
   const when = order.created_at ? new Date(order.created_at) : null
   const items = order.items?.length ?? 0
   const points = order.beans_earned ?? 0
+  const spent = order.beans_spent ?? 0
   const paid = order.is_paid !== false
   return (
     <Card
@@ -122,12 +127,28 @@ function OrderRow({ order, onOpen }: { order: Order; onOpen: () => void }) {
           </span>
         </div>
       </div>
-      {points > 0 && (
-        <div className="flex items-center justify-between border-t border-border/60 bg-muted/30 px-4 py-2">
-          <span className="text-xs text-muted-foreground">نقاط من هالطلب</span>
-          <span className="font-heading text-sm font-bold text-lime">
-            +{formatNumber(points)}
-          </span>
+      {(points > 0 || spent > 0) && (
+        <div className="flex flex-col gap-1 border-t border-border/60 bg-muted/30 px-4 py-2">
+          {/* discounted_total already has the points taken off it, so the
+              figure above IS the cash. This says where the rest went. */}
+          {spent > 0 && (
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-muted-foreground">
+                دُفع بالنقاط · {formatNumber(spent)} نقطة
+              </span>
+              <span className="font-heading text-sm font-bold text-lime">
+                {formatMoney(order.beans_value ?? 0)}
+              </span>
+            </div>
+          )}
+          {points > 0 && (
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-muted-foreground">نقاط من هالطلب</span>
+              <span className="font-heading text-sm font-bold text-lime">
+                +{formatNumber(points)}
+              </span>
+            </div>
+          )}
         </div>
       )}
     </Card>
@@ -272,6 +293,11 @@ export default function CustomerDetailPage() {
           value={formatMoney(customer?.outstanding ?? 0)}
         />
       </div>
+
+      {/* Points: the balance, what has been used, and a way to fix it by hand.
+          The tile above says the number; this says the story, and lets the
+          counter give points back for a drink that went wrong. */}
+      {Number.isFinite(id) && <PointsCard customerId={id} />}
 
       {/* Their usual. Counted from the orders already on this page rather than
           asking the server for a second aggregate — the data is here, and a
