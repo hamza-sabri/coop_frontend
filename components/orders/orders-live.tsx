@@ -42,6 +42,7 @@ const POLL_MS = 10_000
 
 type Ctx = {
   orders: Order[]
+  recent: Order[]
   pending: number
   open: number
   isLoading: boolean
@@ -60,6 +61,7 @@ export function useLiveOrders(): Ctx {
   return (
     c ?? {
       orders: [],
+      recent: [],
       pending: 0,
       open: 0,
       isLoading: false,
@@ -95,7 +97,12 @@ export function OrdersLiveProvider({ children }: { children: React.ReactNode }) 
     staleTime: 0,
   })
 
-  const live = (data?.data ?? { results: [], pending: 0, open: 0 }) as LiveOrders
+  const live = (data?.data ?? {
+    results: [],
+    recent: [],
+    pending: 0,
+    open: 0,
+  }) as LiveOrders
   const orders = live.results ?? []
 
   // Which order ids we have already announced. Seeded on the FIRST response,
@@ -206,6 +213,7 @@ export function OrdersLiveProvider({ children }: { children: React.ReactNode }) 
     <OrdersLiveContext.Provider
       value={{
         orders,
+        recent: live.recent ?? [],
         pending: live.pending ?? 0,
         open: live.open ?? orders.length,
         isLoading,

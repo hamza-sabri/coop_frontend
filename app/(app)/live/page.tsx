@@ -30,7 +30,13 @@ import {
   X,
 } from "lucide-react"
 
-import { orderAdvance, type Order, type OrderStatus } from "@/api/orders"
+import {
+  ALL_STATUSES,
+  orderAdvance,
+  STATUS_LABEL,
+  type Order,
+  type OrderStatus,
+} from "@/api/orders"
 import { useLiveOrders } from "@/components/orders/orders-live"
 import { PageHeader } from "@/components/page-header"
 import { EmptyState } from "@/components/states"
@@ -77,8 +83,50 @@ function canDrop(o: Order | null, to: OrderStatus): boolean {
   return Boolean(o) && o!.status !== to && (o!.next_statuses ?? []).includes(to)
 }
 
+/** Every state, as a menu. The board's columns cover the happy path; this
+ *  covers the mistake — including the two states that have no column,
+ *  تم التسليم and ملغى, which is exactly where a mis-click ends up. */
+function StatusPicker({
+  value,
+  disabled,
+  onPick,
+}: {
+  value: OrderStatus
+  disabled?: boolean
+  onPick: (s: OrderStatus) => void
+}) {
+  return (
+    <label className="mt-2 flex items-center gap-2 text-[11px] text-muted-foreground">
+      <span className="shrink-0">الحالة</span>
+      <select
+        value={value}
+        disabled={disabled}
+        onChange={(e) => {
+          const next = e.target.value as OrderStatus
+          if (next === value) return
+          if (
+            next === "cancelled" &&
+            !window.confirm("إلغاء هذا الطلب؟ ستُعاد نقاطه إن استُخدمت.")
+          ) {
+            e.target.value = value
+            return
+          }
+          onPick(next)
+        }}
+        className="min-w-0 flex-1 rounded-xl border bg-background px-2 py-1.5 text-xs font-semibold text-foreground disabled:opacity-50"
+      >
+        {ALL_STATUSES.map((st) => (
+          <option key={st} value={st}>
+            {STATUS_LABEL[st]}
+          </option>
+        ))}
+      </select>
+    </label>
+  )
+}
+
 export default function LiveOrdersPage() {
-  const { orders, open, isLoading, refresh, enableDesktopAlerts, desktopAlerts } =
+  const { orders, recent, open, isLoading, refresh, enableDesktopAlerts, desktopAlerts } =
     useLiveOrders()
   const qc = useQueryClient()
   const [busy, setBusy] = useState<number | null>(null)
@@ -104,9 +152,12 @@ export default function LiveOrdersPage() {
     try {
       await orderAdvance(o.id, status)
       refresh()
-      // Collecting an order rings it up as a sale and moves points, so the
+      // Collecting an order rings it up as a sale and moves points; leaving
+      // `collected` voids that sale and takes the points back. Either way the
       // history and the customer's balance are now stale everywhere.
-      if (status === "collected") invalidateSaleData(qc)
+      if (status === "collected" || o.status === "collected") {
+        invalidateSaleData(qc)
+      }
       if (status === "accepted") ticket(o)
       toast.success(
         status === "cancelled" ? `أُلغي الطلب #${o.id}` : `طلب #${o.id} · تم`,
@@ -367,28 +418,36 @@ export default function LiveOrdersPage() {
                           >
                             <Printer className="size-4" />
                           </Button>
-                          {o.next_statuses?.includes("cancelled") && (
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              aria-label="ألغِ الطلب"
-                              disabled={busy === o.id}
-                              onClick={() => {
-                                if (
-                                  !window.confirm(
-                                    `إلغاء الطلب #${o.id}؟ ستُعاد نقاطه إن استُخدمت.`,
-                                  )
-                                ) {
-                                  return
-                                }
-                                void move(o, "cancelled")
-                              }}
-                              className="text-destructive"
-                            >
-                              <X className="size-4" />
-                            </Button>
-                          )}
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            aria-label="ألغِ الطلب"
+                            disabled={busy === o.id}
+                            onClick={() => {
+                              if (
+                                !window.confirm(
+                                  `إلغاء الطلب #${o.id}؟ ستُعاد نقاطه إن استُخدمت.`,
+                                )
+                              ) {
+                                return
+                              }
+                              void move(o, "cancelled")
+                            }}
+                            className="text-destructive"
+                          >
+                            <X className="size-4" />
+                          </Button>
                         </div>
+
+                        {/* Any stage, from any stage. Dragging is the fast
+                            path on a laptop; this is the one that works on a
+                            tablet, and the one that can reach تم التسليم and
+                            ملغى, which are not columns. */}
+                        <StatusPicker
+                          value={o.status}
+                          disabled={busy === o.id}
+                          onPick={(next) => void move(o, next)}
+                        />
                       </article>
                     )
                   })
@@ -397,6 +456,50 @@ export default function LiveOrdersPage() {
             )
           })}
         </div>
+      )}
+
+      {/* Marking the wrong cup collected is the easiest mistake on this
+          screen, and it used to need a database query to undo. Today's
+          finished orders sit here so one press puts the card back. */}
+      {recent.length > 0 && (
+        <section className="clay-card p-4">
+          <h2 className="font-heading mb-3 text-sm font-bold">
+            انتهت اليوم
+            <span className="ms-2 text-xs font-normal text-muted-foreground">
+              اضغط لإعادة فتح طلب أُغلق بالخطأ
+            </span>
+          </h2>
+          <div className="flex flex-wrap gap-2">
+            {recent.map((o) => (
+              <button
+                key={o.id}
+                type="button"
+                disabled={busy === o.id}
+                onClick={() => void move(o, "preparing")}
+                title="أعد فتحه إلى «قيد التحضير»"
+                className={cn(
+                  "flex items-center gap-2 rounded-2xl border px-3 py-2 text-xs transition hover:bg-muted disabled:opacity-50",
+                  o.status === "cancelled" && "border-destructive/40",
+                )}
+              >
+                <span className="font-heading font-bold">#{o.id}</span>
+                <span className="text-muted-foreground">
+                  {o.customer_name || "زبون"}
+                </span>
+                <span
+                  className={cn(
+                    "rounded-full px-2 py-0.5 text-[10px] font-semibold",
+                    o.status === "cancelled"
+                      ? "bg-destructive/15 text-destructive"
+                      : "bg-lime/15 text-lime",
+                  )}
+                >
+                  {STATUS_LABEL[o.status]}
+                </span>
+              </button>
+            ))}
+          </div>
+        </section>
       )}
     </div>
   )

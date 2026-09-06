@@ -59,6 +59,8 @@ export const ordersList = (params: Record<string, unknown> = {}) =>
 
 export type LiveOrders = {
   results: Order[]
+  /** Today's collected/cancelled orders, so a mis-click can be undone. */
+  recent: Order[]
   /** Orders nobody has accepted yet — the number that goes on the badge. */
   pending: number
   /** Everything still open, including the ones being made. */
@@ -77,6 +79,20 @@ export const orderAdvance = (id: number, status: OrderStatus) =>
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ status }),
   })
+
+/** The state itself, for a picker. STATUS_ACTION below is the verb. */
+export const STATUS_LABEL: Record<OrderStatus, string> = {
+  placed: "جديد",
+  accepted: "مقبول",
+  preparing: "قيد التحضير",
+  ready: "على الكاونتر",
+  collected: "تم التسليم",
+  cancelled: "ملغى",
+}
+
+export const ALL_STATUSES: OrderStatus[] = [
+  "placed", "accepted", "preparing", "ready", "collected", "cancelled",
+]
 
 /** Arabic for each step, so the button says what it does. */
 export const STATUS_ACTION: Record<OrderStatus, string> = {
