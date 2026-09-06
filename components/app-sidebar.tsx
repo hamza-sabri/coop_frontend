@@ -9,6 +9,7 @@ import { toast } from "sonner"
 
 import { logout } from "@/lib/auth"
 import { isActive } from "@/components/nav-config"
+import { NavBadge } from "@/components/orders/nav-badge"
 import { useIsOwner, useNavItemsWithLock } from "@/lib/modules"
 import { useLockedFeature } from "@/components/locked-feature"
 import { BrandLockup, BrandMark } from "@/components/brand"
@@ -138,11 +139,15 @@ export function AppSidebar() {
                   : "text-white/60 hover:bg-white/8 hover:text-white",
             )
             const inner = collapsed ? (
-              <Icon className="size-5 shrink-0" strokeWidth={active ? 2.4 : 2} />
+              <span className="relative">
+                <Icon className="size-5 shrink-0" strokeWidth={active ? 2.4 : 2} />
+                <NavBadge badge={item.badge} className="absolute -end-2 -top-2" />
+              </span>
             ) : (
               <>
                 <Icon className="size-5 shrink-0" strokeWidth={active ? 2.4 : 2} />
                 <span className="flex-1">{item.label}</span>
+                <NavBadge badge={item.badge} />
                 {locked ? (
                   <Lock aria-hidden="true" className="size-3.5 shrink-0 opacity-70" />
                 ) : active ? (

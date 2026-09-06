@@ -10,6 +10,7 @@ import { DemoBanner } from "@/components/demo/demo-banner"
 import { TourProvider } from "@/components/tour/tour-provider"
 import { TourFromQuery } from "@/components/tour/tour-from-query"
 import { TopBar } from "@/components/top-bar"
+import { OrdersLiveProvider } from "@/components/orders/orders-live"
 import { SyncModeBanner } from "@/components/offline/sync-mode-banner"
 
 export default function AppLayout({
@@ -20,6 +21,10 @@ export default function AppLayout({
   return (
     <AuthGuard>
       <LockedFeatureProvider>
+        {/* One poller for the whole admin: the sidebar badge, the beep and the
+            board all read the same query, so a barista is told about an order
+            wherever they happen to be. */}
+        <OrdersLiveProvider>
         <TourProvider>
           {/* Lock the shell to the viewport; only <main> scrolls so the floating
               ink rail and top bar stay put. */}
@@ -40,6 +45,7 @@ export default function AppLayout({
           <DemoBanner />
           <TourFromQuery />
         </TourProvider>
+        </OrdersLiveProvider>
       </LockedFeatureProvider>
     </AuthGuard>
   )

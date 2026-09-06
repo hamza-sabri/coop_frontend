@@ -57,6 +57,19 @@ const qs = (p: Record<string, unknown>) => {
 export const ordersList = (params: Record<string, unknown> = {}) =>
   customFetch<{ data: Page<Order> }>(`/api/v1/orders/${qs(params)}`)
 
+export type LiveOrders = {
+  results: Order[]
+  /** Orders nobody has accepted yet — the number that goes on the badge. */
+  pending: number
+  /** Everything still open, including the ones being made. */
+  open: number
+}
+
+/** The counter's board. Polled from every page, so it is its own small
+ *  endpoint rather than a page of history filtered in the browser. */
+export const ordersLive = () =>
+  customFetch<{ data: LiveOrders }>(`/api/v1/orders/live/`)
+
 /** Move an order one legal step. The backend refuses anything else. */
 export const orderAdvance = (id: number, status: OrderStatus) =>
   customFetch<{ data: Order }>(`/api/v1/orders/${id}/advance/`, {

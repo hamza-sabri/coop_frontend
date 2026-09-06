@@ -6,6 +6,7 @@ import { Lock } from "lucide-react"
 import { isActive, type NavItem } from "@/components/nav-config"
 import { GlobalScanButton } from "@/components/scan/global-scan-button"
 import { useNavItemsWithLock } from "@/lib/modules"
+import { NavBadge } from "@/components/orders/nav-badge"
 import { useLockedFeature } from "@/components/locked-feature"
 import { cn } from "@/lib/utils"
 
@@ -38,6 +39,7 @@ export function BottomNav() {
           )}
         >
           <Icon className="size-5" strokeWidth={active ? 2.4 : 2} />
+          <NavBadge badge={item.badge} className="absolute -end-1 -top-1" />
           {locked && (
             <span className="absolute -end-0.5 -top-0.5 grid size-3.5 place-items-center rounded-full bg-ink text-white/85 ring-1 ring-white/15">
               <Lock className="size-2.5" />

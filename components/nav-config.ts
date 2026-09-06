@@ -6,6 +6,7 @@ import {
   ReceiptText,
   ShoppingCart,
   ShoppingBag,
+  ConciergeBell,
   ChartPie,
   type LucideIcon,
 } from "lucide-react"
@@ -23,6 +24,13 @@ export type NavItem = {
   module?: string | string[]
   /** Locked for employee accounts (owner/superuser only). */
   ownerOnly?: boolean
+  /**
+   * A live count to show on this item. "liveOrders" = orders from the app that
+   * nobody has accepted yet. Deliberately a KEY rather than a number: nav-config
+   * is a plain data module that both the sidebar and the bottom bar import, and
+   * it must not pull a React hook in with it.
+   */
+  badge?: "liveOrders"
 }
 
 export const NAV_ITEMS: NavItem[] = [
@@ -46,10 +54,19 @@ export const NAV_ITEMS: NavItem[] = [
      nothing was deleted — they are simply not in the navigation, so they can
      come back for a vertical that needs them by restoring these two entries. */
   // On the mobile bottom bar (took the debts slot) + the desktop rail.
-  /* الطلبات, not المبيعات. This is a coffee shop: the counter takes orders,
-     it does not record "sales" the way a supermarket till does. Same data,
-     the word the staff actually use. /sales still redirects here. */
-  { href: "/orders", label: "الطلبات", icon: ShoppingBag, module: "pos" },
+  /* Two different things, and they used to share one page.
+     الطلبات is the LIVE board: drinks somebody is waiting for. It carries the
+     badge, because it is the only page in the admin with a number that means
+     "go and do something now".
+     الفواتير is history: what was rung up. It can wait, and it does. */
+  {
+    href: "/live",
+    label: "الطلبات",
+    icon: ConciergeBell,
+    module: "pos",
+    badge: "liveOrders",
+  },
+  { href: "/orders", label: "الفواتير", icon: ShoppingBag, module: "pos", desktopOnly: true },
   {
     href: "/reports",
     label: "التقارير",
