@@ -7,6 +7,7 @@ import {
   ShoppingCart,
   ShoppingBag,
   ConciergeBell,
+  Sunset,
   ChartPie,
   type LucideIcon,
 } from "lucide-react"
@@ -67,13 +68,21 @@ export const NAV_ITEMS: NavItem[] = [
     badge: "liveOrders",
   },
   { href: "/orders", label: "الفواتير", icon: ShoppingBag, module: "pos", desktopOnly: true },
+  // The screen an owner opens at closing time. Separate from التقارير, which
+  // is a month of analysis: this one is the drawer, tonight.
+  {
+    href: "/today",
+    label: "اليوم",
+    icon: Sunset,
+    module: "pos",
+    desktopOnly: true,
+  },
   {
     href: "/reports",
     label: "التقارير",
     icon: ChartPie,
     desktopOnly: true,
     module: "reports",
-    ownerOnly: true,
   },
   /* Import is out of the navigation for كوب. It exists to bulk-load a
      catalogue of thousands from a supplier file; a café types its menu once

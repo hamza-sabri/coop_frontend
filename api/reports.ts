@@ -288,6 +288,40 @@ export type CafeReport = {
   }
 }
 
+
+/* ── cashing up ──────────────────────────────────────────────────────────
+   The shift that is ending, read while somebody counts the drawer. Its own
+   endpoint and uncached, because a figure five minutes old is a figure that
+   disagrees with the money in his hand. */
+
+export type TodayReport = {
+  start: string
+  end: string
+  revenue: string
+  previous_revenue: string
+  tickets: number
+  returns: number
+  returns_value: string
+  cups: string
+  avg_ticket: string
+  cash: string
+  /** What the points took off today's bills, in shekels. */
+  points_value: string
+  points_spent: number
+  identified_share: number
+  by_hour: { hour: number; revenue: string; count: number }[]
+  top: { name: string; qty: string; revenue: string }[]
+  orders: {
+    placed: number
+    collected: number
+    cancelled: number
+    still_open: number
+  }
+  points: { earned: number; spent: number }
+}
+
+export const todayReport = () => get<TodayReport>(`/api/v1/reports/today/`)
+
 export const cafeReport = (days = 30) =>
   get<CafeReport>(`/api/v1/reports/cafe/${qs({ days })}`)
 
