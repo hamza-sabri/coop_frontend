@@ -70,12 +70,26 @@ function waited(iso: string): { label: string; late: boolean } {
   return { label: `${formatNumber(h)} س`, late: true }
 }
 
+/** The server's transition table, as the client sees it: every order carries
+ *  its own `next_statuses`. Asking the order rather than hard-coding the graph
+ *  means a drop can never propose a move the API would refuse. */
+function canDrop(o: Order | null, to: OrderStatus): boolean {
+  return Boolean(o) && o!.status !== to && (o!.next_statuses ?? []).includes(to)
+}
+
 export default function LiveOrdersPage() {
   const { orders, open, isLoading, refresh, enableDesktopAlerts, desktopAlerts } =
     useLiveOrders()
   const qc = useQueryClient()
   const [busy, setBusy] = useState<number | null>(null)
   const [muted, setMutedState] = useState(false)
+  /* The card being dragged, and the column it is currently over.
+     Held as state (not just in the dataTransfer) because a drop target has to
+     decide whether it will ACCEPT the card before the drop — dataTransfer's
+     payload is deliberately unreadable during dragover for privacy, so the
+     legality check has to be answered from something we already know. */
+  const [dragging, setDragging] = useState<Order | null>(null)
+  const [over, setOver] = useState<OrderStatus | null>(null)
   const { user } = useMe()
   const cashierName = displayName(user)
   const me = user as { pharmacy_name?: string; pharmacy_logo?: string } | undefined
@@ -180,6 +194,10 @@ export default function LiveOrdersPage() {
         }
       />
 
+      <p className="hidden px-1 text-xs text-muted-foreground md:block">
+        اسحب الطلب من عمود لعمود، أو استخدم الزر على البطاقة.
+      </p>
+
       {desktopAlerts === "denied" && (
         <p className="rounded-2xl border border-dashed px-4 py-2.5 text-xs text-muted-foreground">
           <BellOff className="me-1.5 inline size-3.5" />
@@ -204,8 +222,39 @@ export default function LiveOrdersPage() {
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           {COLUMNS.map((col) => {
             const rows = orders.filter((o) => o.status === col.status)
+            const accepts = canDrop(dragging, col.status)
             return (
-              <section key={col.status} className="flex flex-col gap-2.5">
+              <section
+                key={col.status}
+                onDragOver={(e) => {
+                  // preventDefault is what MAKES an element a drop target; a
+                  // column that will not accept this card simply does not call
+                  // it, and the browser shows the "no" cursor for free.
+                  if (!accepts) return
+                  e.preventDefault()
+                  e.dataTransfer.dropEffect = "move"
+                  if (over !== col.status) setOver(col.status)
+                }}
+                onDragLeave={(e) => {
+                  // Only when the pointer leaves the COLUMN, not when it
+                  // crosses from the column onto a card inside it.
+                  if (e.currentTarget.contains(e.relatedTarget as Node)) return
+                  setOver((c) => (c === col.status ? null : c))
+                }}
+                onDrop={(e) => {
+                  e.preventDefault()
+                  const card = dragging
+                  setOver(null)
+                  setDragging(null)
+                  if (!canDrop(card, col.status)) return
+                  void move(card!, col.status)
+                }}
+                className={cn(
+                  "flex flex-col gap-2.5 rounded-3xl p-1.5 transition-colors",
+                  accepts && "outline-dashed outline-2 outline-offset-2 outline-primary/30",
+                  accepts && over === col.status && "bg-primary/10 outline-primary",
+                )}
+              >
                 <header className="flex items-baseline justify-between px-1">
                   <h2 className="font-heading text-sm font-bold">{col.title}</h2>
                   <span className="text-xs text-muted-foreground">
@@ -224,9 +273,22 @@ export default function LiveOrdersPage() {
                     return (
                       <article
                         key={o.id}
+                        draggable
+                        onDragStart={(e) => {
+                          setDragging(o)
+                          e.dataTransfer.effectAllowed = "move"
+                          // Firefox refuses to start a drag without payload.
+                          e.dataTransfer.setData("text/plain", String(o.id))
+                        }}
+                        onDragEnd={() => {
+                          setDragging(null)
+                          setOver(null)
+                        }}
                         className={cn(
-                          "rounded-2xl border bg-card p-3.5 shadow-sm",
+                          "rounded-2xl border bg-card p-3.5 shadow-sm transition",
+                          "cursor-grab active:cursor-grabbing",
                           col.tone,
+                          dragging?.id === o.id && "opacity-40",
                         )}
                       >
                         <div className="flex items-baseline justify-between gap-2">

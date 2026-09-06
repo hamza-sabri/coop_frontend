@@ -33,6 +33,7 @@ import {
   ChartPie,
   Check,
   ChevronDown,
+  Coffee,
   ChevronUp,
   Copy,
   FileQuestion,
@@ -73,6 +74,7 @@ import { cn } from "@/lib/utils"
 
 import { PageHeader } from "@/components/page-header"
 import { LockedReportsTeaser } from "@/components/reports/reports-teaser"
+import { CafeTab } from "@/components/reports/cafe-tab"
 import { SalesTab } from "@/components/reports/sales-tab"
 import { ScanTab } from "@/components/reports/scan-tab"
 import { SearchInput } from "@/components/search-input"
@@ -575,7 +577,12 @@ export default function ReportsPage() {
   const salesUnlocked = isOwner && hasModule(modules, "sales_reports")
   const scanUnlocked = isOwner && hasModule(modules, "scan_reports")
 
-  const [tab, setTab] = useState<"inventory" | "sales" | "scans">("inventory")
+  /* المقهى first, and the default. The other three tabs are a retail
+     inventory audit — right for a pharmacy, and not what anyone opens this
+     page for in a coffee shop. They stay, because the data behind them is
+     real and a different vertical needs them; they are simply no longer the
+     first thing the owner sees. */
+  const [tab, setTab] = useState<"cafe" | "inventory" | "sales" | "scans">("cafe")
   const [days, setDays] = useState<(typeof DAY_OPTIONS)[number]>(30)
   const [issue, setIssue] = useState<ReportIssueKey>("zero_price")
   const [group, setGroup] = useState<string>(() => groupOfIssue("zero_price"))
@@ -988,6 +995,14 @@ export default function ReportsPage() {
             className="sm:w-full"
             options={[
               {
+                value: "cafe",
+                label: (
+                  <>
+                    <Coffee className="size-4" /> المقهى
+                  </>
+                ),
+              },
+              {
                 value: "inventory",
                 label: (
                   <>
@@ -1024,7 +1039,9 @@ export default function ReportsPage() {
         </div>
       </div>
 
-      {tab === "scans" ? (
+      {tab === "cafe" ? (
+        <CafeTab days={days} />
+      ) : tab === "scans" ? (
         <ScanTab days={days} unlocked={scanUnlocked} />
       ) : tab === "sales" ? (
         <SalesTab days={days} unlocked={salesUnlocked} />

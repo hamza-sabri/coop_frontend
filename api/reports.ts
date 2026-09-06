@@ -221,6 +221,76 @@ export type SalesReportsSummary = {
   least_products: TopProduct[]
 }
 
+
+/* ── the café report ─────────────────────────────────────────────────────
+   Its own endpoint and its own shape. The inventory report answers "what is
+   wrong with my stock"; this one answers "what sells, when, and to whom",
+   which is the only question a coffee shop has. */
+
+export type CafeDrink = {
+  product_id: number | null
+  name: string
+  quantity: string
+  revenue: string
+  sales: number
+}
+
+export type CafeReport = {
+  days: number
+  headline: {
+    revenue: string
+    tickets: number
+    returns: number
+    cups: string
+    avg_ticket: string
+    cups_per_ticket: string
+    /** % of tickets with a customer attached. */
+    identified_share: number
+    peak_hour: number | null
+    peak_day: string | null
+  }
+  drinks: {
+    top_by_cups: CafeDrink[]
+    top_by_revenue: CafeDrink[]
+    slowest: CafeDrink[]
+    never_sold: { product_id: number; name: string; price: string }[]
+    by_size: { label: string; qty: string; revenue: string }[]
+    by_category: { name: string; qty: string; revenue: string }[]
+  }
+  when: {
+    by_day: { day: string; total: string; count: number }[]
+    by_hour: { hour: number; revenue: string; count: number }[]
+    by_weekday: { day: string; index: number; revenue: string; count: number }[]
+  }
+  app: {
+    orders: number
+    collected: number
+    cancelled: number
+    open: number
+    cancel_rate: number
+    revenue: string
+    share: number
+    median_wait_min: number | null
+  }
+  loyalty: {
+    earned: number
+    spent: number
+    redemptions: number
+    earned_value: string
+    spent_value: string
+    /** Points still in customers' hands, in shekels — the shop's liability. */
+    outstanding: string
+    new_customers: number
+    identified: number
+    repeat: number
+    repeat_rate: number
+    top_customers: { id: number; name: string; total: string; visits: number }[]
+  }
+}
+
+export const cafeReport = (days = 30) =>
+  get<CafeReport>(`/api/v1/reports/cafe/${qs({ days })}`)
+
 export const salesReportsSummary = (days = 30) =>
   get<SalesReportsSummary>(`/api/v1/reports/sales/summary/${qs({ days })}`)
 
