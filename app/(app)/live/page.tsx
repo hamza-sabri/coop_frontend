@@ -25,18 +25,13 @@ import {
   Loader2,
   Printer,
   RefreshCw,
+  RotateCcw,
   Volume2,
   VolumeX,
   X,
 } from "lucide-react"
 
-import {
-  ALL_STATUSES,
-  orderAdvance,
-  STATUS_LABEL,
-  type Order,
-  type OrderStatus,
-} from "@/api/orders"
+import { orderAdvance, type Order, type OrderStatus } from "@/api/orders"
 import { useLiveOrders } from "@/components/orders/orders-live"
 import { PageHeader } from "@/components/page-header"
 import { EmptyState } from "@/components/states"
@@ -45,14 +40,17 @@ import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useMe, displayName } from "@/hooks/use-me"
 import { formatMoney, formatNumber, toNumber } from "@/lib/format"
-import { isMuted, setMuted, playBeep } from "@/lib/beep"
+import { isMuted, setMuted, playAlert } from "@/lib/beep"
 import { deliverAndToast } from "@/lib/print/deliver"
 import { loadPrintSettings } from "@/lib/print/settings"
 import type { ReceiptData } from "@/lib/print/receipt"
 import { invalidateSaleData } from "@/lib/sale-queries"
 import { cn } from "@/lib/utils"
 
-/** The board, left to right. */
+/** The board, left to right. The last two are today's finished work: they sit
+ *  ON the board rather than on a history page because "did #12 go out?" is a
+ *  question a barista is asked all day, and because a card that is still here
+ *  is one drag away from being put right when it was closed by mistake. */
 const COLUMNS: {
   status: OrderStatus
   title: string
@@ -60,11 +58,15 @@ const COLUMNS: {
   next: OrderStatus
   action: string
   tone: string
+  /** Finished work — resets at the start of each trading day. */
+  done?: boolean
 }[] = [
   { status: "placed", title: "جديد", next: "accepted", action: "اقبل", tone: "border-destructive/50 bg-destructive/5" },
   { status: "accepted", title: "مقبول", next: "preparing", action: "ابدأ التحضير", tone: "border-primary/40 bg-primary/5" },
   { status: "preparing", title: "قيد التحضير", next: "ready", action: "جاهز", tone: "border-amber-500/40 bg-amber-500/5" },
   { status: "ready", title: "على الكاونتر", next: "collected", action: "تم التسليم", tone: "border-lime/50 bg-lime/5" },
+  { status: "collected", title: "تم التسليم", next: "preparing", action: "أعد فتحه", tone: "border-border bg-muted/30", done: true },
+  { status: "cancelled", title: "ملغى", next: "preparing", action: "أعد فتحه", tone: "border-border bg-muted/20", done: true },
 ]
 
 /** How long they have been waiting, and whether that is a problem yet. */
@@ -83,51 +85,13 @@ function canDrop(o: Order | null, to: OrderStatus): boolean {
   return Boolean(o) && o!.status !== to && (o!.next_statuses ?? []).includes(to)
 }
 
-/** Every state, as a menu. The board's columns cover the happy path; this
- *  covers the mistake — including the two states that have no column,
- *  تم التسليم and ملغى, which is exactly where a mis-click ends up. */
-function StatusPicker({
-  value,
-  disabled,
-  onPick,
-}: {
-  value: OrderStatus
-  disabled?: boolean
-  onPick: (s: OrderStatus) => void
-}) {
-  return (
-    <label className="mt-2 flex items-center gap-2 text-[11px] text-muted-foreground">
-      <span className="shrink-0">الحالة</span>
-      <select
-        value={value}
-        disabled={disabled}
-        onChange={(e) => {
-          const next = e.target.value as OrderStatus
-          if (next === value) return
-          if (
-            next === "cancelled" &&
-            !window.confirm("إلغاء هذا الطلب؟ ستُعاد نقاطه إن استُخدمت.")
-          ) {
-            e.target.value = value
-            return
-          }
-          onPick(next)
-        }}
-        className="min-w-0 flex-1 rounded-xl border bg-background px-2 py-1.5 text-xs font-semibold text-foreground disabled:opacity-50"
-      >
-        {ALL_STATUSES.map((st) => (
-          <option key={st} value={st}>
-            {STATUS_LABEL[st]}
-          </option>
-        ))}
-      </select>
-    </label>
-  )
-}
-
 export default function LiveOrdersPage() {
   const { orders, recent, open, isLoading, refresh, enableDesktopAlerts, desktopAlerts } =
     useLiveOrders()
+  // One list for the whole board: the four live columns and the two finished
+  // ones read from the same array, so a card that moves between them is the
+  // same card and not two different renderings of it.
+  const board = [...orders, ...recent]
   const qc = useQueryClient()
   const [busy, setBusy] = useState<number | null>(null)
   const [muted, setMutedState] = useState(false)
@@ -232,7 +196,9 @@ export default function LiveOrdersPage() {
                 const next = !muted
                 setMuted(next)
                 setMutedState(next)
-                if (!next) playBeep(true)
+                // Preview the REAL alert, not a single blip — the point of
+                // un-muting is to know what you are agreeing to hear.
+                if (!next) playAlert()
               }}
               title={muted ? "الصوت مكتوم" : "الصوت مفعّل"}
             >
@@ -246,7 +212,7 @@ export default function LiveOrdersPage() {
       />
 
       <p className="hidden px-1 text-xs text-muted-foreground md:block">
-        اسحب الطلب من عمود لعمود، أو استخدم الزر على البطاقة.
+        اسحب الطلب من عمود لعمود، أو استخدم الزر على البطاقة. آخر عمودين يبدآن من جديد مع كل يوم عمل.
       </p>
 
       {desktopAlerts === "denied" && (
@@ -270,9 +236,13 @@ export default function LiveOrdersPage() {
           description="أي طلب يوصل من التطبيق بيظهر هون فوراً، مع صوت وتنبيه."
         />
       ) : (
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        // Six columns will not fit a laptop in a grid, and wrapping them puts
+        // "تم التسليم" underneath "جديد", which breaks the one thing a board
+        // is for — left to right IS the workflow. So it scrolls sideways, at
+        // a width where a card is still readable.
+        <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-2">
           {COLUMNS.map((col) => {
-            const rows = orders.filter((o) => o.status === col.status)
+            const rows = board.filter((o) => o.status === col.status)
             const accepts = canDrop(dragging, col.status)
             return (
               <section
@@ -301,13 +271,21 @@ export default function LiveOrdersPage() {
                   void move(card!, col.status)
                 }}
                 className={cn(
-                  "flex flex-col gap-2.5 rounded-3xl p-1.5 transition-colors",
+                  "flex w-[17rem] shrink-0 flex-col gap-2.5 rounded-3xl p-1.5 transition-colors",
+                  col.done && "opacity-90",
                   accepts && "outline-dashed outline-2 outline-offset-2 outline-primary/30",
                   accepts && over === col.status && "bg-primary/10 outline-primary",
                 )}
               >
                 <header className="flex items-baseline justify-between px-1">
-                  <h2 className="font-heading text-sm font-bold">{col.title}</h2>
+                  <h2 className="font-heading text-sm font-bold">
+                    {col.title}
+                    {col.done ? (
+                      <span className="ms-1.5 text-[10px] font-normal text-muted-foreground">
+                        اليوم
+                      </span>
+                    ) : null}
+                  </h2>
                   <span className="text-xs text-muted-foreground">
                     {formatNumber(rows.length)}
                   </span>
@@ -318,7 +296,15 @@ export default function LiveOrdersPage() {
                     —
                   </div>
                 ) : (
-                  rows.map((o) => {
+                  <div
+                    className={cn(
+                      "flex flex-col gap-2.5",
+                      // Sixty delivered cups must not push the live columns
+                      // off the bottom of the screen.
+                      col.done && "max-h-[28rem] overflow-y-auto pe-0.5",
+                    )}
+                  >
+                    {rows.map((o) => {
                     const w = waited(o.created_at)
                     const points = Number(o.beans_spent ?? 0)
                     return (
@@ -397,12 +383,15 @@ export default function LiveOrdersPage() {
                         <div className="mt-3 flex gap-2">
                           <Button
                             size="sm"
+                            variant={col.done ? "secondary" : "default"}
                             className="flex-1"
                             disabled={busy === o.id}
                             onClick={() => void move(o, col.next)}
                           >
                             {busy === o.id ? (
                               <Loader2 className="size-4 animate-spin" />
+                            ) : col.done ? (
+                              <RotateCcw className="size-4" />
                             ) : col.next === "collected" ? (
                               <Check className="size-4" />
                             ) : (
@@ -418,39 +407,33 @@ export default function LiveOrdersPage() {
                           >
                             <Printer className="size-4" />
                           </Button>
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            aria-label="ألغِ الطلب"
-                            disabled={busy === o.id}
-                            onClick={() => {
-                              if (
-                                !window.confirm(
-                                  `إلغاء الطلب #${o.id}؟ ستُعاد نقاطه إن استُخدمت.`,
-                                )
-                              ) {
-                                return
-                              }
-                              void move(o, "cancelled")
-                            }}
-                            className="text-destructive"
-                          >
-                            <X className="size-4" />
-                          </Button>
+                          {!col.done && (
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              aria-label="ألغِ الطلب"
+                              disabled={busy === o.id}
+                              onClick={() => {
+                                if (
+                                  !window.confirm(
+                                    `إلغاء الطلب #${o.id}؟ ستُعاد نقاطه إن استُخدمت.`,
+                                  )
+                                ) {
+                                  return
+                                }
+                                void move(o, "cancelled")
+                              }}
+                              className="text-destructive"
+                            >
+                              <X className="size-4" />
+                            </Button>
+                          )}
                         </div>
 
-                        {/* Any stage, from any stage. Dragging is the fast
-                            path on a laptop; this is the one that works on a
-                            tablet, and the one that can reach تم التسليم and
-                            ملغى, which are not columns. */}
-                        <StatusPicker
-                          value={o.status}
-                          disabled={busy === o.id}
-                          onPick={(next) => void move(o, next)}
-                        />
                       </article>
-                    )
-                  })
+                      )
+                    })}
+                  </div>
                 )}
               </section>
             )
@@ -458,49 +441,6 @@ export default function LiveOrdersPage() {
         </div>
       )}
 
-      {/* Marking the wrong cup collected is the easiest mistake on this
-          screen, and it used to need a database query to undo. Today's
-          finished orders sit here so one press puts the card back. */}
-      {recent.length > 0 && (
-        <section className="clay-card p-4">
-          <h2 className="font-heading mb-3 text-sm font-bold">
-            انتهت اليوم
-            <span className="ms-2 text-xs font-normal text-muted-foreground">
-              اضغط لإعادة فتح طلب أُغلق بالخطأ
-            </span>
-          </h2>
-          <div className="flex flex-wrap gap-2">
-            {recent.map((o) => (
-              <button
-                key={o.id}
-                type="button"
-                disabled={busy === o.id}
-                onClick={() => void move(o, "preparing")}
-                title="أعد فتحه إلى «قيد التحضير»"
-                className={cn(
-                  "flex items-center gap-2 rounded-2xl border px-3 py-2 text-xs transition hover:bg-muted disabled:opacity-50",
-                  o.status === "cancelled" && "border-destructive/40",
-                )}
-              >
-                <span className="font-heading font-bold">#{o.id}</span>
-                <span className="text-muted-foreground">
-                  {o.customer_name || "زبون"}
-                </span>
-                <span
-                  className={cn(
-                    "rounded-full px-2 py-0.5 text-[10px] font-semibold",
-                    o.status === "cancelled"
-                      ? "bg-destructive/15 text-destructive"
-                      : "bg-lime/15 text-lime",
-                  )}
-                >
-                  {STATUS_LABEL[o.status]}
-                </span>
-              </button>
-            ))}
-          </div>
-        </section>
-      )}
     </div>
   )
 }

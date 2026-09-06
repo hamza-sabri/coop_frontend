@@ -203,3 +203,29 @@ export function playBeep(ok = true, volume = 1) {
     /* audio unavailable — vibration/toast still give feedback */
   }
 }
+
+/**
+ * The "there is an order waiting" alert: three beeps, not one.
+ *
+ * A single blip is the right length for a scan — the cashier is looking at the
+ * screen and caused it. A new order is the opposite: nobody is looking, and
+ * the person it is for may be at the machine with their back turned. One
+ * 150ms tone across a noisy café is a sound you can be in the room for and
+ * miss entirely, which is exactly what happened.
+ *
+ * Callers repeat this on a timer for as long as the order is unanswered; this
+ * function is just the pattern.
+ */
+export function playAlert(volume = 1) {
+  if (isMuted()) return
+  const gaps = [0, 190, 380]
+  for (const at of gaps) {
+    window.setTimeout(() => {
+      try {
+        playBeep(true, volume)
+      } catch {
+        /* the context can be suspended if the tab lost focus mid-pattern */
+      }
+    }, at)
+  }
+}
