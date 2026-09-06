@@ -32,7 +32,7 @@ import { usePathname } from "next/navigation"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 
 import { ordersLive, type LiveOrders, type Order } from "@/api/orders"
-import { isMuted, playAlert, unlockAudio } from "@/lib/beep"
+import { isMuted, playNewOrder, unlockAudio } from "@/lib/beep"
 
 export const LIVE_ORDERS_KEY = ["orders", "live"] as const
 
@@ -40,13 +40,6 @@ export const LIVE_ORDERS_KEY = ["orders", "live"] as const
  *  is the difference between the app being useful and being decoration. */
 const POLL_MS = 10_000
 
-/** How often the alert repeats while an order sits unaccepted. */
-const RING_MS = 7_000
-
-/** ...and how many times, before it gives up and leaves the badge to it.
- *  Roughly five minutes. Long enough to walk back from the machine; short
- *  enough that an order left overnight does not ring until morning. */
-const MAX_RINGS = 42
 
 type Ctx = {
   orders: Order[]
@@ -134,15 +127,17 @@ export function OrdersLiveProvider({ children }: { children: React.ReactNode }) 
       return
     }
 
-    // Sound is NOT fired from here any more. A new order starts an alarm that
-    // keeps ringing until somebody accepts it (see below) — this effect only
-    // owns the desktop notification, which should fire once per order and
-    // never repeat.
     const fresh = orders.filter(
       (o) => !seen.current!.has(o.id) && o.status === "placed",
     )
     seen.current = ids
     if (fresh.length === 0) return
+
+    // Once. However many arrived together, and however long they sit there
+    // afterwards. A sound that repeats is a sound people learn to resent, and
+    // the standing state has three quieter carriers already: the badge, the
+    // tab title, and a red column at the head of the board.
+    if (!isMuted()) playNewOrder()
 
     if (permission() === "granted") {
       try {
@@ -176,49 +171,6 @@ export function OrdersLiveProvider({ children }: { children: React.ReactNode }) 
       }
     }
   }, [data, orders])
-
-  // Ring until somebody answers.
-  //
-  // The first version beeped once, at the moment an order arrived. That is a
-  // sound you can be in the room for and miss — and if you happened to be
-  // away from the screen for the one second it played, the order simply sat
-  // there. So the alert now repeats every seven seconds for as long as any
-  // order is still UNACCEPTED, and stops the instant one is: accepting is the
-  // acknowledgement, so there is no separate "dismiss" to remember.
-  //
-  // The cap exists for the other end of the day — an order left open
-  // overnight should not ring until morning. After it lapses the badge, the
-  // tab title and the red column are still there.
-  const rings = useRef(0)
-  const highWater = useRef(0)
-
-  useEffect(() => {
-    const pending = live.pending
-    if (pending <= 0) {
-      rings.current = 0
-      highWater.current = 0
-      return
-    }
-    // A NEW order restarts the count, so a second one arriving after the
-    // alarm lapsed starts it ringing again.
-    if (pending > highWater.current) rings.current = 0
-    highWater.current = pending
-
-    const ring = () => {
-      if (rings.current >= MAX_RINGS) return
-      rings.current += 1
-      if (isMuted()) return
-      try {
-        playAlert()
-      } catch {
-        /* the audio context is not unlocked yet; the badge still carries it */
-      }
-    }
-
-    ring()
-    const id = window.setInterval(ring, RING_MS)
-    return () => window.clearInterval(id)
-  }, [live.pending])
 
   // The tab title. A backgrounded tab is the normal state of the admin on a
   // counter laptop that is also someone's browser.

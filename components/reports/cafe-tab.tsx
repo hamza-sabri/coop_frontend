@@ -230,9 +230,9 @@ export function CafeTab({ days }: { days: number }) {
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="clay-card rep-chart p-5 lg:col-span-2">
           <h3 className="font-heading mb-2 text-base font-bold">الإيراد اليومي</h3>
-          <div className="h-52">
+          <div className="h-52" dir="ltr">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={byDay} margin={{ left: 4, right: 4 }}>
+              <AreaChart data={byDay} margin={{ left: 4, right: 8 }}>
                 <defs>
                   <linearGradient id="cafe-rev" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="var(--primary)" stopOpacity={0.5} />
@@ -326,9 +326,9 @@ export function CafeTab({ days }: { days: number }) {
           <p className="mb-2 text-xs text-muted-foreground">
             عدد الفواتير حسب ساعة اليوم — متى تحتاج ناس أكثر خلف الماكينة
           </p>
-          <div className="h-44">
+          <div className="h-44" dir="ltr">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={byHour} margin={{ left: 4, right: 4 }}>
+              <BarChart data={byHour} margin={{ left: 4, right: 8 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.25} />
                 <XAxis dataKey="hour" fontSize={10} tickLine={false} axisLine={false} />
                 <YAxis fontSize={10} tickLine={false} axisLine={false} width={34} />
@@ -360,19 +360,26 @@ export function CafeTab({ days }: { days: number }) {
           <p className="mb-2 text-xs text-muted-foreground">
             الإيراد حسب اليوم — أي يوم يحمل الأسبوع
           </p>
-          <div className="h-44">
+          {/* dir="ltr" on the chart only. Recharts lays an axis out assuming
+              left-to-right text metrics; inside an RTL page it placed the day
+              names at x≈0, on top of the bars they label. The names themselves
+              still shape right-to-left — that is the font's job, not the
+              container's — so nothing about the Arabic changes. */}
+          <div className="h-52" dir="ltr">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
                 data={byWeekday}
                 layout="vertical"
-                margin={{ left: 4, right: 8 }}
+                margin={{ left: 8, right: 12, top: 4, bottom: 4 }}
+                barCategoryGap="22%"
               >
                 <CartesianGrid strokeDasharray="3 3" horizontal={false} opacity={0.25} />
                 <XAxis type="number" fontSize={10} tickLine={false} axisLine={false} />
                 <YAxis
                   type="category"
                   dataKey="day"
-                  width={58}
+                  width={74}
+                  tickMargin={8}
                   fontSize={11}
                   tickLine={false}
                   axisLine={false}

@@ -40,7 +40,7 @@ import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useMe, displayName } from "@/hooks/use-me"
 import { formatMoney, formatNumber, toNumber } from "@/lib/format"
-import { isMuted, setMuted, playAlert } from "@/lib/beep"
+import { isMuted, setMuted, playNewOrder } from "@/lib/beep"
 import { deliverAndToast } from "@/lib/print/deliver"
 import { loadPrintSettings } from "@/lib/print/settings"
 import type { ReceiptData } from "@/lib/print/receipt"
@@ -198,7 +198,7 @@ export default function LiveOrdersPage() {
                 setMutedState(next)
                 // Preview the REAL alert, not a single blip — the point of
                 // un-muting is to know what you are agreeing to hear.
-                if (!next) playAlert()
+                if (!next) playNewOrder()
               }}
               title={muted ? "الصوت مكتوم" : "الصوت مفعّل"}
             >

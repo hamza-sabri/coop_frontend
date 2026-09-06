@@ -205,27 +205,46 @@ export function playBeep(ok = true, volume = 1) {
 }
 
 /**
- * The "there is an order waiting" alert: three beeps, not one.
+ * A new order has arrived. Two soft notes, once.
  *
- * A single blip is the right length for a scan — the cashier is looking at the
- * screen and caused it. A new order is the opposite: nobody is looking, and
- * the person it is for may be at the machine with their back turned. One
- * 150ms tone across a noisy café is a sound you can be in the room for and
- * miss entirely, which is exactly what happened.
+ * NOT the till's beep. That sound is a 3.6 kHz piezo spike designed to cut
+ * through a supermarket at the moment a cashier scans something — correct
+ * there, and an alarm anywhere else. Repeating it every seven seconds turned
+ * a café counter into a smoke detector.
  *
- * Callers repeat this on a timer for as long as the order is unanswered; this
- * function is just the pattern.
+ * This is a rising perfect fifth on sine waves with a slow attack and a long
+ * tail: audible across a room, and pleasant enough that hearing it forty times
+ * a shift is not a punishment. It plays ONCE per order — the badge, the tab
+ * title and the red column are what persist.
  */
-export function playAlert(volume = 1) {
+export function playNewOrder(volume = 0.9) {
   if (isMuted()) return
-  const gaps = [0, 190, 380]
-  for (const at of gaps) {
-    window.setTimeout(() => {
-      try {
-        playBeep(true, volume)
-      } catch {
-        /* the context can be suspended if the tab lost focus mid-pattern */
-      }
-    }, at)
+  const c = getCtx()
+  if (!c) return
+  try {
+    const t0 = c.currentTime
+    // E5 then B5 — a fifth apart, which reads as "something arrived" rather
+    // than "something is wrong". A minor interval would sound like an error.
+    const notes: [number, number][] = [
+      [659.25, 0],
+      [987.77, 0.13],
+    ]
+    for (const [hz, at] of notes) {
+      const t = t0 + at
+      const osc = c.createOscillator()
+      const gain = c.createGain()
+      osc.type = "sine"
+      osc.frequency.setValueAtTime(hz, t)
+      // A soft attack: no click, which is what makes a tone sound expensive.
+      gain.gain.setValueAtTime(0.0001, t)
+      gain.gain.exponentialRampToValueAtTime(0.22 * volume, t + 0.03)
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.55)
+      osc.connect(gain)
+      gain.connect(c.destination)
+      osc.start(t)
+      osc.stop(t + 0.6)
+    }
+  } catch {
+    /* the context can be suspended if the tab has never been interacted with */
   }
 }
