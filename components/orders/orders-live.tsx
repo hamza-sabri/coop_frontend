@@ -99,6 +99,13 @@ export function OrdersLiveProvider({ children }: { children: React.ReactNode }) 
     queryKey: LIVE_ORDERS_KEY,
     queryFn: ordersLive,
     refetchInterval: POLL_MS,
+    // Keep polling when the tab is NOT the one being looked at. This is the
+    // whole point: react-query pauses interval refetches in a background tab
+    // by default, so the admin only noticed an order at the moment somebody
+    // switched back to it — the alarm and the desktop notification both fired
+    // on return rather than on arrival, which is precisely backwards. A
+    // notification exists to reach someone who is looking at something else.
+    refetchIntervalInBackground: true,
     refetchOnWindowFocus: true,
     // A blip on the café's wifi must not empty the board.
     retry: 2,
