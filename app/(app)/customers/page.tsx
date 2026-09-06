@@ -117,7 +117,7 @@ function CustomerCard({
           </span>
         </div>
         <div className="flex items-center justify-between px-4 py-2.5">
-          <span className="text-xs text-muted-foreground">نقاطك</span>
+          <span className="text-xs text-muted-foreground">النقاط</span>
           <span className="font-heading text-sm font-bold text-lime">
             {formatNumber(points)}
           </span>
