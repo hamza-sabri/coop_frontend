@@ -43,6 +43,17 @@ export type ReceiptData = {
   total: number
   /** Amount actually charged. */
   discountedTotal: number
+  /**
+   * Points the customer redeemed on this sale, and what they were worth.
+   *
+   * Printed as its own line rather than rolled into «الخصم». A customer who
+   * paid part of a bill with points and is handed a receipt that only says
+   * "discount" has no paper record that the points were taken — which is the
+   * one thing he is most likely to come back and argue about.
+   */
+  beansSpent?: number
+  /** Shekel value of `beansSpent`, from the server where one exists. */
+  beansValue?: number
   paymentMethod: "cash" | "debt"
   isReturn?: boolean
   customerName?: string
@@ -191,6 +202,12 @@ function receiptBodyHtml(data: ReceiptData, name: string, s: PrintSettings, logo
     .join("")
 
   const discount = data.total - data.discountedTotal
+  const beans = Number(data.beansSpent) || 0
+  // Never let the two lines add up to more than the discount actually given:
+  // a rate change between the sale and the reprint would otherwise print a
+  // negative «خصم إضافي».
+  const beansOff = Math.min(Number(data.beansValue) || 0, Math.max(0, discount))
+  const otherOff = Math.max(0, discount - beansOff)
   const payLabel = data.paymentMethod === "debt" ? "دين (آجل)" : "نقدي"
 
   // The sync state used to be printed as a badge too; it is the till's
@@ -240,8 +257,9 @@ function receiptBodyHtml(data: ReceiptData, name: string, s: PrintSettings, logo
     <div class="rule"></div>
     <div class="totals">
       <div class="row"><span>الإجمالي</span><span>${esc(formatMoney(data.total))}</span></div>
-      ${discount > 0.001 ? `<div class="row"><span>الخصم</span><span>- ${esc(formatMoney(discount))}</span></div>` : ""}
-      <div class="row grand"><span>${data.isReturn ? "المبلغ المُعاد" : "المطلوب"}</span><span>${esc(formatMoney(data.discountedTotal))}</span></div>
+      ${beans > 0 ? `<div class="row"><span>نقاط مستخدمة (${esc(String(beans))} نقطة)</span><span>- ${esc(formatMoney(beansOff))}</span></div>` : ""}
+      ${otherOff > 0.001 ? `<div class="row"><span>${beans > 0 ? "خصم إضافي" : "الخصم"}</span><span>- ${esc(formatMoney(otherOff))}</span></div>` : ""}
+      <div class="row grand"><span>${data.isReturn ? "المبلغ المُعاد" : beans > 0 ? "المطلوب نقداً" : "المطلوب"}</span><span>${esc(formatMoney(data.discountedTotal))}</span></div>
     </div>
     <div class="foot">
       ${barcode ? `${barcode}<div class="num">${esc(code)}</div>` : ""}

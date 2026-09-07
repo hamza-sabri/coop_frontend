@@ -11,14 +11,15 @@ import {
   CalendarDays,
   ChevronDown,
   CloudOff,
+  Coins,
   Package,
   Pencil,
   Printer,
   ReceiptText,
   SlidersHorizontal,
   Trash2,
-  UserCog,
   User as UserIcon,
+  UserCog,
 } from "lucide-react"
 
 import {
@@ -672,6 +673,19 @@ export default function SalesPage() {
                         {s.is_return ? "−" : ""}
                         {formatMoney(s.discounted_total)}
                       </span>
+                      {/* The amount alone reads as a cheap sale. Saying which
+                          part of it was paid in points is what stops the owner
+                          scanning the day's takings from thinking the till is
+                          under-charging. */}
+                      {(s.beans_spent ?? 0) > 0 && (
+                        <span
+                          className="mt-0.5 flex items-center justify-end gap-1 text-[11px] font-medium text-lime"
+                          title={`استُخدمت ${s.beans_spent} نقطة على هذه الفاتورة`}
+                        >
+                          <Coins className="size-3" />
+                          {formatNumber(s.beans_spent ?? 0)} نقطة
+                        </span>
+                      )}
                     </TableCell>
                     <TableCell className="text-center">
                       <PaymentPill sale={s} />

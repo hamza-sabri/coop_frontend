@@ -58,6 +58,7 @@ import { CustomerChips } from "@/components/pos/customer-chips"
 import { ManualLineRow } from "@/components/pos/manual-line-row"
 import { useCustomersCatalog } from "@/hooks/use-customers-catalog"
 import { invalidateSaleData } from "@/lib/sale-queries"
+import { POINTS_PER_ILS, pointsForBill, pointsValue } from "@/lib/points"
 import { useSaleEditLink } from "@/hooks/use-sale-edit-link"
 import { useDebounced } from "@/hooks/use-debounced"
 import {
@@ -111,6 +112,17 @@ type SaleSnapshot = {
   isReturn: boolean
   paymentMethod: "cash" | "debt"
   customerName?: string
+  /**
+   * Points put towards this sale, already clamped the way the server will
+   * clamp them, and what they are worth.
+   *
+   * `discountedTotal` above is NET of them. The payload deliberately is not —
+   * it sends the bill before points and lets the server subtract, so a retry
+   * cannot take them off twice — which meant an offline receipt printed the
+   * pre-points figure while the synced sale showed the post-points one.
+   */
+  beansSpent?: number
+  beansValue?: number
   /** Stable per checkout — also used to key this sale's single toast. */
   receiptCode?: string
 }
@@ -186,6 +198,11 @@ function receiptFromSale(sale: Sale, cashierName: string): ReceiptData {
     })),
     total: toNumber(sale.total),
     discountedTotal: toNumber(sale.discounted_total),
+    beansSpent: Number(sale.beans_spent) || 0,
+    beansValue:
+      sale.beans_value != null
+        ? toNumber(sale.beans_value)
+        : pointsValue(Number(sale.beans_spent) || 0),
     paymentMethod: sale.payment_method,
     isReturn: Boolean(sale.is_return),
     customerName: sale.customer_name,
@@ -214,6 +231,8 @@ function receiptFromQueued(
     })),
     total: snap.total,
     discountedTotal: snap.discountedTotal,
+    beansSpent: snap.beansSpent ?? 0,
+    beansValue: snap.beansValue ?? 0,
     paymentMethod: snap.paymentMethod,
     isReturn: snap.isReturn,
     customerName: snap.customerName,
@@ -456,6 +475,17 @@ function buildPayload(pos: Pos): CheckoutInput | null {
         ? active.beansSpent
         : undefined,
   }
+  /* What the points actually take off, clamped exactly as the server clamps
+     it: never more than the balance, never more than the bill. The payload
+     keeps the PRE-points total (see discounted_total above); the snapshot is
+     what gets printed and what an offline sale is shown as, so it has to be
+     the post-points figure or the paper disagrees with the till. */
+  const billed = discounted != null ? discounted : total
+  const beansSpent =
+    active.customerId != null
+      ? Math.max(0, Math.min(active.beansSpent ?? 0, pointsForBill(billed)))
+      : 0
+  const beansWorth = pointsValue(beansSpent)
   const snapshot: SaleSnapshot = {
     receiptCode: body.receipt_code || active.editingReceipt || "",
     items: active.lines.map((l) => ({
@@ -470,7 +500,9 @@ function buildPayload(pos: Pos): CheckoutInput | null {
       unitPrice: l.unitPrice,
     })),
     total,
-    discountedTotal: discounted != null ? discounted : total,
+    discountedTotal: Math.max(0, billed - beansWorth),
+    beansSpent,
+    beansValue: beansWorth,
     isReturn: Boolean(active.isReturn),
     paymentMethod,
     customerName: active.customerName || undefined,
@@ -721,10 +753,6 @@ function SaleControls({ pos }: { pos: Pos }) {
   )
 }
 
-/** Points that make one shekel. Mirrors POINTS_PER_ILS on the server; the
- *  server is the authority and re-clamps whatever the till sends. */
-const POINTS_PER_ILS = 10
-
 /**
  * "The customer says use my points."
  *
@@ -817,7 +845,7 @@ function TotalRow({
     active.customerId != null
       ? Math.max(0, Math.min(active.beansSpent ?? 0, Math.floor(billed * POINTS_PER_ILS)))
       : 0
-  const beansWorth = beans / POINTS_PER_ILS
+  const beansWorth = pointsValue(beans)
   const due = Math.max(0, billed - beansWorth)
 
   return (

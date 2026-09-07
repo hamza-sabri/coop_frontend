@@ -146,6 +146,8 @@ export default function LiveOrdersPage() {
       })),
       total: toNumber(o.total),
       discountedTotal: toNumber(o.cash_total ?? o.total),
+      beansSpent: Number(o.beans_spent) || 0,
+      beansValue: toNumber(o.beans_value ?? 0),
       paymentMethod: "cash",
       customerName: o.customer_name || "زبون التطبيق",
       cashierName,

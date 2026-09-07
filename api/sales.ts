@@ -45,7 +45,22 @@ export type Sale = {
   is_return?: boolean
   items: SaleItem[]
   total: string
+  /**
+   * What was actually charged: the bill after the cashier's discount AND after
+   * any points the customer redeemed.
+   */
   discounted_total: string
+  /**
+   * Points the customer redeemed on this sale, and what they were worth in
+   * shekels, as the SERVER computed it.
+   *
+   * Kept as two fields rather than one so nothing on the client has to divide
+   * by the rate: a sale rung up before a rate change has to keep showing the
+   * discount it was actually given, not the one today's rate would imply.
+   * Backend: Sale.beans_spent / SaleSerializer.get_beans_value.
+   */
+  beans_spent?: number
+  beans_value?: string
   debt: number | null
   note: string
   /** The 12-digit number printed as a barcode on this sale's receipt. */

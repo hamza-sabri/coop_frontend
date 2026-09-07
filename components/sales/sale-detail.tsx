@@ -5,10 +5,11 @@
    at all or grow a second, thinner copy of the same dialog — one that would
    drift from this one the first time either changed. One dialog, two callers.
 */
-import { Banknote, CalendarDays, Pencil, Printer, Trash2, UserCog, User as UserIcon } from "lucide-react"
+import { Banknote, CalendarDays, Coins, Pencil, Printer, Trash2, UserCog, User as UserIcon } from "lucide-react"
 import { saleItemName, type Sale } from "@/api/sales"
 import { useMe, displayName } from "@/hooks/use-me"
-import { formatDate, formatMoney, toNumber } from "@/lib/format"
+import { formatDate, formatMoney, formatNumber, toNumber } from "@/lib/format"
+import { pointsValue } from "@/lib/points"
 import { deliverAndToast } from "@/lib/print/deliver"
 import type { ReceiptData } from "@/lib/print/receipt"
 import { loadPrintSettings } from "@/lib/print/settings"
@@ -36,6 +37,22 @@ export function SaleDetail({
   const pharmacyName = me?.pharmacy_name?.trim() || "المتجر"
   const pharmacyLogo = me?.pharmacy_logo || ""
 
+  /* The bill, split three ways.
+
+     `discounted_total` alone cannot answer "why is this 10.70 and not 15?",
+     and that is the question the owner opens the invoice with when a customer
+     disputes a bill. beans_value is the SERVER's figure — a sale rung up under
+     an older rate keeps the discount it was actually given — and pointsValue
+     is only the fallback for a sale that predates the field. */
+  const beansSpent = Number(sale?.beans_spent) || 0
+  const beansWorth =
+    sale?.beans_value != null ? toNumber(sale.beans_value) : pointsValue(beansSpent)
+  const gross = toNumber(sale?.total ?? 0)
+  const net = toNumber(sale?.discounted_total ?? 0)
+  // Whatever the cashier knocked off by hand, on top of the points.
+  const otherDiscount = Math.max(0, gross - net - beansWorth)
+  const hasBreakdown = beansSpent > 0 || gross - net > 0.001
+
   function reprint(s: Sale) {
     const data: ReceiptData = {
       saleId: s.id,
@@ -49,6 +66,11 @@ export function SaleDetail({
       })),
       total: toNumber(s.total),
       discountedTotal: toNumber(s.discounted_total),
+      beansSpent: Number(s.beans_spent) || 0,
+      beansValue:
+        s.beans_value != null
+          ? toNumber(s.beans_value)
+          : pointsValue(Number(s.beans_spent) || 0),
       paymentMethod: s.payment_method,
       isReturn: Boolean(s.is_return),
       customerName: s.customer_name,
@@ -127,11 +149,23 @@ export function SaleDetail({
                     {formatMoney(sale.discounted_total)}
                   </p>
                 </div>
-                {toNumber(sale.discounted_total) !== toNumber(sale.total) && (
-                  <p className="text-sm text-white/45 line-through">
-                    {formatMoney(sale.total)}
-                  </p>
-                )}
+                <div className="flex flex-col items-end gap-1">
+                  {net !== gross && (
+                    <p className="text-sm text-white/45 line-through">
+                      {formatMoney(sale.total)}
+                    </p>
+                  )}
+                  {/* Not folded into "خصم": the owner has to be able to tell a
+                      points redemption from a cashier's discount at a glance,
+                      because only one of the two is money he chose to give
+                      away today. */}
+                  {beansSpent > 0 && (
+                    <span className="pill gap-1 bg-lime/20 text-[11px] text-lime">
+                      <Coins className="size-3" />
+                      {formatNumber(beansSpent)} نقطة · {formatMoney(beansWorth)}
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -203,6 +237,36 @@ export function SaleDetail({
                   </TableBody>
                 </Table>
               </div>
+
+              {hasBreakdown && (
+                <div className="space-y-1.5 rounded-2xl bg-muted/60 px-4 py-3 text-sm">
+                  <div className="flex items-center justify-between text-muted-foreground">
+                    <span>الإجمالي</span>
+                    <span className="tabular-nums">{formatMoney(gross)}</span>
+                  </div>
+                  {beansSpent > 0 && (
+                    <div className="flex items-center justify-between font-medium text-lime">
+                      <span className="inline-flex items-center gap-1.5">
+                        <Coins className="size-3.5" />
+                        مدفوع بالنقاط ({formatNumber(beansSpent)} نقطة)
+                      </span>
+                      <span className="tabular-nums">− {formatMoney(beansWorth)}</span>
+                    </div>
+                  )}
+                  {otherDiscount > 0.001 && (
+                    <div className="flex items-center justify-between text-muted-foreground">
+                      <span>خصم إضافي</span>
+                      <span className="tabular-nums">
+                        − {formatMoney(otherDiscount)}
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between border-t pt-1.5 font-heading font-bold">
+                    <span>{beansSpent > 0 ? "المدفوع نقداً" : "المطلوب"}</span>
+                    <span className="tabular-nums">{formatMoney(net)}</span>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="flex shrink-0 flex-row items-center justify-between gap-2 border-t border-border/70 bg-muted/30 px-6 py-4">

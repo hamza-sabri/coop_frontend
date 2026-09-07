@@ -50,6 +50,13 @@ const PRECACHE_ROUTES = [
   "/menu",
   "/menu/stats",
   "/sales",
+  // The café pages. /live in particular is the one a barista holds on a phone
+  // behind the counter — the screen least able to afford a dead connection.
+  "/live",
+  "/orders",
+  "/today",
+  "/inventory",
+  "/inventory/stats",
   "/purchases",
   "/reports",
   "/settings",

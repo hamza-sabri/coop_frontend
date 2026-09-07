@@ -19,6 +19,7 @@ import { deliverAndToast } from "@/lib/print/deliver"
 import { type ReceiptData } from "@/lib/print/receipt"
 import { loadPrintSettings } from "@/lib/print/settings"
 import { cn } from "@/lib/utils"
+import { pointsValue } from "@/lib/points"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -52,6 +53,11 @@ function saleToReceipt(s: Sale, cashierFallback: string): ReceiptData {
     })),
     total: toNumber(s.total),
     discountedTotal: toNumber(s.discounted_total),
+    beansSpent: Number(s.beans_spent) || 0,
+    beansValue:
+      s.beans_value != null
+        ? toNumber(s.beans_value)
+        : pointsValue(Number(s.beans_spent) || 0),
     paymentMethod: s.payment_method,
     isReturn: Boolean(s.is_return),
     customerName: s.customer_name,

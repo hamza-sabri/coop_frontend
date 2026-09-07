@@ -144,8 +144,14 @@ export function renderReceiptCanvas(
   h += S(34) // table head
   for (const lines of wrapped) h += lines.length * S(26) + S(24)
   h += S(20) + S(32) // rule + total
-  const hasDiscount = data.total - data.discountedTotal > 0.001
-  if (hasDiscount) h += S(30)
+  const discount = data.total - data.discountedTotal
+  const beans = Number(data.beansSpent) || 0
+  // Clamped so a rate change between the sale and the reprint can never make
+  // the second line negative.
+  const beansOff = Math.min(Number(data.beansValue) || 0, Math.max(0, discount))
+  const otherOff = Math.max(0, discount - beansOff)
+  if (beans > 0) h += S(30)
+  if (otherOff > 0.001) h += S(30)
   h += S(48) // grand total
   const bcH = S(80)
   if (opts.barcode !== false) h += bcH + S(60)
@@ -249,19 +255,34 @@ export function renderReceiptCanvas(
   ctx.textAlign = "left"
   ctx.fillText(formatMoney(data.total), pad, y)
   y += S(30)
-  if (hasDiscount) {
+  // Points get their own line on the paper: «الخصم» alone leaves a customer
+  // who part-paid with points no record that they were spent.
+  if (beans > 0) {
     ctx.textAlign = "right"
-    ctx.fillText("الخصم", W - pad, y)
+    ctx.fillText(`نقاط مستخدمة (${beans} نقطة)`, W - pad, y)
     ctx.textAlign = "left"
     ctx.direction = "ltr"
-    ctx.fillText("- " + formatMoney(data.total - data.discountedTotal), pad, y)
+    ctx.fillText("- " + formatMoney(beansOff), pad, y)
+    ctx.direction = "rtl"
+    y += S(30)
+  }
+  if (otherOff > 0.001) {
+    ctx.textAlign = "right"
+    ctx.fillText(beans > 0 ? "خصم إضافي" : "الخصم", W - pad, y)
+    ctx.textAlign = "left"
+    ctx.direction = "ltr"
+    ctx.fillText("- " + formatMoney(otherOff), pad, y)
     ctx.direction = "rtl"
     y += S(30)
   }
   solid(ctx, y - S(18), W, pad)
   ctx.font = `800 ${S(27)}px ${FONT}`
   ctx.textAlign = "right"
-  ctx.fillText(data.isReturn ? "المبلغ المُعاد" : "المطلوب", W - pad, y + S(14))
+  ctx.fillText(
+    data.isReturn ? "المبلغ المُعاد" : beans > 0 ? "المطلوب نقداً" : "المطلوب",
+    W - pad,
+    y + S(14),
+  )
   ctx.textAlign = "left"
   ctx.fillText(formatMoney(data.discountedTotal), pad, y + S(14))
   y += S(48)
