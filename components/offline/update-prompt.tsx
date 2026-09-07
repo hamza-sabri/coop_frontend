@@ -23,6 +23,11 @@ export function UpdatePrompt() {
   useEffect(() => {
     if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return
     let cancelled = false
+    // Hoisted. These used to be created inside the `.then`, which returned a
+    // cleanup function to a PROMISE — where nothing calls it. The interval
+    // survived every remount and stacked up.
+    let timer = 0
+    let onVisible: (() => void) | null = null
 
     navigator.serviceWorker.ready
       .then((reg) => {
@@ -41,19 +46,26 @@ export function UpdatePrompt() {
             }
           })
         })
+
+        const check = () => void reg.update().catch(() => {})
         // Deploys are irregular, so poll rather than wait for a navigation.
-        // Five minutes is far below any realistic deploy cadence and costs one
-        // conditional request.
-        const timer = window.setInterval(
-          () => void reg.update().catch(() => {}),
-          5 * 60_000,
-        )
-        return () => window.clearInterval(timer)
+        timer = window.setInterval(check, 5 * 60_000)
+        // …and check the moment the tab is looked at again. Polling alone
+        // meant a deploy could sit unnoticed for five minutes in the one tab
+        // someone had just switched back to — which is exactly when they are
+        // wondering why the change they shipped is not on screen.
+        onVisible = () => {
+          if (document.visibilityState === "visible") check()
+        }
+        document.addEventListener("visibilitychange", onVisible)
+        check()
       })
       .catch(() => {})
 
     return () => {
       cancelled = true
+      if (timer) window.clearInterval(timer)
+      if (onVisible) document.removeEventListener("visibilitychange", onVisible)
     }
   }, [])
 
