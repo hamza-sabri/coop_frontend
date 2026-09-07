@@ -20,7 +20,6 @@ import { useMe, displayName } from "@/hooks/use-me"
 import { useIsOwner } from "@/lib/modules"
 import { BrandMark } from "@/components/brand"
 import { PriceQrDialog } from "@/components/reports/price-qr-card"
-import { GlobalScanButton } from "@/components/scan/global-scan-button"
 import { ConfirmDelete } from "@/components/confirm-delete"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -63,19 +62,25 @@ export function TopBar() {
   )
 
   return (
-    <header className="sticky top-0 z-30 flex min-h-[3.25rem] items-center gap-3 px-4 pt-[env(safe-area-inset-top)] md:min-h-[3.75rem] md:px-8 md:pt-1">
+    /* What is left of the top bar: a page's action buttons, and on mobile the
+       brand and the account menu.
+
+       Everything else has gone. The page TITLE went first — the sidebar
+       already lights up the page you are on. Then the desktop scan button,
+       because a café scans nothing (the wedge is caught page-wide anyway), and
+       the desktop avatar, which was `display only`: a photo of yourself, above
+       the till, all day. On a page with no actions this bar is now empty and
+       nearly zero-height on desktop, which is the point. */
+    <header className="sticky top-0 z-30 flex items-center gap-3 px-4 pt-[env(safe-area-inset-top)] md:px-8">
       {/* Mobile brand — the tenant's app icon, so the app bar matches the
-          launcher. The brand NAME used to sit beside it; the page title took
-          that space, and the shop knows which shop it is. */}
-      <BrandMark className="size-9 shrink-0 rounded-xl ring-1 ring-border md:hidden" />
+          launcher. The brand NAME used to sit beside it; the shop knows which
+          shop it is. */}
+      <BrandMark className="my-2 size-9 shrink-0 rounded-xl ring-1 ring-border md:hidden" />
 
       {/* Where every page's <PageHeader> lands. */}
-      <PageHeaderSlot className="flex min-w-0 flex-1 items-center" />
+      <PageHeaderSlot className="flex min-w-0 flex-1 items-center justify-end gap-2 py-1.5" />
 
       <div className="flex shrink-0 items-center gap-2.5">
-        {/* Scan lives in the bottom nav on mobile — desktop only here. */}
-        <GlobalScanButton variant="chrome" className="hidden md:inline-flex" />
-
         {/* Mobile: the price-page QR sits right next to the profile circle.
             Available to EVERY signed-in member of staff, not just the owner —
             it's a poster to hand a customer, not a management report. */}
@@ -142,10 +147,6 @@ export function TopBar() {
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-        {/* Desktop: display only — logout lives in the sidebar. */}
-        <div className="hidden md:block" title={name}>
-          {avatar}
-        </div>
       </div>
 
       <ConfirmDelete

@@ -1,23 +1,25 @@
 "use client"
 
-/* The page title, moved OUT of the page.
+/* The page title, deleted. Its actions, moved.
 
-   Every screen used to open with a title block: a gradient bar, an h1, a
-   subtitle, and air around all three. On a desktop that reads as design. On
-   the 10" touchscreen this actually runs on it is a hundred wasted pixels
-   above the only thing anyone came to touch — and the top bar directly above
-   it was sitting empty.
+   First attempt moved the heading block into the top bar — one row instead of
+   three, which was better and still wrong. The title itself was the waste. The
+   sidebar already lights up the page you are on, and nobody standing at a
+   till needs a screen to tell them it is the till. So the h1 and its subtitle
+   are gone from the layout entirely; the page name lives in the browser tab,
+   where it costs nothing.
 
-   So PageHeader no longer renders where it is written. Each page still calls
-   it exactly as before, and it TELEPORTS its content into the slot the top bar
-   exposes. A React portal rather than passing the title up through context or
-   layout props, because a portal keeps the node in the page's own React tree:
-   an `action` button can still close over that page's state, open that page's
-   dialog and read that page's hooks, while its DOM lands in the top bar.
+   What is left of PageHeader is the teleport for a page's ACTIONS. A React
+   portal rather than passing them up through context or layout props, because
+   a portal keeps the node in the page's own React tree: a button can still
+   close over that page's state, open that page's dialog and read that page's
+   hooks, while its DOM lands in the top bar.
 
-   One row instead of two, on every screen. */
+   Pages still call it with a title. Deleting the prop would have been the
+   tidier diff and the worse decision — it names the tab, and it is the one
+   place a page declares what it is. */
 
-import { createContext, useContext, useState, type ReactNode } from "react"
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react"
 import { createPortal } from "react-dom"
 
 const SlotContext = createContext<{
@@ -42,39 +44,27 @@ export function PageHeaderSlot({ className }: { className?: string }) {
 
 export function PageHeader({
   title,
-  description,
   action,
 }: {
   title: string
+  /** Accepted and ignored — it was the subtitle, and the subtitle is gone.
+   *  Left in the type so a dozen pages do not need editing to say nothing. */
   description?: string
   action?: ReactNode
 }) {
   const { node } = useContext(SlotContext)
 
-  const content = (
-    <div className="flex w-full min-w-0 items-center gap-3">
-      <div className="flex min-w-0 items-baseline gap-2">
-        <h1 className="truncate font-heading text-lg font-bold tracking-tight md:text-xl">
-          {title}
-        </h1>
-        {/* The subtitle is nearly always a count — «45 صنف», «2 زبون». Worth a
-            glance, never worth its own line, and first to go when the screen
-            is narrow. */}
-        {description && (
-          <p className="hidden truncate text-xs text-muted-foreground sm:block">
-            {description}
-          </p>
-        )}
-      </div>
-      {action && (
-        <div className="ms-auto flex shrink-0 items-center gap-2">{action}</div>
-      )}
-    </div>
-  )
+  // The tab, and the browser history entry — the only two places the page name
+  // is still worth spending. `description` is a count («45 صنف»); it belongs
+  // to neither, and a page that wants it on screen can render it itself.
+  useEffect(() => {
+    document.title = `${title} · كوب`
+  }, [title])
 
-  // Before the slot has mounted there is nowhere to put it. Rendering it in
-  // place for that one frame would push the whole page down and then snap it
-  // back, which is worse than a frame without a title.
-  if (!node) return null
-  return createPortal(content, node)
+  // Before the slot has mounted there is nowhere to put them.
+  if (!node || !action) return null
+  return createPortal(
+    <div className="flex min-w-0 items-center gap-2">{action}</div>,
+    node,
+  )
 }

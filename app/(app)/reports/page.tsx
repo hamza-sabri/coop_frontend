@@ -77,13 +77,12 @@ export default function ReportsPage() {
 
   return (
     <div className="mx-auto w-full max-w-7xl">
+      {/* The period picker had a row to itself under the heading. It is an
+          action, so it goes where the actions go. */}
       <PageHeader
         title="التقارير"
-        description="ماذا يُباع، متى تزدحم، وماذا يكلّفك برنامج النقاط"
+        action={<PeriodDropdown days={days} onChange={setDays} />}
       />
-      <div className="mb-2 flex min-h-9 items-center justify-end gap-2">
-        <PeriodDropdown days={days} onChange={setDays} />
-      </div>
       <CafeTab days={days} />
     </div>
   )

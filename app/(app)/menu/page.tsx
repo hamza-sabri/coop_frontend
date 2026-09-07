@@ -6,7 +6,6 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
-  ArrowDownToLine,
   BarChart3,
   CalendarClock,
   CalendarX2,
@@ -25,7 +24,6 @@ import {
 import { productsList } from "@/api/generated/products/products"
 import {
   bulkDeleteMedications,
-  downloadHesabateProducts,
   seedDemoMedications,
 } from "@/api/products"
 import type { Product } from "@/api/generated/model"
@@ -384,18 +382,6 @@ function MedicationsPageInner() {
   const [deleting, setDeleting] = useState(false)
   const isOwner = useIsOwner()
   const [selectMode, setSelectMode] = useState(false)
-  const [exportingHesabate, setExportingHesabate] = useState(false)
-  async function handleExportHesabate() {
-    setExportingHesabate(true)
-    try {
-      await downloadHesabateProducts()
-      toast.success("تم تصدير المنتجات بصيغة حسابات")
-    } catch {
-      toast.error("تعذّر التصدير")
-    } finally {
-      setExportingHesabate(false)
-    }
-  }
   const [selected, setSelected] = useState<Set<number>>(new Set())
   const [flushOpen, setFlushOpen] = useState(false)
   const [flushAll, setFlushAll] = useState(false)
@@ -558,42 +544,43 @@ function MedicationsPageInner() {
       <PageHeader
         title="المنيو"
         description={count ? `${formatNumber(count)} صنف` : "أصناف المنيو وأسعارها"}
+        /* One labelled button — the one anybody presses — and icons for the
+           rest. Four full-width pills across the top of a touchscreen is a
+           toolbar competing with the menu it sits above.
+
+           «تصدير إلى حسابات» is gone entirely: Hesabate is the pharmacy
+           accounting package this template arrived with, and a café has no
+           reason to know the name. */
         action={
-          <div className="flex items-center gap-2">
+          <>
             {isOwner && (
               <Button
                 variant="outline"
+                size="icon"
                 onClick={() => (selectMode ? exitSelect() : setSelectMode(true))}
-                className="gap-1.5"
+                title={selectMode ? "إلغاء التحديد" : "تحديد عدة أصناف"}
+                aria-label={selectMode ? "إلغاء التحديد" : "تحديد عدة أصناف"}
+                className={cn(selectMode && "border-primary text-primary")}
               >
                 <CheckSquare className="size-4" />
-                {selectMode ? "إلغاء التحديد" : "تحديد"}
               </Button>
             )}
             <Link
               href="/inventory/stats"
-              className={cn(buttonVariants({ variant: "outline" }), "hidden gap-1.5 sm:inline-flex")}
+              title="إحصائيات المنيو"
+              aria-label="إحصائيات المنيو"
+              className={cn(
+                buttonVariants({ variant: "outline", size: "icon" }),
+                "hidden sm:inline-flex",
+              )}
             >
               <BarChart3 className="size-4" />
-              إحصائيات
             </Link>
-            {isOwner && (
-              <Button
-                variant="outline"
-                onClick={handleExportHesabate}
-                disabled={exportingHesabate}
-                title="تصدير كل المنتجات بصيغة حسابات (xlsx) لإعادة استيرادها هناك"
-                className="hidden gap-1.5 sm:inline-flex"
-              >
-                <ArrowDownToLine className="size-4" />
-                تصدير إلى حسابات
-              </Button>
-            )}
             <Button onClick={openAdd} data-tour="page-add" className="hidden md:inline-flex">
               <PlusCircle className="size-4" />
               إضافة منتج
             </Button>
-          </div>
+          </>
         }
       />
 
@@ -602,9 +589,8 @@ function MedicationsPageInner() {
           <SearchInput
             value={searchRaw}
             onChange={setSearchRaw}
-            placeholder="ابحث بالاسم أو امسح الباركود…"
+            placeholder="ابحث بالاسم…"
             className="flex-1"
-            scan
           />
           <FilterMenu
             groups={[

@@ -37,7 +37,15 @@ describe("where a page title goes", () => {
   it("renders nothing at all until the slot exists", () => {
     // Rendering in place for one frame would push the page down and snap it
     // back — worse than a frame without a title.
-    expect(src).toContain("if (!node) return null")
+    expect(src).toContain("if (!node || !action) return null")
+  })
+
+  it("keeps the page name in the tab, where it costs no pixels", () => {
+    expect(src).toContain("document.title")
+  })
+
+  it("renders no heading of its own — that was the whole point", () => {
+    expect(src).not.toMatch(/<h1/)
   })
 
   it("the top bar exposes the slot", () => {

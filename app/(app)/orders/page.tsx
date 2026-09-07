@@ -48,7 +48,7 @@ import {
 import { bulkDeleteSales } from "@/api/products"
 
 import { invalidateSaleData } from "@/lib/sale-queries"
-import { DaySummaryCards } from "@/components/sales/day-summary-cards"
+import { CustomRangeCard } from "@/components/sales/range-card"
 import { SaleRevisions } from "@/components/sales/sale-revisions"
 import { SaleDetail } from "@/components/sales/sale-detail"
 import { PageHeader } from "@/components/page-header"
@@ -305,9 +305,6 @@ export default function SalesPage() {
               className={cn(buttonVariants({ variant: "outline" }), "gap-1.5 md:hidden")}
             >
               <ReceiptText className="size-4" />
-
-      {/* Orders customers sent from the app. Different table from the
-          sales history below — see api/orders.ts. */}
               الديون
             </Link>
             {isOwner && count ? (
@@ -320,24 +317,18 @@ export default function SalesPage() {
         }
       />
 
-      {/* The three numbers the owner actually opens this page for: جوال,
-          دخان, and the day's total — for the TRADING day, which rolls over at
-          4am rather than midnight. Above everything else because he wants to
-          walk past the screen and know. */}
-      <div className="mb-4">
-        <DaySummaryCards />
-      </div>
-
-      {/* Period totals */}
+      {/* Period totals. ONE row: the six fixed windows the server buckets, plus
+          the hand-picked range that used to be a whole panel of its own above
+          them — chips and a single wide card repeating three of these six. */}
       {statsLoading && (
-        <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
-          {Array.from({ length: 6 }).map((_, i) => (
+        <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-7">
+          {Array.from({ length: 7 }).map((_, i) => (
             <Skeleton key={i} className="h-20 rounded-3xl" />
           ))}
         </div>
       )}
       {stats && (
-        <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
+        <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-7">
           {periodCards.map(([label, bucket]) => (
             <Card key={label} className="sale-stat clay-card border-0 gap-0 p-3.5">
               <p className="text-[11px] font-medium text-muted-foreground">
@@ -351,6 +342,7 @@ export default function SalesPage() {
               </p>
             </Card>
           ))}
+          <CustomRangeCard />
         </div>
       )}
 
