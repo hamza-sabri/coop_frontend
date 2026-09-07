@@ -9,8 +9,14 @@ import path from "node:path"
  * history grew the middle section, and because the header was a flex child
  * with no `shrink-0` it collapsed — hiding قيمة البيع, which is the one number
  * an owner opens an invoice to read. Only the middle may give.
+ *
+ * The dialog was lifted out of this page into components/sales/sale-detail.tsx
+ * so the customer page could show the same invoice; the rule follows it there.
  */
-const SRC = readFileSync(path.resolve(__dirname, "page.tsx"), "utf8")
+const SRC = readFileSync(
+  path.resolve(__dirname, "../../../components/sales/sale-detail.tsx"),
+  "utf8",
+)
 
 describe("the invoice dialog", () => {
   it("pins the header so a growing body cannot crush it", () => {

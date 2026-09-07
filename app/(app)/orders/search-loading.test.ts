@@ -11,7 +11,7 @@ import { readFileSync } from "node:fs"
  * the debounce window, before the request has even been sent.
  */
 const PAGES = [
-  "app/(app)/sales/page.tsx",
+  "app/(app)/orders/page.tsx",
   "components/print/print-receipt-dialog.tsx",
 ]
 

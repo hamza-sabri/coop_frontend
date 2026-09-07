@@ -10,6 +10,7 @@ import { DemoBanner } from "@/components/demo/demo-banner"
 import { TourProvider } from "@/components/tour/tour-provider"
 import { TourFromQuery } from "@/components/tour/tour-from-query"
 import { TopBar } from "@/components/top-bar"
+import { PageHeaderProvider } from "@/components/page-header"
 import { OrdersLiveProvider } from "@/components/orders/orders-live"
 import { SyncModeBanner } from "@/components/offline/sync-mode-banner"
 
@@ -28,16 +29,22 @@ export default function AppLayout({
         <TourProvider>
           {/* Lock the shell to the viewport; only <main> scrolls so the floating
               ink rail and top bar stay put. */}
+          {/* The page's own <PageHeader> renders into the top bar, so the
+              provider has to wrap BOTH of them. */}
+          <PageHeaderProvider>
           <div className="flex h-dvh overflow-hidden">
             <AppSidebar />
             <div className="flex min-w-0 flex-1 flex-col">
               <SyncModeBanner />
               <TopBar />
-              <main className="min-h-0 flex-1 overflow-y-auto px-4 pb-32 pt-4 md:px-8 md:pb-10 md:pt-3">
+              {/* pt-1: the heading used to supply the breathing room here, and
+                  it has moved upstairs. */}
+              <main className="min-h-0 flex-1 overflow-y-auto px-4 pb-32 pt-1 md:px-8 md:pb-10 md:pt-2">
                 <ModuleGuard>{children}</ModuleGuard>
               </main>
             </div>
           </div>
+          </PageHeaderProvider>
           <BottomNav />
           <TenantGuard />
           <OfflineGate />

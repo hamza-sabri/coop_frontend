@@ -50,9 +50,21 @@ describe("a correction's pinned amount", () => {
   })
 
   it("never overwrites an amount the cashier typed during the correction", () => {
-    // Both input paths disown the original the moment she types.
-    const typed = POS.match(/discountFromOriginal: false,/g) ?? []
-    expect(typed.length).toBeGreaterThanOrEqual(3) // 2 inputs + the unpin
+    /* This used to count the occurrences — "2 inputs + the unpin" — and it
+       broke the day the café POS dropped its second amount field, which is
+       exactly the kind of change that SHOULD leave a test alone.
+
+       The invariant, stated instead of counted: every place that records a
+       cashier-typed amount must disown the original sale's in the same
+       breath, or the effect recomputes the total and quietly overwrites what
+       she just typed. */
+    const typed = POS.match(/discountTouched: true,[\s\S]{0,160}?\}/g) ?? []
+    expect(typed.length).toBeGreaterThan(0)
+    for (const block of typed) {
+      expect(block).toContain("discountFromOriginal: false")
+    }
+    // And the unpin path — lines moved, so the original amount is stale.
+    expect(POS).toMatch(/discountTouched: false,\s*\n\s*discountFromOriginal: false,/)
   })
 })
 

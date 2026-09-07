@@ -7,7 +7,6 @@ import {
   ShoppingCart,
   ShoppingBag,
   ConciergeBell,
-  Sunset,
   ChartPie,
   type LucideIcon,
 } from "lucide-react"
@@ -68,15 +67,9 @@ export const NAV_ITEMS: NavItem[] = [
     badge: "liveOrders",
   },
   { href: "/orders", label: "الفواتير", icon: ShoppingBag, module: "pos", desktopOnly: true },
-  // The screen an owner opens at closing time. Separate from التقارير, which
-  // is a month of analysis: this one is the drawer, tonight.
-  {
-    href: "/today",
-    label: "اليوم",
-    icon: Sunset,
-    module: "pos",
-    desktopOnly: true,
-  },
+  // There WAS an «اليوم» closing-time screen here. Removed: it answered the
+  // same questions التقارير answers, in a second visual language, and the
+  // owner had to learn which of two pages held today's number.
   {
     href: "/reports",
     label: "التقارير",

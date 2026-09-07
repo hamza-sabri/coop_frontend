@@ -37,6 +37,7 @@
   ],
   "exclude": [
     "node_modules",
+    "_to_delete",
     "**/*.test.ts",
     "**/*.test.tsx",
     "vitest.config.ts",

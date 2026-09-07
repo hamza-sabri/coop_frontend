@@ -3,40 +3,44 @@ import { readFileSync } from "node:fs"
 import path from "node:path"
 
 /**
- * A product is always added to the cart as a single PIECE.
+ * Which thing went into the cart.
  *
- * The bug: scanning a ₪1 chocolate bar opened "اختر النوع" listing only
- * "عبوة ×24 — ₪24.00" (twice, because the import makes one variant per pack
- * BARCODE and this product had two). There was no way to say "just one", so
- * the sale stopped dead at the till.
+ * This file used to assert the OPPOSITE rule, and the reversal is worth
+ * keeping written down. In the pharmacy build every "variant" was a pack
+ * invented by an import — عبوة ×24 and friends — so the base product was
+ * always a valid answer, and opening a chooser for it stopped a ₪1 chocolate
+ * bar dead at the till.
  *
- * Every variant in this store is a PACK created by the Shamel import from its
- * secondary selling units — not a colour or a size. So the base product is
- * always a valid answer and is the right default; the pack is the exception,
- * reachable from the النوع column after the fact.
+ * A café's variants are not packaging. آيس تي is خوخ or يافا or بامبي, and
+ * they are different drinks at different prices. Dropping the base row in
+ * charges the right money for the wrong cup and leaves the barista guessing.
+ * So: options present → always ask; no options → straight into the cart.
  */
-const SRC = readFileSync(
-  path.resolve(__dirname, "page.tsx"),
-  "utf8",
+const SRC = readFileSync(path.resolve(__dirname, "page.tsx"), "utf8")
+
+const addMedOrPick = SRC.slice(
+  SRC.indexOf("function addMedOrPick"),
+  SRC.indexOf("/** Camera scan"),
 )
 
-describe("the POS defaults to a single piece", () => {
-  it("adding never opens the unit dialog", () => {
-    // addMedOrPick must not set the picker — that was the blocking behaviour.
-    const fn = SRC.slice(
-      SRC.indexOf("function addMedOrPick"),
-      SRC.indexOf("/** Camera scan"),
-    )
-    expect(fn).not.toContain("setVariantPicker")
-    expect(fn).toContain("addWithFeedback(med)")
+describe("adding a product to the cart", () => {
+  it("asks which one when the product has options", () => {
+    expect(addMedOrPick).toContain("setVariantPicker")
+    expect(addMedOrPick).toContain("opts.length > 0")
   })
 
-  it("the unit picker offers قطعة as its first option", () => {
-    const dialog = SRC.slice(SRC.indexOf("اختر النوع</DialogTitle>"))
-    const piece = dialog.indexOf(">قطعة<")
-    const packs = dialog.indexOf("variantPicker?.variants.map")
-    expect(piece).toBeGreaterThan(-1)
-    expect(piece).toBeLessThan(packs) // listed before the packs
+  it("skips the question when there is nothing to choose", () => {
+    expect(addMedOrPick).toContain("addWithFeedback(med)")
+  })
+
+  it("never offers an option that was taken off the menu", () => {
+    // A retired flavour is still attached to the product; it must not be
+    // orderable just because the row still exists.
+    expect(addMedOrPick).toContain("is_active")
+  })
+
+  it("does not make the barista pick from a list of one", () => {
+    expect(addMedOrPick).toContain("opts.length === 1 ? opts[0] : null")
   })
 
   it("switching a line's unit keeps the quantity, via setLineUnit", () => {
@@ -54,27 +58,20 @@ describe("the POS defaults to a single piece", () => {
     expect(fn).not.toContain("quantity: 1")
   })
 
-  it("duplicate pack rows are collapsed before the cashier sees them", () => {
-    // One variant per pack barcode means two barcodes for the same 24-pack
-    // render as two identical choices.
+  it("collapses duplicate option rows before the barista sees them", () => {
     const fn = SRC.slice(SRC.indexOf("function openUnitPicker"))
     expect(fn).toContain("seen.has(k)")
   })
-
-  it("the cart table has a النوع column", () => {
-    expect(SRC).toContain(">النوع</TableHead>")
-    expect(SRC).toContain("<UnitCell")
-  })
 })
 
-describe("every barcode a product has is searchable, not just scannable", () => {
-  it("the POS search box matches the extra codes too", () => {
-    // The gap the shop hit: a code you can SCAN but cannot TYPE. Scanning
-    // resolved the extras (byBarcode indexes them); the search box filtered
-    // on `barcode` alone — so a code the scanner accepted returned nothing
-    // when keyed in by hand, which is exactly when the sticker is torn.
-    const fn = SRC.slice(SRC.indexOf("const matches = useMemo"))
-    expect(fn).toContain("m.alt_barcodes")
+describe("finding a product", () => {
+  it("has no search box — the menu is pictures, and you tap them", () => {
+    // A permanent text field cost a row of tiles and popped the on-screen
+    // keyboard over the menu. Scanning is unaffected: see below.
+    expect(SRC).not.toContain("<SearchInput")
+  })
+
+  it("still catches a hardware scanner anywhere on the page", () => {
+    expect(SRC).toContain("useGlobalScanner")
   })
 })
-

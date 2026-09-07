@@ -16,7 +16,7 @@ const CARD = readFileSync(
   "utf8",
 )
 const PAGE = readFileSync(
-  path.resolve(__dirname, "../../app/(app)/sales/page.tsx"),
+  path.resolve(__dirname, "../../app/(app)/orders/page.tsx"),
   "utf8",
 )
 

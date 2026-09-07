@@ -67,7 +67,7 @@ describe("nobody keeps a private copy of it", () => {
   it("every write path calls the shared helper", () => {
     for (const f of [
       "app/(app)/pos/page.tsx",
-      "app/(app)/sales/page.tsx",
+      "app/(app)/orders/page.tsx",
       "components/sales/sale-revisions.tsx",
     ]) {
       expect(readFileSync(join(ROOT, f), "utf8")).toContain("invalidateSaleData(qc)")

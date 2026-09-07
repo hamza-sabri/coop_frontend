@@ -40,7 +40,7 @@ describe("nothing bypasses the print agent", () => {
   it("the reprint paths go through deliverAndToast", () => {
     for (const f of [
       "components/print/print-receipt-dialog.tsx",
-      "app/(app)/sales/page.tsx",
+      "app/(app)/orders/page.tsx",
       "components/print/print-settings-dialog.tsx",
     ]) {
       expect(readFileSync(f, "utf8")).toContain("deliverAndToast")

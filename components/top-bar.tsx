@@ -17,7 +17,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { useMe, displayName } from "@/hooks/use-me"
-import { useBranding } from "@/hooks/use-branding"
 import { useIsOwner } from "@/lib/modules"
 import { BrandMark } from "@/components/brand"
 import { PriceQrDialog } from "@/components/reports/price-qr-card"
@@ -25,6 +24,7 @@ import { GlobalScanButton } from "@/components/scan/global-scan-button"
 import { ConfirmDelete } from "@/components/confirm-delete"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Skeleton } from "@/components/ui/skeleton"
+import { PageHeaderSlot } from "@/components/page-header"
 
 export function TopBar() {
   const router = useRouter()
@@ -47,7 +47,6 @@ export function TopBar() {
 
   const name = displayName(user)
   const initials = name ? name.charAt(0) : "؟"
-  const { name: brandName } = useBranding()
   const isOwner = useIsOwner()
   const [qrOpen, setQrOpen] = useState(false)
 
@@ -64,20 +63,16 @@ export function TopBar() {
   )
 
   return (
-    <header className="sticky top-0 z-30 flex min-h-[4.5rem] items-center justify-between gap-3 px-4 pt-[env(safe-area-inset-top)] md:px-8 md:pt-2">
-      {/* Mobile brand — the tenant's app icon, so the app bar matches the launcher. */}
-      <div className="flex items-center gap-2.5 md:hidden">
-        <BrandMark className="size-10 rounded-xl ring-1 ring-border" />
-        <p className="font-heading text-lg font-bold tracking-tight">
-          {brandName}
-        </p>
-      </div>
+    <header className="sticky top-0 z-30 flex min-h-[3.25rem] items-center gap-3 px-4 pt-[env(safe-area-inset-top)] md:min-h-[3.75rem] md:px-8 md:pt-1">
+      {/* Mobile brand — the tenant's app icon, so the app bar matches the
+          launcher. The brand NAME used to sit beside it; the page title took
+          that space, and the shop knows which shop it is. */}
+      <BrandMark className="size-9 shrink-0 rounded-xl ring-1 ring-border md:hidden" />
 
-      {/* No greeting — each page's own title/description is the heading, which
-          frees this space. Spacer keeps the actions pinned to the end. */}
-      <div className="hidden md:block" aria-hidden />
+      {/* Where every page's <PageHeader> lands. */}
+      <PageHeaderSlot className="flex min-w-0 flex-1 items-center" />
 
-      <div className="flex items-center gap-2.5">
+      <div className="flex shrink-0 items-center gap-2.5">
         {/* Scan lives in the bottom nav on mobile — desktop only here. */}
         <GlobalScanButton variant="chrome" className="hidden md:inline-flex" />
 

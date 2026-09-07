@@ -76,7 +76,9 @@ describe("a correction keeps the original sale's identity", () => {
   it("sends a null customer on a correction, so debt → cash detaches them", () => {
     // `undefined` is dropped by JSON.stringify, so PATCH would leave the old
     // customer attached and the debt with it.
-    expect(fn).toContain("editingSaleId != null\n        ? null")
+    expect(fn.replace(/\s+/g, " ")).toContain(
+      "editingSaleId != null ? null : undefined",
+    )
   })
 })
 
@@ -104,7 +106,7 @@ describe("saving the correction", () => {
   })
 
   it("shows a banner while the cart is a correction", () => {
-    expect(POS).toContain("active.editingSaleId != null &&")
+    expect(POS).toMatch(/active\??\.editingSaleId != null &&/)
     // Says BOTH halves: the same invoice is updated, and the old version is
     // still there. "سيتم حفظ النسخة السابقة" alone read as "a copy gets saved
     // somewhere" without answering the question the cashier is actually asking.

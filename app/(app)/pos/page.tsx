@@ -77,8 +77,8 @@ import {
 import { isMuted, playBeep, setMuted } from "@/lib/beep"
 import { cn } from "@/lib/utils"
 
-import { SearchInput } from "@/components/search-input"
 import { StickyToolbar } from "@/components/sticky-toolbar"
+import { PageHeader } from "@/components/page-header"
 import { LoadMore } from "@/components/load-more"
 import { EntityCombobox, type ComboOption } from "@/components/entity-combobox"
 import { ConfirmDelete } from "@/components/confirm-delete"
@@ -922,7 +922,18 @@ function CheckoutButtons({
   // gate, and a queue does not wait while a name is typed in.
   const needsCustomer = false
   return (
-    <div className="flex items-center gap-2">
+    <div className="space-y-2">
+      {/* A correction looks exactly like a new sale — same cart, same buttons —
+          and «حفظ التعديل» on the button is easy to miss with a queue waiting.
+          Says BOTH halves, because "سيتم حفظ النسخة السابقة" alone read as "a
+          copy gets saved somewhere" without answering what the cashier is
+          actually asking: does this make a second invoice? */}
+      {active?.editingSaleId != null && (
+        <p className="rounded-xl bg-warning/15 px-3 py-2 text-center text-xs font-medium">
+          تعديل فاتورة: ستُحدَّث الفاتورة نفسها، وتبقى النسخة السابقة محفوظة في السجل
+        </p>
+      )}
+      <div className="flex items-center gap-2">
       <button
         type="button"
         data-tour="pos-checkout"
@@ -984,6 +995,7 @@ function CheckoutButtons({
           <Trash2 className="size-5" />
         </button>
       )}
+      </div>
     </div>
   )
 }
@@ -1523,13 +1535,6 @@ function MoneyEditor({
   )
 }
 
-/**
- * The النوع (unit) cell: قطعة, or whichever pack this line is set to.
- *
- * Only interactive when the product actually HAS packs. Products without them
- * — most of the catalogue — show a plain "قطعة" rather than a button that
- * opens a dialog with one option in it.
- */
 function PosPageInner() {
   const pos = usePosCarts()
   // `/pos?edit=<id>` — the pencil on a sale lands here and opens it as a cart.
@@ -1900,20 +1905,13 @@ function PosPageInner() {
   return (
     <div className="mx-auto w-full max-w-7xl">
       {scanAlertOverlay}
-      {/* Header strip */}
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="font-heading text-2xl font-bold tracking-tight md:text-3xl">
-            نقطة البيع
-          </h1>
-          {/* The day's takings and the transaction count used to sit here.
-              Removed at the owner's request: the till is worked by staff, and
-              the shop's running total is the owner's business, not something
-              that should be readable over a cashier's shoulder by whoever is
-              standing at the counter. Both are still on the sales page and the
-              dashboard, which is where the owner looks. */}
-        </div>
-        <div className="flex items-center gap-2">
+      {/* Renders into the top bar. The day's takings and the transaction count
+          used to sit under the title; removed at the owner's request — the
+          till is worked by staff, and the shop's running total should not be
+          readable over a cashier's shoulder by whoever is at the counter. */}
+      <PageHeader
+        title="نقطة البيع"
+        action={
           <Link
             href="/orders"
             className="inline-flex h-9 items-center gap-1.5 rounded-full border border-border bg-card px-3.5 text-xs font-medium shadow-sm transition hover:border-primary/40 hover:text-primary md:hidden"
@@ -1921,8 +1919,8 @@ function PosPageInner() {
             <ChartColumn className="size-4" />
             المبيعات
           </Link>
-        </div>
-      </div>
+        }
+      />
 
       {/* Grid only. The table view was a pharmacy habit — rows of
           barcodes typed in fast. A café picks by sight, so the tiles
@@ -1932,36 +1930,32 @@ function PosPageInner() {
             {/* Products */}
             <div className="min-w-0" data-tour="pos-search">
               {/* Kept inside the products column so it never slides over the cart. */}
+              {/* No search box. A café orders by sight: the barista taps the
+                  picture of the drink. A permanent text field here was a
+                  pharmacy habit — thousands of near-identical boxes you can
+                  only tell apart by typing — and on a touchscreen it cost a
+                  row of tiles and popped the on-screen keyboard over the menu
+                  every time someone brushed it.
+
+                  Nothing about scanning is lost: the hardware wedge is caught
+                  page-wide by useGlobalScanner above, and the camera lives in
+                  the top bar and the bottom nav. */}
               <StickyToolbar className="lg:-mx-2 lg:px-2">
-                <SearchInput
-                  value={searchRaw}
-                  onChange={setSearchRaw}
-                  placeholder="ابحث أو امسح الباركود لإضافة منتج…"
-                  scan
-                  onScan={handleScan}
-                  scanContinuous
-                  onEnter={handleWedgeEnter}
-                  onScanClick={() => {
-                    // On mobile, scanning happens inside the cart sheet —
-                    // camera on top, items landing live underneath.
-                    if (window.innerWidth < 1024) {
-                      setSheetScan(true)
-                      setCartOpen(true)
-                      return true
-                    }
-                  }}
-                  scanStatus={
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="flex items-center gap-1.5 text-muted-foreground">
-                        <ShoppingBag className="size-4" />
-                        {formatNumber(activeCount)} صنف
-                      </span>
-                      <span className="font-heading text-lg font-bold">
-                        {formatMoney(activeTotal)}
-                      </span>
-                    </div>
-                  }
-                />
+                {/* An ambiguous scan can still leave a filter behind — it
+                    narrows the grid rather than adding to the cart. Shown as a
+                    chip so it can never become invisible state. */}
+                {searchRaw.trim() !== "" && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setSearchRaw("")}
+                      className="inline-flex h-8 items-center gap-1.5 rounded-full bg-primary/10 px-3 text-xs font-medium text-primary transition hover:bg-primary/15"
+                    >
+                      <X className="size-3.5" />
+                      نتائج: {searchRaw}
+                    </button>
+                  </div>
+                )}
                 <CategoryCircles value={catId} onChange={setCatId} />
               </StickyToolbar>
 

@@ -54,7 +54,6 @@ const PRECACHE_ROUTES = [
   // behind the counter — the screen least able to afford a dead connection.
   "/live",
   "/orders",
-  "/today",
   "/inventory",
   "/inventory/stats",
   "/purchases",
