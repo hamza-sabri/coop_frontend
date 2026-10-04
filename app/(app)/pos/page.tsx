@@ -1686,16 +1686,30 @@ function PosPageInner() {
   const [sheetScan, setSheetScan] = useState(false)
   const [bump, setBump] = useState(0)
   const scope = useRef<HTMLDivElement>(null)
-  // The category strip's height, so the cart can sit level with the first
-  // row of drinks and stick just under the strip when the menu scrolls.
-  const catsRef = useRef<HTMLDivElement>(null)
-  const [catsH, setCatsH] = useState(120)
+  // On a desktop the till is one screen that never moves: the category strip
+  // and the cart stay where they are, and only the drinks scroll. The page
+  // takes exactly the height left under the top bar — measured, so a banner
+  // above it (offline, demo) can never push the checkout button off screen.
+  const shellRef = useRef<HTMLDivElement>(null)
+  const [fitH, setFitH] = useState<number | null>(null)
   useEffect(() => {
-    const el = catsRef.current
-    if (!el || typeof ResizeObserver === "undefined") return
-    const ro = new ResizeObserver(() => setCatsH(Math.round(el.getBoundingClientRect().height)))
-    ro.observe(el)
-    return () => ro.disconnect()
+    const el = shellRef.current
+    if (!el) return
+    const measure = () => {
+      const main = el.closest("main")
+      const pb = main ? parseFloat(getComputedStyle(main).paddingBottom) || 0 : 0
+      const top = el.getBoundingClientRect().top + (main?.scrollTop ?? 0)
+      setFitH(Math.max(420, Math.floor(window.innerHeight - top - pb)))
+    }
+    measure()
+    window.addEventListener("resize", measure)
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(measure) : null
+    const main = el.closest("main")
+    if (ro && main?.parentElement) ro.observe(main.parentElement)
+    return () => {
+      window.removeEventListener("resize", measure)
+      ro?.disconnect()
+    }
   }, [])
 
   // Remember the cashier's preferred mode + sound preference.
@@ -1953,7 +1967,11 @@ function PosPageInner() {
   const activeTotal = pos.active ? cartTotal(pos.active) : 0
 
   return (
-    <div className="mx-auto w-full max-w-7xl" style={{ ["--pos-cats" as string]: `${catsH}px` }}>
+    <div
+      ref={shellRef}
+      className="mx-auto w-full max-w-7xl lg:flex lg:h-[var(--pos-fit)] lg:flex-col lg:overflow-hidden"
+      style={{ ["--pos-fit" as string]: fitH ? `${fitH}px` : "calc(100dvh - 7rem)" }}
+    >
       {scanAlertOverlay}
       {/* Renders into the top bar. The day's takings and the transaction count
           used to sit under the title; removed at the owner's request — the
@@ -1980,8 +1998,8 @@ function PosPageInner() {
           {/* The categories run the full width — the whole menu at a glance,
               still scrollable — and the cart starts level with the first row
               of drinks rather than with the category strip. */}
-          <div ref={catsRef}>
-          <StickyToolbar>
+          <div className="shrink-0">
+          <StickyToolbar className="lg:static">
             {/* An ambiguous scan can still leave a filter behind — it
                 narrows the grid rather than adding to the cart. Shown as a
                 chip so it can never become invisible state. */}
@@ -2000,9 +2018,12 @@ function PosPageInner() {
             <CategoryCircles value={catId} onChange={setCatId} />
           </StickyToolbar>
           </div>
-          <div className="grid gap-5 lg:grid-cols-[1fr_460px]">
-            {/* Products */}
-            <div className="min-w-0" data-tour="pos-search">
+          <div className="grid gap-5 lg:min-h-0 lg:flex-1 lg:grid-cols-[1fr_460px]">
+            {/* Products — the only thing that scrolls on a desktop. */}
+            <div
+              className="min-w-0 lg:-me-3 lg:h-full lg:overflow-y-auto lg:overscroll-contain lg:pe-3 lg:pb-4 lg:[scrollbar-gutter:stable]"
+              data-tour="pos-search"
+            >
               {/* Kept inside the products column so it never slides over the cart. */}
               {/* No search box. A café orders by sight: the barista taps the
                   picture of the drink. A permanent text field here was a
@@ -2054,12 +2075,12 @@ function PosPageInner() {
             </div>
 
             {/* Cart — desktop side panel */}
-            <div className="relative z-30 hidden lg:block" data-tour="pos-cart">
+            <div className="relative z-30 hidden min-h-0 lg:block lg:h-full" data-tour="pos-cart">
               <Card
                 className={cn(
-                  // Height accounts for the top bar + page header so the
-                  // checkout button never slips below the fold.
-                  "sticky top-[calc(var(--pos-cats,7.5rem)+0.5rem)] flex max-h-[calc(100dvh-13.5rem-var(--pos-cats,7.5rem))] min-h-[24rem] flex-col gap-0 overflow-hidden p-4",
+                  // Fills the column, which fills the screen: the checkout
+                  // button is always in the same place.
+                  "flex h-full min-h-0 flex-col gap-0 overflow-hidden p-4",
                   bumping && "cart-bump",
                   pos.active?.isReturn && "return-glow",
                 )}

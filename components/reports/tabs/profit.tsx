@@ -1,17 +1,33 @@
 "use client"
 
-/* الأرباح — the statement, read top to bottom: what was sold, what came off
- * it, what it cost, what was left. A shift chip narrows it to one shift and
- * swaps net profit for what the shift contributed after its wages. */
+/* الأرباح — said the way an owner says it, in one line:
+ *
+ *   دخل الصندوق  −  ما صرفته  =  ربحك
+ *
+ * then where the spending went, each line with "of every 100 ₪ that came in,
+ * this much went here". No floating bars, no accounting order to decode.
+ * A shift chip narrows it to one shift, where "ما صرفته" carries that shift's
+ * wages instead of the month's bills. */
 import { useState } from "react"
 import { useQuery } from "@tanstack/react-query"
-import { Info } from "lucide-react"
+import { Coffee, Equal, Info, Minus, Receipt, Trash2, Wallet } from "lucide-react"
 
 import { fetchPnl, type PnlQuery } from "@/api/finance"
+import { Bars } from "@/components/charts"
+import { CountUp } from "@/components/count-up"
 import { Failed, Panel, TabSkeleton } from "@/components/reports/kit"
-import { Bars, Waterfall, type Step } from "@/components/charts"
 import { formatMoney, formatNumber, toNumber } from "@/lib/format"
 import { cn } from "@/lib/utils"
+
+type Cost = {
+  key: string
+  label: string
+  explain: string
+  amount: number
+  Icon: typeof Coffee
+  tint: string
+  detail?: { label: string; amount: number }[]
+}
 
 export function ProfitTab({ q }: { q: PnlQuery }) {
   const [shiftId, setShiftId] = useState<number | null>(null)
@@ -24,49 +40,31 @@ export function ProfitTab({ q }: { q: PnlQuery }) {
   if (!data) return <Failed />
 
   const L = data.lines
-  const net = toNumber(L.net_revenue)
   const isShift = Boolean(data.shift)
-  const gross = toNumber(L.gross_sales)
+  const income = toNumber(L.net_revenue)
   const offTill = toNumber(L.discounts) + toNumber(L.points_redeemed) + toNumber(L.returns)
-  const drinks = toNumber(L.cogs)
   const lost = toNumber(L.waste) + toNumber(L.remakes) + toNumber(L.count_shortfall)
-  const last = isShift ? toNumber(L.shift_wages) : toNumber(L.opex)
   const left = isShift ? toNumber(L.contribution) : toNumber(L.net_profit)
+  const per100 = (v: number) => (income > 0 ? (v / income) * 100 : 0)
 
-  const steps: Step[] = [
-    { label: "بعت", value: gross, kind: "start" },
-    ...(offTill ? [{ label: "خصومات ونقاط", value: offTill, kind: "minus" as const }] : []),
-    { label: "كلفة المشروبات", value: drinks, kind: "minus" },
-    ...(lost > 0 ? [{ label: "هدر وتلف", value: lost, kind: "minus" as const }] : lost < 0 ? [{ label: "زيادة جرد", value: -lost, kind: "plus" as const }] : []),
-    { label: isShift ? "أجور الوردية" : "المصاريف", value: last, kind: "minus" },
-    { label: "بقي لك", value: left, kind: "total" },
-  ]
-
-  type Line = { label: string; hint?: string; amount: number; minus?: boolean; strong?: boolean; detail?: { label: string; amount: number }[] }
-  const lines: Line[] = [
-    { label: "بعت بسعر المنيو", amount: gross },
-    ...(offTill
+  const costs: Cost[] = [
+    {
+      key: "drinks",
+      label: "مكوّنات ما بعته",
+      explain: "حليب، بن، أكواب… بحسب تكلفة كل مشروب",
+      amount: toNumber(L.cogs),
+      Icon: Coffee,
+      tint: "bg-amber-500/12 text-amber-700 dark:text-amber-300",
+    },
+    ...(lost > 0
       ? [
           {
-            label: "خصومات ونقاط ومرتجعات",
-            amount: offTill,
-            minus: true,
-            detail: [
-              { label: "خصم الكاشير", amount: toNumber(L.discounts) },
-              { label: "دُفع بالنقاط", amount: toNumber(L.points_redeemed) },
-              { label: "مرتجعات أُعيد ثمنها", amount: toNumber(L.returns) },
-            ].filter((x) => x.amount),
-          },
-        ]
-      : []),
-    { label: "دخل الصندوق", hint: "ما دخل فعلاً", amount: net, strong: true },
-    { label: "كلفة المشروبات المباعة", amount: drinks, minus: true },
-    ...(lost
-      ? [
-          {
-            label: lost > 0 ? "هدر وتلف ونقص في الجرد" : "زيادة في الجرد",
-            amount: Math.abs(lost),
-            minus: lost > 0,
+            key: "lost",
+            label: "هدر وتلف",
+            explain: "ما رُمي أو أُعيد تحضيره أو نقص في الجرد",
+            amount: lost,
+            Icon: Trash2,
+            tint: "bg-rose-500/12 text-rose-700 dark:text-rose-300",
             detail: [
               { label: "هدر", amount: toNumber(L.waste) },
               { label: "إعادة تحضير", amount: toNumber(L.remakes) },
@@ -76,115 +74,203 @@ export function ProfitTab({ q }: { q: PnlQuery }) {
         ]
       : []),
     isShift
-      ? { label: "أجور الوردية", hint: `${formatMoney(data.shift?.wage_per_day)} × ${data.range.days} يوم`, amount: last, minus: true }
-      : { label: "المصاريف", hint: "إيجار، رواتب، فواتير — حصة هذه الأيام", amount: last, minus: true },
+      ? {
+          key: "wages",
+          label: "أجور الوردية",
+          explain: `${formatMoney(data.shift?.wage_per_day)} يومياً × ${formatNumber(data.range.days)} ${data.range.days === 1 ? "يوم" : "أيام"}`,
+          amount: toNumber(L.shift_wages),
+          Icon: Wallet,
+          tint: "bg-sky-500/12 text-sky-700 dark:text-sky-300",
+        }
+      : {
+          key: "opex",
+          label: "المصاريف",
+          explain: "إيجار، رواتب، كهرباء… حصة هذه الأيام من الشهر",
+          amount: toNumber(L.opex),
+          Icon: Receipt,
+          tint: "bg-sky-500/12 text-sky-700 dark:text-sky-300",
+        },
   ]
+  const spent = costs.reduce((a, c) => a + c.amount, 0)
+  const gain = lost < 0 ? -lost : 0 // the count found more than the books said
+  const opex = (data.opex ?? []).filter((o) => toNumber(o.amount) > 0)
+  const days = `${formatNumber(data.range.days)} ${data.range.days === 1 ? "يوم" : "أيام"}${data.range.elapsed_end < data.range.end ? " حتى اليوم" : ""}`
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-4 lg:grid-cols-5">
-        <Panel
-          className="lg:col-span-3"
-          title={isShift ? `ماذا بقي من وردية ${data.shift?.name}` : "من البيع إلى الربح"}
-          hint={`${data.range.days} ${data.range.days === 1 ? "يوم" : "أيام"}${data.range.elapsed_end < data.range.end ? " حتى اليوم" : ""} — كل عمود يُطرح مما قبله`}
-          action={
-            data.shifts.length > 0 ? (
-              // Which shift — beside the chart it changes, never a row of its own.
-              <div className="inline-flex shrink-0 rounded-xl border border-border bg-card p-0.5" role="tablist" aria-label="الوردية">
-                {[{ id: null as number | null, name: "كل اليوم", start: "", end: "" }, ...data.shifts].map((sh) => (
-                  <button
-                    key={sh.id ?? "all"}
-                    type="button"
-                    role="tab"
-                    aria-selected={shiftId === sh.id}
-                    title={sh.start ? `${sh.start}–${sh.end}` : undefined}
-                    onClick={() => setShiftId(sh.id)}
-                    className={cn(
-                      "rounded-lg px-3 py-1.5 text-xs font-semibold transition",
-                      shiftId === sh.id ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",
-                    )}
-                  >
-                    {sh.name}
-                  </button>
-                ))}
-              </div>
-            ) : undefined
-          }
-        >
-          <Waterfall steps={steps} format={(v) => formatMoney(v)} height={280} />
-        </Panel>
+      {/* ── the one line ─────────────────────────────────────────────── */}
+      <Panel
+        title={isShift ? `وردية ${data.shift?.name}` : "حساب الفترة"}
+        hint={days}
+        action={
+          data.shifts.length > 0 ? (
+            <div className="inline-flex shrink-0 rounded-xl border border-border bg-card p-0.5" role="tablist" aria-label="الوردية">
+              {[{ id: null as number | null, name: "كل اليوم", start: "", end: "" }, ...data.shifts].map((sh) => (
+                <button
+                  key={sh.id ?? "all"}
+                  type="button"
+                  role="tab"
+                  aria-selected={shiftId === sh.id}
+                  title={sh.start ? `${sh.start}–${sh.end}` : undefined}
+                  onClick={() => setShiftId(sh.id)}
+                  className={cn(
+                    "rounded-lg px-3 py-1.5 text-xs font-semibold transition",
+                    shiftId === sh.id ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {sh.name}
+                </button>
+              ))}
+            </div>
+          ) : undefined
+        }
+      >
+        <div className="grid items-stretch gap-2 md:grid-cols-[1fr_auto_1fr_auto_1fr]">
+          <Term
+            i={0}
+            label="دخل الصندوق"
+            value={income}
+            sub={offTill ? `بعد ${formatMoney(offTill)} خصومات ونقاط ومرتجعات` : "كل ما دفعه الزبائن"}
+          />
+          <Op i={1}>
+            <Minus className="size-4" />
+          </Op>
+          <Term i={2} label="ما صرفته" value={spent} sub={costs.map((c) => c.label).join(" · ")} tone="spent" />
+          <Op i={3}>
+            <Equal className="size-4" />
+          </Op>
+          <Term
+            i={4}
+            label={isShift ? "ما بقي من الوردية" : left >= 0 ? "ربحك" : "خسارتك"}
+            value={Math.abs(left)}
+            sub={
+              income > 0 && left > 0
+                ? `من كل ١٠٠ ₪ دخلت، بقي لك ${formatNumber(Math.round(per100(left)))} ₪`
+                : gain
+                  ? `منها ${formatMoney(gain)} زيادة وُجدت في الجرد`
+                  : "صرفت أكثر مما دخل"
+            }
+            tone={left >= 0 ? "good" : "bad"}
+          />
+        </div>
+      </Panel>
 
-        <Panel className="lg:col-span-2" title="الحساب بالتفصيل">
-          <ul className="divide-y divide-border/70 text-sm">
-            {lines.map((l) => (
-              <li key={l.label} className="py-2">
-                <div className="flex items-baseline justify-between gap-3">
-                  <span className={cn(l.strong ? "font-semibold" : l.minus ? "text-muted-foreground" : "")}>
-                    {l.minus ? "− " : ""}
-                    {l.label}
-                    {l.hint ? <span className="ms-1.5 text-[11px] text-muted-foreground">{l.hint}</span> : null}
-                  </span>
-                  <span className={cn("shrink-0 tabular-nums", l.strong ? "font-bold" : "font-semibold")}>{formatMoney(l.amount)}</span>
+      {/* ── where the spending went ──────────────────────────────────── */}
+      <div className={cn("grid items-start gap-4", !isShift && opex.length && "lg:grid-cols-5")}>
+        <Panel className="lg:col-span-3" title="أين ذهب ما صرفته" hint="ومن كل ١٠٠ ₪ دخلت الصندوق، كم ذهب لكل بند">
+          <ul className="divide-y divide-border/70">
+            {costs.map((c, i) => (
+              <li
+                key={c.key}
+                className="flex items-start gap-3 py-3 first:pt-0 animate-in fade-in slide-in-from-bottom-1 fill-mode-both"
+                style={{ animationDelay: `${i * 60}ms` }}
+              >
+                <span className={cn("grid size-10 shrink-0 place-items-center rounded-xl", c.tint)}>
+                  <c.Icon className="size-[18px]" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold">{c.label}</p>
+                  <p className="text-[11px] text-muted-foreground">{c.explain}</p>
+                  {c.detail && c.detail.length > 1 ? (
+                    <p className="mt-1 text-[11px] text-muted-foreground">
+                      {c.detail.map((d) => `${d.label} ${formatMoney(d.amount)}`).join(" · ")}
+                    </p>
+                  ) : null}
                 </div>
-                {l.detail && l.detail.length > 1 ? (
-                  <ul className="mt-1 space-y-0.5 ps-3 text-[11px] text-muted-foreground">
-                    {l.detail.map((x) => (
-                      <li key={x.label} className="flex justify-between">
-                        <span>{x.label}</span>
-                        <span className="tabular-nums">{formatMoney(x.amount)}</span>
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
+                <div className="shrink-0 text-end">
+                  <p className="font-semibold tabular-nums">{formatMoney(c.amount)}</p>
+                  {income > 0 ? (
+                    <p className="text-[11px] text-muted-foreground">
+                      {formatNumber(Math.round(per100(c.amount) * 10) / 10)} ₪ من كل ١٠٠
+                    </p>
+                  ) : null}
+                </div>
               </li>
             ))}
           </ul>
-          <div
-            className={cn(
-              "mt-2 flex items-baseline justify-between rounded-xl px-3 py-3",
-              left >= 0 ? "bg-emerald-500/10 text-emerald-800 dark:text-emerald-300" : "bg-rose-500/10 text-rose-800 dark:text-rose-300",
-            )}
-          >
-            <span className="font-semibold">{isShift ? "ما بقي من الوردية" : left >= 0 ? "ربحك" : "خسارتك"}</span>
-            <span className="font-heading text-xl font-bold tabular-nums">{formatMoney(Math.abs(left))}</span>
-          </div>
+          {/* Things worth knowing that do not change the profit above. */}
+          {!isShift && (data.memo.points_outstanding > 0 || toNumber(data.memo.purchases) > 0) ? (
+            <div className="mt-3 flex gap-2 rounded-xl bg-muted/50 p-3 text-xs leading-relaxed text-muted-foreground">
+              <Info className="mt-0.5 size-3.5 shrink-0" />
+              <p>
+                {toNumber(data.memo.purchases) > 0 ? (
+                  <>
+                    اشتريت مخزوناً بـ <b className="text-foreground">{formatMoney(data.memo.purchases)}</b> — يُحسب أعلاه فقط حين يُستخدم في مشروب.{" "}
+                  </>
+                ) : null}
+                {data.memo.points_outstanding > 0 ? (
+                  <>
+                    وعند الزبائن نقاط قيمتها <b className="text-foreground">{formatMoney(data.memo.points_outstanding_value)}</b> لم يستخدموها بعد.
+                  </>
+                ) : null}
+              </p>
+            </div>
+          ) : null}
         </Panel>
-      </div>
 
-      {!isShift ? (
-        <div className="grid gap-4 lg:grid-cols-5">
-          <Panel className="lg:col-span-3" title="المصاريف حسب النوع" hint="حصة هذه الأيام من كل مصروف">
-            {(data.opex ?? []).filter((o) => toNumber(o.amount) > 0).length ? (
-              <Bars
-                height={200}
-                showValues
-                data={(data.opex ?? []).filter((o) => toNumber(o.amount) > 0).map((o) => ({ label: o.name, value: toNumber(o.amount) }))}
-                format={(v) => formatMoney(v)}
-              />
-            ) : (
-              <p className="py-10 text-center text-sm text-muted-foreground">لا مصاريف مسجلة — أضفها من صفحة المصاريف.</p>
-            )}
+        {!isShift && opex.length ? (
+          <Panel className="lg:col-span-2" title="المصاريف حسب النوع" hint="حصة هذه الأيام من كل مصروف">
+            <Bars
+              height={230}
+              showValues
+              data={opex.map((o) => ({ label: o.name, value: toNumber(o.amount) }))}
+              format={(v) => formatMoney(v)}
+            />
           </Panel>
-          <Panel className="lg:col-span-2" title={<span className="flex items-center gap-1.5"><Info className="size-4 text-muted-foreground" />للعلم — لا يُطرح من الربح</span>}>
-            <dl className="space-y-3 text-sm">
-              <div className="flex items-start justify-between gap-3">
-                <dt>
-                  نقاط عند الزبائن لم تُستخدم بعد
-                  <p className="text-[11px] text-muted-foreground">{formatNumber(data.memo.points_outstanding)} نقطة — ستُخصم حين يستخدمونها</p>
-                </dt>
-                <dd className="font-semibold tabular-nums">{formatMoney(data.memo.points_outstanding_value)}</dd>
-              </div>
-              <div className="flex items-start justify-between gap-3">
-                <dt>
-                  اشتريت مخزوناً بقيمة
-                  <p className="text-[11px] text-muted-foreground">يُحسب في الربح حين يُباع في مشروب، لا يوم الشراء</p>
-                </dt>
-                <dd className="font-semibold tabular-nums">{formatMoney(data.memo.purchases)}</dd>
-              </div>
-            </dl>
-          </Panel>
-        </div>
-      ) : null}
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
+function Term({
+  i,
+  label,
+  value,
+  sub,
+  tone,
+}: {
+  i: number
+  label: string
+  value: number
+  sub: string
+  tone?: "spent" | "good" | "bad"
+}) {
+  return (
+    <div
+      className={cn(
+        "flex flex-col justify-between rounded-2xl border p-4 animate-in fade-in zoom-in-95 fill-mode-both duration-500",
+        tone === "good"
+          ? "border-emerald-500/25 bg-emerald-500/8"
+          : tone === "bad"
+            ? "border-rose-500/25 bg-rose-500/8"
+            : "border-border/80 bg-muted/30",
+      )}
+      style={{ animationDelay: `${i * 90}ms` }}
+    >
+      <p className="text-xs font-semibold text-muted-foreground">{label}</p>
+      <p
+        className={cn(
+          "mt-1 font-heading text-2xl font-bold tabular-nums md:text-[28px]",
+          tone === "good" && "text-emerald-700 dark:text-emerald-300",
+          tone === "bad" && "text-rose-700 dark:text-rose-300",
+        )}
+      >
+        <CountUp value={value} decimals={2} suffix=" ₪" />
+      </p>
+      <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-muted-foreground">{sub}</p>
+    </div>
+  )
+}
+
+function Op({ i, children }: { i: number; children: React.ReactNode }) {
+  return (
+    <div
+      className="grid place-items-center animate-in fade-in fill-mode-both duration-500 max-md:py-0.5"
+      style={{ animationDelay: `${i * 90}ms` }}
+      aria-hidden
+    >
+      <span className="grid size-8 place-items-center rounded-full bg-muted text-muted-foreground">{children}</span>
     </div>
   )
 }

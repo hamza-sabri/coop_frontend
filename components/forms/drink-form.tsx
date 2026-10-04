@@ -83,11 +83,6 @@ type Option = {
   open: boolean
 }
 
-const KINDS: { k: Kind; label: string }[] = [
-  { k: "size", label: "حجم" },
-  { k: "flavour", label: "نكهة" },
-  { k: "pack", label: "عبوة" },
-]
 
 const newKey = () =>
   typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -101,6 +96,8 @@ function num(v: string): number {
 
 /** Absolute price for a row, given the drink's base price. */
 function resolvePrice(o: Option, base: number): number {
+  // A blank price means "same as the drink" — exactly what the grey hint says.
+  if (o.amount.trim() === "") return base > 0 ? base : 0
   const v = num(o.amount)
   const p = o.mode === "delta" ? base + v : v
   return p > 0 ? p : 0
@@ -241,122 +238,224 @@ function DrinkPhoto({
 
 /* ── one option row ──────────────────────────────────────────────────────── */
 
-function OptionRow({
+/* ── sizes & flavours: one table, edited in place ─────────────────────────
+ *
+ *   الاسم      السعر     التكلفة    يربح    متوفر
+ *   الأحجام
+ *   صغير       10.00     3.20       6.80     ●
+ *   وسط        12.00     3.90       8.10     ●
+ *   ＋ حجم
+ *   النكهات — بزيادة على السعر الأساسي
+ *   فانيلا     +2.00     —          …        ●
+ *   ＋ نكهة
+ *
+ * Every price in one glance, Tab from cell to cell. A size is typed as its
+ * full price; a flavour as what it adds to the drink's base price. A blank
+ * cost means "same as the drink". Ingredients per option stay on the
+ * المكونات tab. On a phone each option folds into two lines. */
+const PRESET_SIZES = ["صغير", "وسط", "كبير"]
+
+function OptionsTable({
+  options,
+  base,
+  baseCost,
+  showCost,
+  onPatch,
+  onAdd,
+  onRemove,
+}: {
+  options: Option[]
+  base: number
+  baseCost: number
+  showCost: boolean
+  onPatch: (key: string, p: Partial<Option>) => void
+  onAdd: (kind: Kind, label?: string) => void
+  onRemove: (key: string) => void
+}) {
+  const sizes = options.filter((o) => o.kind !== "flavour")
+  const flavours = options.filter((o) => o.kind === "flavour")
+  // Desktop columns: name · price · cost · profit · available · delete
+  const cols = showCost
+    ? "sm:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1fr)_4.5rem_3rem_2rem]"
+    : "sm:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_3rem_2rem]"
+
+  if (options.length === 0) {
+    return (
+      <div className="flex flex-col items-center gap-3 py-4 text-center">
+        <p className="text-sm text-muted-foreground">بلا أحجام — يُباع بالسعر الأساسي{base > 0 ? ` (${base.toFixed(2)} ₪)` : ""}.</p>
+        <div className="flex flex-wrap justify-center gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="gap-1"
+            onClick={() => PRESET_SIZES.forEach((l) => onAdd("size", l))}
+          >
+            <Plus className="size-3.5" />
+            صغير · وسط · كبير
+          </Button>
+          <Button type="button" size="sm" variant="outline" className="gap-1" onClick={() => onAdd("size")}>
+            <Plus className="size-3.5" />
+            حجم
+          </Button>
+          <Button type="button" size="sm" variant="outline" className="gap-1" onClick={() => onAdd("flavour")}>
+            <Plus className="size-3.5" />
+            نكهة
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
+  const group = (title: React.ReactNode, rows: Option[], kind: Kind, addLabel: string) => (
+    <>
+      <div className="bg-muted/40 px-3 py-1.5 text-[11px] font-semibold text-muted-foreground">{title}</div>
+      {rows.map((o) => (
+        <OptionLine
+          key={o.key}
+          o={o}
+          base={base}
+          baseCost={baseCost}
+          showCost={showCost}
+          cols={cols}
+          onChange={(p) => onPatch(o.key, p)}
+          onRemove={() => onRemove(o.key)}
+        />
+      ))}
+      <button
+        type="button"
+        onClick={() => onAdd(kind)}
+        className="flex w-full items-center gap-1 px-3 py-2 text-xs font-semibold text-primary transition hover:bg-primary/5"
+      >
+        <Plus className="size-3.5" />
+        {addLabel}
+      </button>
+    </>
+  )
+
+  return (
+    <div className="overflow-hidden rounded-xl border border-border/80">
+      <div className={cn("hidden items-center gap-2 bg-muted/60 px-3 py-2 text-[11px] font-medium text-muted-foreground sm:grid", cols)}>
+        <span>الاسم</span>
+        <span>السعر (₪)</span>
+        {showCost ? <span>التكلفة (₪)</span> : null}
+        {showCost ? <span className="text-end">يربح</span> : null}
+        <span className="text-center">متوفر</span>
+        <span />
+      </div>
+      <div className="divide-y divide-border/60">
+        {group("الأحجام", sizes, "size", "حجم")}
+        {group(
+          <>
+            النكهات <span className="font-normal">— بزيادة على السعر الأساسي{base > 0 ? ` (${base.toFixed(2)} ₪)` : ""}</span>
+          </>,
+          flavours,
+          "flavour",
+          "نكهة",
+        )}
+      </div>
+    </div>
+  )
+}
+
+function OptionLine({
   o,
   base,
   baseCost,
   showCost,
+  cols,
   onChange,
   onRemove,
 }: {
   o: Option
   base: number
-  /** The drink's own typed cost — what a blank option cost means. */
   baseCost: number
   showCost: boolean
+  cols: string
   onChange: (patch: Partial<Option>) => void
   onRemove: () => void
 }) {
   const resolved = resolvePrice(o, base)
   const cost = o.cost.trim() !== "" ? num(o.cost) : baseCost
-
+  const profit = resolved - cost
+  const cell =
+    "h-9 w-full min-w-0 rounded-lg border border-border/70 bg-card px-2.5 text-sm transition focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:outline-none"
   return (
-    <div className="rounded-xl border bg-card animate-in fade-in slide-in-from-top-1 duration-200">
-      <div className="flex items-center gap-2 p-2 pb-0">
-        <Input
-          value={o.label}
-          onChange={(e) => onChange({ label: e.target.value })}
-          placeholder={o.kind === "flavour" ? "فانيلا" : "كبير"}
-          className="h-9 min-w-0 flex-1"
-          aria-label="اسم الخيار"
+    <div
+      className={cn(
+        "grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto] items-center gap-2 px-3 py-2 animate-in fade-in slide-in-from-top-1 duration-200",
+        cols,
+        !o.active && "bg-muted/30",
+      )}
+    >
+      <input
+        value={o.label}
+        onChange={(e) => onChange({ label: e.target.value })}
+        placeholder={o.kind === "flavour" ? "فانيلا" : "كبير"}
+        aria-label="الاسم"
+        autoFocus={!o.id && !o.label}
+        className={cn(cell, "order-1 col-span-2 font-semibold sm:order-none sm:col-span-1", !o.active && "text-muted-foreground")}
+      />
+      {/* Price: the full price of a size, or what a flavour adds (+). The
+          little sign switches between the two for the odd exception. */}
+      <div className={cn("order-4 flex min-w-0 items-stretch sm:order-none sm:col-span-1", showCost ? "col-span-2" : "col-span-4")}>
+        <button
+          type="button"
+          onClick={() => onChange({ mode: o.mode === "abs" ? "delta" : "abs" })}
+          title={o.mode === "abs" ? "السعر كاملاً — اضغط لتكتب زيادة على السعر الأساسي" : "زيادة على السعر الأساسي — اضغط لتكتب السعر كاملاً"}
+          className="grid w-8 shrink-0 place-items-center rounded-s-lg border border-e-0 border-border/70 bg-muted text-xs font-bold text-muted-foreground"
+        >
+          {o.mode === "abs" ? "₪" : "+"}
+        </button>
+        <input
+          inputMode="decimal"
+          dir="ltr"
+          value={o.amount}
+          onChange={(e) => onChange({ amount: e.target.value })}
+          placeholder={o.mode === "abs" ? (base > 0 ? base.toFixed(2) : "0") : "0"}
+          aria-label="السعر"
+          title={o.mode === "delta" ? `= ${resolved.toFixed(2)} ₪` : undefined}
+          className={cn(cell, "rounded-s-none text-end tabular-nums")}
         />
-        <div className="flex shrink-0 overflow-hidden rounded-lg border">
-          {KINDS.map((k) => (
-            <button
-              key={k.k}
-              type="button"
-              onClick={() => onChange({ kind: k.k })}
-              className={cn(
-                "px-2.5 py-1.5 text-xs font-semibold transition",
-                o.kind === k.k ? "bg-primary text-primary-foreground" : "hover:bg-muted",
-              )}
-            >
-              {k.label}
-            </button>
-          ))}
-        </div>
-        <button
-          type="button"
-          onClick={onRemove}
-          aria-label="حذف الخيار"
-          title="حذف الخيار"
-          className="grid size-9 shrink-0 place-items-center rounded-lg text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive"
-        >
-          <Trash2 className="size-4" />
-        </button>
       </div>
-
-      <div className="flex flex-wrap items-center gap-2 p-2">
-        <div className="flex items-stretch overflow-hidden rounded-lg border">
-          <button
-            type="button"
-            onClick={() => onChange({ mode: o.mode === "abs" ? "delta" : "abs" })}
-            title={o.mode === "abs" ? "سعر ثابت — اضغط لتكتب الزيادة" : "زيادة على السعر الأساسي — اضغط للسعر الثابت"}
-            className="bg-muted px-2.5 text-xs font-bold"
-          >
-            {o.mode === "abs" ? "₪" : "+₪"}
-          </button>
-          <Input
-            inputMode="decimal"
-            value={o.amount}
-            onChange={(e) => onChange({ amount: e.target.value })}
-            placeholder="0"
-            className="h-8 w-20 rounded-none border-0 text-center"
-            aria-label="السعر"
-          />
-        </div>
-        {showCost && (
-          <div className="flex items-stretch overflow-hidden rounded-lg border" title="تكلفة هذا الخيار — فارغ = نفس تكلفة المشروب">
-            <span className="grid place-items-center bg-muted px-2.5 text-[11px] font-semibold">تكلفة</span>
-            <Input
-              inputMode="decimal"
-              value={o.cost}
-              onChange={(e) => onChange({ cost: e.target.value })}
-              placeholder={baseCost > 0 ? baseCost.toFixed(2) : "0"}
-              className="h-8 w-20 rounded-none border-0 text-center"
-            />
-          </div>
-        )}
-        {o.kind === "pack" && (
-          <div className="flex items-stretch overflow-hidden rounded-lg border">
-            <span className="grid place-items-center bg-muted px-2.5 text-[11px] font-semibold">قطع</span>
-            <Input
-              inputMode="numeric"
-              value={o.pieces}
-              onChange={(e) => onChange({ pieces: e.target.value })}
-              placeholder="6"
-              className="h-8 w-16 rounded-none border-0 text-center"
-            />
-          </div>
-        )}
-        <button
-          type="button"
-          onClick={() => onChange({ active: !o.active })}
+      {showCost ? (
+        <input
+          inputMode="decimal"
+          dir="ltr"
+          value={o.cost}
+          onChange={(e) => onChange({ cost: e.target.value })}
+          placeholder={baseCost > 0 ? baseCost.toFixed(2) : "0"}
+          aria-label="التكلفة"
+          title="تكلفة كوب بهذا الخيار — فارغة = تكلفة المشروب"
+          className={cn(cell, "order-5 col-span-2 text-end tabular-nums sm:order-none sm:col-span-1")}
+        />
+      ) : null}
+      {showCost ? (
+        <span
           className={cn(
-            "h-8 rounded-lg border px-2.5 text-xs font-semibold transition",
-            o.active ? "text-muted-foreground" : "bg-muted text-foreground",
+            "hidden text-end text-xs font-semibold tabular-nums sm:block",
+            !(resolved > 0) || !(cost > 0) ? "text-muted-foreground" : profit > 0 ? "text-emerald-700 dark:text-emerald-400" : "text-rose-600",
           )}
-          title={o.active ? "متوفر — اضغط لإخفائه من المنيو" : "غير متوفر — مخفي من المنيو"}
         >
-          {o.active ? "متوفر" : "مخفي"}
-        </button>
-        {o.mode === "delta" || (showCost && cost > 0 && resolved > 0) ? (
-          <span className="ms-auto flex items-center gap-2 text-[11px] text-muted-foreground">
-            {o.mode === "delta" ? <span>= {resolved.toFixed(2)} ₪</span> : null}
-            {showCost && cost > 0 && resolved > 0 ? <MarginPill price={resolved} cost={cost} /> : null}
-          </span>
-        ) : null}
+          {resolved > 0 && cost > 0 ? profit.toFixed(2) : "—"}
+        </span>
+      ) : null}
+      <div className="order-2 flex items-center justify-center sm:order-none">
+        <Switch
+          checked={o.active}
+          onCheckedChange={(v) => onChange({ active: Boolean(v) })}
+          aria-label={o.active ? "متوفر — أطفئه لإخفائه من البيع" : "مخفي من البيع"}
+        />
       </div>
+      <button
+        type="button"
+        onClick={onRemove}
+        aria-label="حذف"
+        title="حذف"
+        className="order-3 grid size-8 place-items-center justify-self-end rounded-lg text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive sm:order-none"
+      >
+        <X className="size-4" />
+      </button>
     </div>
   )
 }
@@ -905,40 +1004,16 @@ export function DrinkForm({
         }
         open={showOptions}
         onToggle={() => setShowOptions((v) => !v)}
-        action={
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            className="h-8 gap-1"
-            onClick={() => {
-              addOption("size")
-              setShowOptions(true)
-            }}
-          >
-            <Plus className="size-3.5" />
-            خيار
-          </Button>
-        }
       >
-        {options.length === 0 ? (
-          <p className="py-3 text-center text-sm text-muted-foreground">بلا أحجام — يُباع بالسعر الأساسي.</p>
-        ) : (
-          <div className="flex flex-col gap-2">
-            <p className="text-[11px] text-muted-foreground">اضغط ₪ ليصير +₪ لتكتب الزيادة على السعر الأساسي بدل السعر الكامل.</p>
-            {options.map((o) => (
-              <OptionRow
-                key={o.key}
-                o={o}
-                base={base}
-                baseCost={num(cost)}
-                showCost={isOwner}
-                onChange={(p) => patch(o.key, p)}
-                onRemove={() => removeOption(o.key)}
-              />
-            ))}
-          </div>
-        )}
+        <OptionsTable
+          options={options}
+          base={base}
+          baseCost={num(cost)}
+          showCost={isOwner}
+          onPatch={patch}
+          onAdd={addOption}
+          onRemove={removeOption}
+        />
       </Fold>
 
       <Fold
