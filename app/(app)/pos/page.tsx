@@ -15,6 +15,7 @@ import {
   Printer,
   ScanBarcode,
   ShoppingBag,
+  StickyNote,
   Trash2,
   Undo2,
   UserPlus,
@@ -1271,8 +1272,9 @@ function CartLineRow({
         {/* The note has to be READABLE in the cart, not just stored. A cashier
             reads the order back to the customer off this list. */}
         {line.note?.trim() ? (
-          <p className="truncate text-[11px] text-warning-foreground">
-            ⌁ {line.note}
+          <p className="mt-0.5 flex items-center gap-1 truncate text-[11px] font-semibold text-amber-800 dark:text-amber-300">
+            <StickyNote className="size-3 shrink-0" />
+            <span className="truncate">{line.note}</span>
           </p>
         ) : null}
         <p className="text-[11px] text-muted-foreground">
@@ -1705,8 +1707,8 @@ function PosPageInner() {
   }, [])
 
   /** Add + feedback: chirp and make the cart bounce. */
-  function addWithFeedback(med: Product, variant?: CartVariant) {
-    pos.addMedication(med, variant)
+  function addWithFeedback(med: Product, variant?: CartVariant, note?: string) {
+    pos.addMedication(med, variant, note)
     playBeep(true)
     setBump((b) => b + 1)
   }
@@ -1959,6 +1961,7 @@ function PosPageInner() {
           readable over a cashier's shoulder by whoever is at the counter. */}
       <PageHeader
         title="نقطة البيع"
+        quiet
         action={
           <Link
             href="/orders"
@@ -2250,10 +2253,10 @@ function PosPageInner() {
                       pos.setLineUnit(variantPicker.lineKey, unit, variantPicker.med.price ?? "0")
                       if (pickNote.trim()) pos.setLineNote(variantPicker.lineKey, pickNote.trim())
                     } else {
-                      addWithFeedback(variantPicker.med, unit)
-                      // The line the add just created is the one to annotate.
-                      const key = pos.active?.lines.at(-1)?.key
-                      if (key && pickNote.trim()) pos.setLineNote(key, pickNote.trim())
+                      // The note rides with the add itself — looking the new
+                      // line up afterwards read the cart from BEFORE the add
+                      // and annotated the wrong line, or none.
+                      addWithFeedback(variantPicker.med, unit, pickNote)
                     }
                     setVariantPicker(null)
                   }}

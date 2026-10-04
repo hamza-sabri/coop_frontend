@@ -77,8 +77,11 @@ export function useIsOwner(): boolean {
 export function useOwnerState(): "owner" | "employee" | "loading" {
   const { user, isLoading } = useMe()
   if (!user) return isLoading ? "loading" : "owner"
-  const role = (user as { role?: string } | undefined)?.role
-  return role === "employee" ? "employee" : "owner"
+  // The server's answer first: owner OR platform superuser = full access,
+  // whatever `role` says (a superuser's role can read "employee").
+  const u = user as { role?: string; is_owner?: boolean }
+  if (typeof u.is_owner === "boolean") return u.is_owner ? "owner" : "employee"
+  return u.role === "employee" ? "employee" : "owner"
 }
 
 function itemLocked(

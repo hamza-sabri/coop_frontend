@@ -7,7 +7,7 @@
 */
 import { useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
-import { Banknote, CalendarDays, Coins, Pencil, Printer, Trash2, Undo2, UserCog, User as UserIcon } from "lucide-react"
+import { Banknote, CalendarDays, Coins, Pencil, Printer, StickyNote, Trash2, Undo2, UserCog, User as UserIcon } from "lucide-react"
 import { saleItemName, type Sale, type SaleItem } from "@/api/sales"
 import { useMe, displayName } from "@/hooks/use-me"
 import { formatDate, formatMoney, formatNumber, toNumber } from "@/lib/format"
@@ -70,7 +70,11 @@ export function SaleDetail({
       // Same number as the original receipt, so a reprint scans identically.
       receiptCode: s.receipt_code,
       items: s.items.map((it) => ({
-        name: saleItemName(it),
+        // Same as the till prints it: the note rides on the name so it reaches
+        // whoever makes the drink.
+        name: [saleItemName(it), (it as { note?: string }).note?.trim() ? `(${(it as { note?: string }).note!.trim()})` : ""]
+          .filter(Boolean)
+          .join(" "),
         quantity: it.quantity,
         unitPrice: it.unit_price,
         lineTotal: it.line_total,
@@ -224,6 +228,15 @@ export function SaleDetail({
                 receiptCode={sale.receipt_code}
               />
 
+              {/* The order's note sits right above what was ordered — it is
+                  read by whoever makes the drinks, not filed away. */}
+              {(sale as { note?: string }).note?.trim() ? (
+                <div className="flex items-start gap-2 rounded-2xl border border-amber-500/30 bg-amber-500/8 px-4 py-3 text-sm text-amber-900 dark:text-amber-200">
+                  <StickyNote className="mt-0.5 size-4 shrink-0" />
+                  <p className="whitespace-pre-wrap">{(sale as { note?: string }).note}</p>
+                </div>
+              ) : null}
+
               <div className="overflow-hidden rounded-2xl border">
                 <Table>
                   <TableHeader>
@@ -243,6 +256,12 @@ export function SaleDetail({
                           {toNumber(it.returned_quantity) > 0 ? (
                             <span className="ms-1.5 rounded-full bg-rose-500/12 px-1.5 py-0.5 text-[10px] font-semibold text-rose-700 dark:text-rose-300">
                               أُرجع {Number(it.returned_quantity)}
+                            </span>
+                          ) : null}
+                          {(it as { note?: string }).note?.trim() ? (
+                            <span className="mt-1 flex items-start gap-1 text-xs font-normal text-amber-800 dark:text-amber-300">
+                              <StickyNote className="mt-0.5 size-3 shrink-0" />
+                              {(it as { note?: string }).note}
                             </span>
                           ) : null}
                         </TableCell>

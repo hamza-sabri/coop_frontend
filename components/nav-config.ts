@@ -10,6 +10,7 @@ import {
   ChartPie,
   Package,
   Wallet,
+  UserCog,
   type LucideIcon,
 } from "lucide-react"
 
@@ -106,6 +107,9 @@ export const NAV_ITEMS: NavItem[] = [
     module: "reports",
     ownerOnly: true,
   },
+  // Who works the till. Owner (and superuser) only; on the phone it lives in
+  // the profile menu.
+  { href: "/staff", label: "الموظفون", icon: UserCog, ownerOnly: true, desktopOnly: true },
   /* Import is out of the navigation for كوب. It exists to bulk-load a
      catalogue of thousands from a supplier file; a café types its menu once
      and then edits it. The page and its API are untouched — restore this

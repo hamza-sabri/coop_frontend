@@ -45,26 +45,33 @@ export function PageHeaderSlot({ className }: { className?: string }) {
 export function PageHeader({
   title,
   action,
+  quiet = false,
 }: {
   title: string
   /** Accepted and ignored — it was the subtitle, and the subtitle is gone.
    *  Left in the type so a dozen pages do not need editing to say nothing. */
   description?: string
   action?: ReactNode
+  /** The till: no title, only the actions. Every pixel there is a drink. */
+  quiet?: boolean
 }) {
   const { node } = useContext(SlotContext)
 
-  // The tab, and the browser history entry — the only two places the page name
-  // is still worth spending. `description` is a count («45 صنف»); it belongs
-  // to neither, and a page that wants it on screen can render it itself.
   useEffect(() => {
     document.title = `${title} · كوب`
   }, [title])
 
   // Before the slot has mounted there is nowhere to put them.
-  if (!node || !action) return null
+  if (!node || (quiet && !action)) return null
+  // The page's name and its main actions as ONE group at the start of the
+  // bar — where an Arabic reader's eye lands first. The actions used to sit
+  // alone at the far end, which on a wide screen is a corner nobody looks at:
+  // "where do I add one?" was the most-asked question about every page.
   return createPortal(
-    <div className="flex min-w-0 items-center gap-2">{action}</div>,
+    <div className="flex min-w-0 items-center gap-3">
+      {!quiet ? <h1 className="truncate font-heading text-lg font-bold md:text-xl">{title}</h1> : null}
+      {action ? <div className="flex shrink-0 items-center gap-2">{action}</div> : null}
+    </div>,
     node,
   )
 }

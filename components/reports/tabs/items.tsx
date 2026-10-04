@@ -11,7 +11,7 @@ import { ArrowDown, ArrowUp, Search } from "lucide-react"
 
 import { fetchItems, type ItemRow, type PnlQuery } from "@/api/finance"
 import { Chip } from "@/components/finance/period-bar"
-import { Empty, Failed, MarginPill, Panel, Stat, TabSkeleton } from "@/components/reports/kit"
+import { Empty, Failed, Panel, Stat, TabSkeleton } from "@/components/reports/kit"
 import { Input } from "@/components/ui/input"
 import { formatMoney, formatNumber, toNumber } from "@/lib/format"
 import { cn } from "@/lib/utils"
@@ -21,7 +21,7 @@ type Sort = "qty" | "profit" | "margin" | "dead"
 const SORTS: { id: Sort; label: string }[] = [
   { id: "qty", label: "الأكثر مبيعاً" },
   { id: "profit", label: "الأعلى ربحاً" },
-  { id: "margin", label: "الأقل هامشاً" },
+  { id: "margin", label: "ربحه قليل" },
   { id: "dead", label: "لم يُطلب" },
 ]
 
@@ -108,14 +108,14 @@ export function ItemsTab({ q, onOpenItem }: { q: PnlQuery; onOpenItem: (id: numb
             {/* Desktop: a real table — the owner compares across columns. */}
             <table className="hidden w-full text-sm md:table">
               <thead className="text-[11px] text-muted-foreground">
+                {/* Every header uses its column's own cell classes (COL), so a
+                    title can never drift away from the numbers under it. */}
                 <tr className="border-b border-border/70">
-                  <th className="px-4 py-2 text-start font-medium">الصنف</th>
-                  <th className="px-2 py-2 text-start font-medium w-px whitespace-nowrap">الأكواب</th>
-                  <th className="px-2 py-2 text-end font-medium w-px whitespace-nowrap">الإيراد</th>
-                  <th className="px-2 py-2 text-end font-medium w-px whitespace-nowrap">الربح</th>
-                  <th className="px-2 py-2 text-center font-medium w-px whitespace-nowrap">الهامش</th>
-                  <th className="px-2 py-2 text-end font-medium w-px whitespace-nowrap">من الربح</th>
-                  <th className="px-4 py-2 text-end font-medium w-px whitespace-nowrap">آخر طلب</th>
+                  <th className={cn(COL.name, "font-medium")}>الصنف</th>
+                  <th className={cn(COL.cups, "font-medium")}>كم بيع</th>
+                  <th className={cn(COL.money, "font-medium")}>المبيعات</th>
+                  <th className={cn(COL.money, "font-medium")}>الربح</th>
+                  <th className={cn(COL.last, "font-medium")}>آخر مرة</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/60">
@@ -133,10 +133,12 @@ export function ItemsTab({ q, onOpenItem }: { q: PnlQuery; onOpenItem: (id: numb
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-semibold">{i.name}</p>
                       <p className="text-[11px] text-muted-foreground">
-                        {formatNumber(Math.round(toNumber(i.qty)))} كوب · ربح {formatMoney(i.profit)}
+                        {formatNumber(Math.round(toNumber(i.qty)))} مرة · مبيعات {formatMoney(i.revenue)}
                       </p>
                     </div>
-                    <MarginPill pct={i.margin_pct} />
+                    <span className="shrink-0 text-end text-sm font-semibold tabular-nums">
+                      {i.margin_pct == null ? "—" : formatMoney(i.profit)}
+                    </span>
                   </button>
                 </li>
               ))}
@@ -160,11 +162,18 @@ function Thumb({ src }: { src: string }) {
   )
 }
 
+const COL = {
+  name: "px-4 py-2.5 text-start",
+  cups: "w-56 px-3 py-2.5 text-start whitespace-nowrap",
+  money: "w-32 px-3 py-2.5 text-end whitespace-nowrap",
+  last: "w-24 px-4 py-2.5 text-end whitespace-nowrap",
+}
+
 function ItemTableRow({ i, maxQty, onOpen }: { i: ItemRow; maxQty: number; onOpen: () => void }) {
   const qty = toNumber(i.qty)
   return (
     <tr onClick={onOpen} className="cursor-pointer transition hover:bg-muted/40">
-      <td className="px-4 py-2">
+      <td className={COL.name}>
         <div className="flex items-center gap-2.5">
           <Thumb src={i.image} />
           <div className="min-w-0">
@@ -173,20 +182,20 @@ function ItemTableRow({ i, maxQty, onOpen }: { i: ItemRow; maxQty: number; onOpe
           </div>
         </div>
       </td>
-      <td className="px-2 py-2">
-        <div className="flex items-center gap-2 whitespace-nowrap ps-2">
-          <div className="h-1.5 w-20 overflow-hidden rounded-full bg-muted">
-            <div className="h-full rounded-full bg-primary" style={{ width: `${(qty / maxQty) * 100}%` }} />
+      <td className={COL.cups}>
+        <div className="flex items-center gap-2">
+          <span className="w-10 font-semibold tabular-nums">{formatNumber(Math.round(qty))}</span>
+          <div className="h-2 w-24 overflow-hidden rounded-full bg-muted">
+            <div className="animate-bar h-full rounded-full bg-primary" style={{ width: `${(qty / maxQty) * 100}%` }} />
           </div>
-          <span className="w-8 font-semibold tabular-nums">{formatNumber(Math.round(qty))}</span>
           <Trend now={qty} before={toNumber(i.prev_qty)} />
         </div>
       </td>
-      <td className="whitespace-nowrap px-3 py-2 text-end tabular-nums">{formatMoney(i.revenue)}</td>
-      <td className="whitespace-nowrap px-3 py-2 text-end font-semibold tabular-nums">{i.margin_pct == null ? "—" : formatMoney(i.profit)}</td>
-      <td className="px-2 py-2 text-center"><MarginPill pct={i.margin_pct} /></td>
-      <td className="px-2 py-2 text-end tabular-nums text-muted-foreground">{i.margin_pct == null ? "—" : `${i.profit_share}%`}</td>
-      <td className="px-4 py-2 text-end text-[11px] text-muted-foreground">
+      <td className={cn(COL.money, "tabular-nums")}>{formatMoney(i.revenue)}</td>
+      <td className={cn(COL.money, "font-semibold tabular-nums")}>
+        {i.margin_pct == null ? <span className="text-xs font-normal text-muted-foreground">بلا تكلفة</span> : formatMoney(i.profit)}
+      </td>
+      <td className={cn(COL.last, "text-xs text-muted-foreground")}>
         {i.last_sold_at ? new Date(i.last_sold_at).toLocaleDateString("ar-u-nu-latn", { day: "numeric", month: "short" }) : "—"}
       </td>
     </tr>

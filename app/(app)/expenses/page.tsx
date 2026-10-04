@@ -199,7 +199,7 @@ export default function ExpensesPage() {
                 </h3>
                 <Button size="sm" variant="outline" className="gap-1" onClick={() => setEditing({ kind: "monthly", row: null })}>
                   <Plus className="size-3.5" />
-                  إضافة
+                  مصروف ثابت
                 </Button>
               </div>
               {data.recurring.length === 0 ? (
@@ -230,15 +230,15 @@ export default function ExpensesPage() {
                   <Receipt className="size-4 text-primary" />
                   فواتير ومصاريف {monthName(anchor)}
                 </h3>
-                <Button size="sm" variant="outline" className="gap-1" onClick={() => setEditing({ kind: "once", row: null })}>
-                  <Plus className="size-3.5" />
-                  إضافة
-                </Button>
               </div>
               {data.expenses.length === 0 ? (
-                <p className="py-4 text-center text-xs text-muted-foreground">
-                  الكهرباء، المياه، صيانة، إعلان… كل ما دُفع عن هذا الشهر.
-                </p>
+                <div className="flex flex-col items-center gap-2 py-4 text-center">
+                  <p className="text-xs text-muted-foreground">الكهرباء، المياه، صيانة، إعلان… كل ما دُفع عن هذا الشهر.</p>
+                  <Button size="sm" variant="outline" className="gap-1" onClick={() => setEditing({ kind: "once", row: null })}>
+                    <Plus className="size-3.5" />
+                    مصروف
+                  </Button>
+                </div>
               ) : (
                 <ul className="divide-y divide-border/60">
                   {data.expenses.map((e) => (

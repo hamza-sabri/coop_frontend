@@ -7,8 +7,6 @@ import {
   Loader2,
   Pencil,
   Plus,
-  ShieldCheck,
-  User as UserIcon,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -22,6 +20,7 @@ import {
   type StaffUser,
 } from "@/api/staff"
 import { MODULE_LABELS } from "@/lib/modules"
+import { PageHeader } from "@/components/page-header"
 import { useMe } from "@/hooks/use-me"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -158,18 +157,19 @@ export function StaffSection() {
   })
 
   return (
-    <section className="mb-5 rounded-2xl border bg-card p-5">
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <div>
-          <h2 className="font-heading text-base font-bold">الموظفون</h2>
-          <p className="text-xs text-muted-foreground">
-            أضِف حسابات الموظفين وتحكّم بصلاحياتهم
-          </p>
-        </div>
-        <Button size="sm" onClick={openCreate}>
-          <Plus className="size-4" /> إضافة مستخدم
-        </Button>
-      </div>
+    <section className="space-y-3">
+      <PageHeader
+        title="الموظفون"
+        action={
+          <Button size="sm" className="bg-brand-gradient gap-1.5 shadow-md shadow-primary/25" onClick={openCreate}>
+            <Plus className="size-4" />
+            موظف
+          </Button>
+        }
+      />
+      <p className="text-sm text-muted-foreground">
+        حسابات من يعمل على الكاشير. المالك يرى كل شيء؛ الموظف يبيع ويسجّل الهدر والجرد، ولا يرى التكاليف والأرباح.
+      </p>
 
       {isLoading ? (
         <div className="grid place-items-center py-8 text-muted-foreground">
@@ -181,37 +181,44 @@ export function StaffSection() {
         </p>
       ) : staff.length === 0 ? (
         <p className="rounded-xl bg-muted/50 p-3 text-sm text-muted-foreground">
-          لا يوجد موظفون بعد — اضغط «إضافة مستخدم».
+          لا موظفين بعد — اضغط «+ موظف» في الأعلى.
         </p>
       ) : (
-        <ul className="flex flex-col gap-2">
+        <ul className="divide-y divide-border/60 overflow-hidden rounded-2xl border border-border/80 bg-card">
           {staff.map((u) => {
             const isMe = u.id === myId
             return (
               <li
                 key={u.id}
                 className={cn(
-                  "flex items-center gap-3 rounded-xl border p-3",
+                  "flex items-center gap-3 px-4 py-3 animate-in fade-in slide-in-from-bottom-1 fill-mode-both duration-300",
                   !u.is_active && "opacity-60",
                 )}
               >
-                <span className="grid size-9 shrink-0 place-items-center rounded-full bg-muted">
-                  {u.role === "owner" ? (
-                    <ShieldCheck className="size-4 text-primary" />
-                  ) : (
-                    <UserIcon className="size-4 text-muted-foreground" />
+                <span
+                  className={cn(
+                    "grid size-10 shrink-0 place-items-center rounded-full font-heading text-sm font-bold",
+                    u.role === "owner" ? "bg-primary text-primary-foreground" : "bg-muted text-foreground",
                   )}
+                >
+                  {(u.display_name || u.username).charAt(0).toUpperCase()}
                 </span>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="truncate text-sm font-semibold">
                       {u.display_name || u.username}
                     </span>
-                    {u.role === "owner" && <Badge variant="secondary">مالك</Badge>}
+                    <Badge variant={u.role === "owner" ? "default" : "secondary"}>{u.role === "owner" ? "مالك" : "موظف"}</Badge>
                     {isMe && <Badge variant="outline">أنت</Badge>}
                   </div>
-                  <span className="block truncate text-xs text-muted-foreground" dir="ltr">
-                    @{u.username}
+                  <span className="block truncate text-xs text-muted-foreground">
+                    <span dir="ltr">{u.username}</span>
+                    {" · "}
+                    {!u.is_active
+                      ? "موقوف"
+                      : u.last_login
+                        ? `آخر دخول ${new Date(u.last_login).toLocaleDateString("ar-u-nu-latn", { day: "numeric", month: "short" })}`
+                        : "لم يدخل بعد"}
                   </span>
                 </div>
                 <Button

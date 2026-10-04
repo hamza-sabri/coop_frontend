@@ -21,7 +21,6 @@ import { SortMenu, type SortOption } from "@/components/sort-menu"
 import { LoadMore } from "@/components/load-more"
 import { Fab } from "@/components/fab"
 import { RowActions } from "@/components/row-actions"
-import { GenderBadge } from "@/components/gender-badge"
 import { EmptyState, ErrorState } from "@/components/states"
 import { NoCustomersArt } from "@/components/illustrations"
 import { CustomerForm } from "@/components/forms/customer-form"
@@ -83,7 +82,6 @@ function CustomerCard({
             </p>
           )}
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
-            <GenderBadge gender={customer.gender} />
             {loyalty.signed_up && (
               <Badge className="border-transparent bg-primary/12 font-normal text-primary">
                 عبر التطبيق
@@ -103,25 +101,18 @@ function CustomerCard({
         </Link>
         <RowActions onEdit={onEdit} onDelete={onDelete} />
       </div>
-      <div className="grid grid-cols-2 divide-x divide-x-reverse divide-border/60 border-t border-border/60 bg-muted/30">
-        <div className="flex items-center justify-between px-4 py-2.5">
-          <span className="text-xs text-muted-foreground">الرصيد المستحق</span>
-          <span
-            className={
-              outstanding > 0
-                ? "pill pill-warning font-heading text-sm"
-                : "pill pill-success"
-            }
-          >
-            {formatMoney(customer.outstanding)}
-          </span>
-        </div>
-        <div className="flex items-center justify-between px-4 py-2.5">
-          <span className="text-xs text-muted-foreground">النقاط</span>
-          <span className="font-heading text-sm font-bold text-lime">
-            {formatNumber(points)}
-          </span>
-        </div>
+      {/* Points, in points and in shekels — the one number a café customer
+          asks about. A tab is shown only when there is one; "owes 0.00" on
+          every card was a pharmacy's ledger, not a café's. */}
+      <div className="flex items-center justify-between gap-3 border-t border-border/60 bg-muted/30 px-4 py-2.5">
+        <span className="text-xs text-muted-foreground">النقاط</span>
+        <span className="flex items-baseline gap-2">
+          {outstanding > 0 ? (
+            <span className="pill pill-warning text-[11px]">عليه {formatMoney(customer.outstanding)}</span>
+          ) : null}
+          <span className="font-heading text-sm font-bold tabular-nums">{formatNumber(points)}</span>
+          <span className="text-[11px] tabular-nums text-muted-foreground">= {formatMoney(points / 10)}</span>
+        </span>
       </div>
     </Card>
   )

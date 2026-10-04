@@ -37,15 +37,18 @@ describe("where a page title goes", () => {
   it("renders nothing at all until the slot exists", () => {
     // Rendering in place for one frame would push the page down and snap it
     // back — worse than a frame without a title.
-    expect(src).toContain("if (!node || !action) return null")
+    expect(src).toContain("if (!node || (quiet && !action)) return null")
   })
 
   it("keeps the page name in the tab, where it costs no pixels", () => {
     expect(src).toContain("document.title")
   })
 
-  it("renders no heading of its own — that was the whole point", () => {
-    expect(src).not.toMatch(/<h1/)
+  it("names the page beside its actions, so the add button is found where the eye starts", () => {
+    // One h1, in the bar, grouped with the actions — never a heading block in
+    // the page body (see the test below).
+    expect(src).toMatch(/<h1/)
+    expect(read("components/top-bar.tsx")).toContain("justify-start")
   })
 
   it("the top bar exposes the slot", () => {

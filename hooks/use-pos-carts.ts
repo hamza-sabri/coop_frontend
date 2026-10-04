@@ -386,23 +386,23 @@ export function usePosCarts() {
   }, [])
 
   const addMedication = useCallback(
-    (med: Product, variant?: CartVariant | null) => {
+    (med: Product, variant?: CartVariant | null, note?: string) => {
       const variantId = variant?.id ?? null
+      const n = (note ?? "").trim()
+      // Same drink, same size, same note → one more of it. A different note
+      // is a different drink: "بدون سكر" must not merge into the plain one.
+      const same = (l: CartLine) =>
+        l.medicationId === med.id && (l.variantId ?? null) === variantId && (l.note ?? "").trim() === n
       // Resolve the affected line key up front (from the live mirror) so we can
       // point the quantity auto-focus at it — whether we increment an existing
       // line or append a new one.
       const cart =
         cartsRef.current.find((c) => c.id === activeIdRef.current) ??
         cartsRef.current[0]
-      const existingKey = cart?.lines.find(
-        (l) => l.medicationId === med.id && (l.variantId ?? null) === variantId,
-      )?.key
+      const existingKey = cart?.lines.find(same)?.key
       const key = existingKey ?? `l${Date.now()}_${(seq += 1)}`
       patchActive((c) => {
-        const existing = c.lines.find(
-          (l) =>
-            l.medicationId === med.id && (l.variantId ?? null) === variantId,
-        )
+        const existing = c.lines.find(same)
         if (existing) {
           return {
             lines: c.lines.map((l) =>
@@ -422,11 +422,13 @@ export function usePosCarts() {
               unitPrice: variant ? String(variant.price) : med.price ?? "0",
               basePrice: variant ? String(variant.price) : med.price ?? "0",
               quantity: 1,
+              ...(n ? { note: n } : {}),
             },
           ],
         }
       })
       setLastAdded((p) => ({ key, tick: p.tick + 1 }))
+      return key
     },
     [patchActive],
   )

@@ -5,7 +5,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useQueryClient } from "@tanstack/react-query"
 import { useTheme } from "next-themes"
-import { BarChart3, GraduationCap, LogOut, Moon, QrCode, ReceiptText, Settings, Sun, Users, Wallet } from "lucide-react"
+import { BarChart3, GraduationCap, LogOut, Moon, QrCode, ReceiptText, Settings, Sun, UserCog, Users, Wallet } from "lucide-react"
 import { toast } from "sonner"
 
 import { logout } from "@/lib/auth"
@@ -78,7 +78,7 @@ export function TopBar() {
       <BrandMark className="my-2 size-9 shrink-0 rounded-xl ring-1 ring-border md:hidden" />
 
       {/* Where every page's <PageHeader> lands. */}
-      <PageHeaderSlot className="flex min-w-0 flex-1 items-center justify-end gap-2 py-1.5" />
+      <PageHeaderSlot className="flex min-h-12 min-w-0 flex-1 items-center justify-start gap-2 py-1.5" />
 
       <div className="flex shrink-0 items-center gap-2.5">
         {/* Mobile: the price-page QR sits right next to the profile circle.
@@ -137,6 +137,12 @@ export function TopBar() {
               <DropdownMenuItem onClick={() => router.push("/expenses")}>
                 <Wallet className="size-4" />
                 المصاريف
+              </DropdownMenuItem>
+            )}
+            {isOwner && (
+              <DropdownMenuItem onClick={() => router.push("/staff")}>
+                <UserCog className="size-4" />
+                الموظفون
               </DropdownMenuItem>
             )}
             {isOwner && (

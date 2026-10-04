@@ -6,13 +6,14 @@ import { useGSAP } from "@gsap/react"
 import gsap from "gsap"
 import { ScrollTrigger } from "gsap/ScrollTrigger"
 import { toast } from "sonner"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
   Banknote,
+  StickyNote,
   CalendarDays,
   ChevronDown,
   CloudOff,
   Coins,
-  Package,
   Pencil,
   Printer,
   ReceiptText,
@@ -608,19 +609,14 @@ export default function SalesPage() {
                   >
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        <span className="bg-brand-gradient flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-full text-sm font-bold text-white">
+                        <Avatar className="size-9 shrink-0">
                           {(s as { customer_avatar?: string }).customer_avatar ? (
-                            <img
-                              src={(s as { customer_avatar?: string }).customer_avatar}
-                              alt=""
-                              className="size-full object-cover"
-                            />
-                          ) : (
-                            s.customer_name?.trim().charAt(0) || (
-                              <ReceiptText className="size-4" />
-                            )
-                          )}
-                        </span>
+                            <AvatarImage src={(s as { customer_avatar?: string }).customer_avatar} alt="" className="object-cover" />
+                          ) : null}
+                          <AvatarFallback className="bg-brand-gradient text-sm font-bold text-white">
+                            {s.customer_name?.trim().charAt(0) || <ReceiptText className="size-4" />}
+                          </AvatarFallback>
+                        </Avatar>
                         <div className="min-w-0">
                           <div className="flex items-center gap-1.5">
                             <span className="truncate font-semibold">
@@ -660,10 +656,27 @@ export default function SalesPage() {
                       </div>
                     </TableCell>
                     <TableCell className="hidden sm:table-cell">
-                      <span className="inline-flex items-center gap-1.5 text-muted-foreground">
-                        <Package className="size-3.5" />
-                        {formatNumber(s.items.length)} صنف
+                      {/* What was ordered, by name — and the notes, so a
+                          "بدون سكر" is visible without opening the invoice. */}
+                      <span className="block max-w-[16rem] truncate text-sm">
+                        {s.items
+                          .slice(0, 2)
+                          .map((it) => `${Number(it.quantity) > 1 ? `${Number(it.quantity)}× ` : ""}${saleItemName(it)}`)
+                          .join("، ")}
+                        {s.items.length > 2 ? <span className="text-muted-foreground"> +{formatNumber(s.items.length - 2)}</span> : null}
                       </span>
+                      {(() => {
+                        const notes = [
+                          (s as { note?: string }).note?.trim(),
+                          ...s.items.map((it) => (it as { note?: string }).note?.trim()),
+                        ].filter(Boolean) as string[]
+                        return notes.length ? (
+                          <span className="mt-0.5 flex max-w-[16rem] items-center gap-1 truncate text-[11px] text-amber-800 dark:text-amber-300">
+                            <StickyNote className="size-3 shrink-0" />
+                            <span className="truncate">{notes.join(" · ")}</span>
+                          </span>
+                        ) : null
+                      })()}
                     </TableCell>
                     <TableCell className="text-end">
                       <span

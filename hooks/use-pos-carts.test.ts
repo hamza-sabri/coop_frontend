@@ -83,3 +83,17 @@ describe("a correction cart is never written down at all", () => {
     )
   })
 })
+
+describe("a note belongs to the drink it was typed for", () => {
+  it("is passed with the add, not looked up afterwards", () => {
+    // Looking the new line up after the add read the cart from BEFORE it and
+    // put the note on the wrong drink, or on none.
+    const page = readFileSync(path.resolve(__dirname, "../app/(app)/pos/page.tsx"), "utf8")
+    expect(page).toContain("addWithFeedback(variantPicker.med, unit, pickNote)")
+    expect(page).not.toContain("pos.active?.lines.at(-1)?.key")
+  })
+
+  it("a different note is a different line — «بدون سكر» never merges into the plain one", () => {
+    expect(CODE).toContain("(l.note ?? \"\").trim() === n")
+  })
+})

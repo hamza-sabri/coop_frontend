@@ -61,6 +61,7 @@ const PRECACHE_ROUTES = [
   // writes are online-only until week two.
   "/stock",
   "/expenses",
+  "/staff",
   "/reports",
   "/settings",
   "/customers",
