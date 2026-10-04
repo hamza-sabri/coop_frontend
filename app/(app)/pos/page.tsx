@@ -1684,6 +1684,17 @@ function PosPageInner() {
   const [sheetScan, setSheetScan] = useState(false)
   const [bump, setBump] = useState(0)
   const scope = useRef<HTMLDivElement>(null)
+  // The category strip's height, so the cart can sit level with the first
+  // row of drinks and stick just under the strip when the menu scrolls.
+  const catsRef = useRef<HTMLDivElement>(null)
+  const [catsH, setCatsH] = useState(120)
+  useEffect(() => {
+    const el = catsRef.current
+    if (!el || typeof ResizeObserver === "undefined") return
+    const ro = new ResizeObserver(() => setCatsH(Math.round(el.getBoundingClientRect().height)))
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
 
   // Remember the cashier's preferred mode + sound preference.
   const [muted, setMutedState] = useState(false)
@@ -1940,7 +1951,7 @@ function PosPageInner() {
   const activeTotal = pos.active ? cartTotal(pos.active) : 0
 
   return (
-    <div className="mx-auto w-full max-w-7xl">
+    <div className="mx-auto w-full max-w-7xl" style={{ ["--pos-cats" as string]: `${catsH}px` }}>
       {scanAlertOverlay}
       {/* Renders into the top bar. The day's takings and the transaction count
           used to sit under the title; removed at the owner's request — the
@@ -1963,6 +1974,29 @@ function PosPageInner() {
           barcodes typed in fast. A café picks by sight, so the tiles
           with photos ARE the product list and a second way to see the
           same thing was just another button to get wrong. */}
+          {/* The categories run the full width — the whole menu at a glance,
+              still scrollable — and the cart starts level with the first row
+              of drinks rather than with the category strip. */}
+          <div ref={catsRef}>
+          <StickyToolbar>
+            {/* An ambiguous scan can still leave a filter behind — it
+                narrows the grid rather than adding to the cart. Shown as a
+                chip so it can never become invisible state. */}
+            {searchRaw.trim() !== "" && (
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSearchRaw("")}
+                  className="inline-flex h-8 items-center gap-1.5 rounded-full bg-primary/10 px-3 text-xs font-medium text-primary transition hover:bg-primary/15"
+                >
+                  <X className="size-3.5" />
+                  نتائج: {searchRaw}
+                </button>
+              </div>
+            )}
+            <CategoryCircles value={catId} onChange={setCatId} />
+          </StickyToolbar>
+          </div>
           <div className="grid gap-5 lg:grid-cols-[1fr_460px]">
             {/* Products */}
             <div className="min-w-0" data-tour="pos-search">
@@ -1977,24 +2011,6 @@ function PosPageInner() {
                   Nothing about scanning is lost: the hardware wedge is caught
                   page-wide by useGlobalScanner above, and the camera lives in
                   the top bar and the bottom nav. */}
-              <StickyToolbar className="lg:-mx-2 lg:px-2">
-                {/* An ambiguous scan can still leave a filter behind — it
-                    narrows the grid rather than adding to the cart. Shown as a
-                    chip so it can never become invisible state. */}
-                {searchRaw.trim() !== "" && (
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setSearchRaw("")}
-                      className="inline-flex h-8 items-center gap-1.5 rounded-full bg-primary/10 px-3 text-xs font-medium text-primary transition hover:bg-primary/15"
-                    >
-                      <X className="size-3.5" />
-                      نتائج: {searchRaw}
-                    </button>
-                  </div>
-                )}
-                <CategoryCircles value={catId} onChange={setCatId} />
-              </StickyToolbar>
 
               {isLoading && (
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -2040,7 +2056,7 @@ function PosPageInner() {
                 className={cn(
                   // Height accounts for the top bar + page header so the
                   // checkout button never slips below the fold.
-                  "sticky top-2 flex max-h-[calc(100dvh-13.5rem)] min-h-0 flex-col gap-0 overflow-hidden p-4",
+                  "sticky top-[calc(var(--pos-cats,7.5rem)+0.5rem)] flex max-h-[calc(100dvh-13.5rem-var(--pos-cats,7.5rem))] min-h-[24rem] flex-col gap-0 overflow-hidden p-4",
                   bumping && "cart-bump",
                   pos.active?.isReturn && "return-glow",
                 )}

@@ -234,7 +234,7 @@ export function Ingredients({
         </Button>
         {lines.length ? (
           <span className="ms-auto flex items-center gap-2 text-xs">
-            تكلفة الكوب <b className="tabular-nums" title={`${cost.toFixed(4)} ₪`}>{formatMoney(cost)}</b>
+            تكلفة المكونات <b className="tabular-nums" title={`${cost.toFixed(4)} ₪`}>{formatMoney(cost)}</b>
             {price > 0 && cost > 0 ? <MarginPill pct={((price - cost) / price) * 100} /> : null}
           </span>
         ) : null}

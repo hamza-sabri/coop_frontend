@@ -1,5 +1,6 @@
 "use client"
 
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { useEffect, useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { Check, ChevronsUpDown, X, Loader2 } from "lucide-react"
@@ -110,9 +111,12 @@ export function EntityCombobox({
                 at the far end. */}
             <span className="flex min-w-0 flex-1 items-center gap-2">
               {value != null && selectedAvatar && (
-                <span className="grid size-6 shrink-0 place-items-center overflow-hidden rounded-full bg-card">
-                  <img src={selectedAvatar} alt="" className="size-full object-cover" />
-                </span>
+                <Avatar className="size-6 shrink-0">
+                  <AvatarImage src={selectedAvatar} alt="" className="object-cover" />
+                  <AvatarFallback className="bg-primary/10 text-[10px] font-semibold text-primary">
+                    {selectedLabel?.charAt(0) ?? ""}
+                  </AvatarFallback>
+                </Avatar>
               )}
               <span className="truncate">
                 {value && selectedLabel ? selectedLabel : placeholder}
@@ -189,11 +193,12 @@ export function EntityCombobox({
                     )}
                   />
                   {(opt.avatar || opt.badge) && (
-                    <span className="grid size-7 shrink-0 place-items-center overflow-hidden rounded-full bg-card text-xs font-semibold text-primary">
-                      {opt.avatar
-                        ? <img src={opt.avatar} alt="" className="size-full object-cover" />
-                        : opt.label.charAt(0)}
-                    </span>
+                    <Avatar className="size-7 shrink-0">
+                      {opt.avatar ? <AvatarImage src={opt.avatar} alt="" className="object-cover" /> : null}
+                      <AvatarFallback className="bg-primary/10 text-xs font-semibold text-primary">
+                        {opt.label.charAt(0)}
+                      </AvatarFallback>
+                    </Avatar>
                   )}
                   <div className="flex min-w-0 flex-1 flex-col">
                     <span className="flex items-center gap-1.5 truncate font-semibold">

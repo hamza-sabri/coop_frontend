@@ -46,7 +46,6 @@ import { PeriodBar, type PeriodState } from "@/components/finance/period-bar"
 import { ItemReport } from "@/components/reports/item-report"
 import {
   copyDraft,
-  draftCost,
   draftPayload,
   draftProblem,
   Ingredients,
@@ -246,49 +245,38 @@ function OptionRow({
   base,
   baseCost,
   showCost,
-  items,
-  baseLines,
   onChange,
   onRemove,
 }: {
   o: Option
   base: number
-  /** What the drink itself costs — from its ingredients when it has them. */
+  /** The drink's own typed cost — what a blank option cost means. */
   baseCost: number
   showCost: boolean
-  items: InventoryItem[]
-  baseLines: Draft[]
   onChange: (patch: Partial<Option>) => void
   onRemove: () => void
 }) {
   const resolved = resolvePrice(o, base)
-  const byId = new Map(items.map((i) => [i.id, i]))
-  // Cost of this option: its own ingredients, else the drink's ingredients,
-  // else whatever was typed, else the drink's typed cost.
-  const recipeCost = o.own && o.lines.length ? draftCost(o.lines, byId) : baseLines.length ? draftCost(baseLines, byId) : null
-  const cost = recipeCost ?? (o.cost.trim() !== "" ? num(o.cost) : baseCost)
-  const inherits = !o.own && baseLines.length > 0
-  const ingredientsLabel = o.own && o.lines.length ? `${o.lines.length} خاصة` : baseLines.length ? "= المشروب" : "لا شيء"
+  const cost = o.cost.trim() !== "" ? num(o.cost) : baseCost
 
   return (
-    <div className="rounded-2xl border bg-card/60">
-      {/* row 1 — what it is */}
-      <div className="flex items-center gap-2 p-2.5 pb-0">
+    <div className="rounded-xl border bg-card animate-in fade-in slide-in-from-top-1 duration-200">
+      <div className="flex items-center gap-2 p-2 pb-0">
         <Input
           value={o.label}
           onChange={(e) => onChange({ label: e.target.value })}
           placeholder={o.kind === "flavour" ? "فانيلا" : "كبير"}
-          className="h-10 min-w-0 flex-1"
+          className="h-9 min-w-0 flex-1"
           aria-label="اسم الخيار"
         />
-        <div className="flex shrink-0 overflow-hidden rounded-xl border">
+        <div className="flex shrink-0 overflow-hidden rounded-lg border">
           {KINDS.map((k) => (
             <button
               key={k.k}
               type="button"
               onClick={() => onChange({ kind: k.k })}
               className={cn(
-                "px-2.5 py-2 text-xs font-semibold transition",
+                "px-2.5 py-1.5 text-xs font-semibold transition",
                 o.kind === k.k ? "bg-primary text-primary-foreground" : "hover:bg-muted",
               )}
             >
@@ -301,15 +289,14 @@ function OptionRow({
           onClick={onRemove}
           aria-label="حذف الخيار"
           title="حذف الخيار"
-          className="grid size-10 shrink-0 place-items-center rounded-xl border text-destructive transition hover:bg-destructive/10"
+          className="grid size-9 shrink-0 place-items-center rounded-lg text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive"
         >
           <Trash2 className="size-4" />
         </button>
       </div>
 
-      {/* row 2 — money and availability */}
-      <div className="flex flex-wrap items-center gap-2 p-2.5">
-        <div className="flex items-stretch overflow-hidden rounded-xl border">
+      <div className="flex flex-wrap items-center gap-2 p-2">
+        <div className="flex items-stretch overflow-hidden rounded-lg border">
           <button
             type="button"
             onClick={() => onChange({ mode: o.mode === "abs" ? "delta" : "abs" })}
@@ -323,120 +310,135 @@ function OptionRow({
             value={o.amount}
             onChange={(e) => onChange({ amount: e.target.value })}
             placeholder="0"
-            className="h-9 w-20 rounded-none border-0 text-center"
+            className="h-8 w-20 rounded-none border-0 text-center"
             aria-label="السعر"
           />
         </div>
-
         {showCost && (
-          <div
-            className="flex items-stretch overflow-hidden rounded-xl border"
-            title={recipeCost != null ? "من المكونات" : "تكلفة هذا الخيار — فارغ = نفس تكلفة المشروب"}
-          >
+          <div className="flex items-stretch overflow-hidden rounded-lg border" title="تكلفة هذا الخيار — فارغ = نفس تكلفة المشروب">
             <span className="grid place-items-center bg-muted px-2.5 text-[11px] font-semibold">تكلفة</span>
             <Input
               inputMode="decimal"
-              value={recipeCost != null ? recipeCost.toFixed(2) : o.cost}
-              readOnly={recipeCost != null}
+              value={o.cost}
               onChange={(e) => onChange({ cost: e.target.value })}
               placeholder={baseCost > 0 ? baseCost.toFixed(2) : "0"}
-              className={cn("h-9 w-20 rounded-none border-0 text-center", recipeCost != null && "bg-muted/40")}
+              className="h-8 w-20 rounded-none border-0 text-center"
             />
           </div>
         )}
-
         {o.kind === "pack" && (
-          <div className="flex items-stretch overflow-hidden rounded-xl border">
+          <div className="flex items-stretch overflow-hidden rounded-lg border">
             <span className="grid place-items-center bg-muted px-2.5 text-[11px] font-semibold">قطع</span>
             <Input
               inputMode="numeric"
               value={o.pieces}
               onChange={(e) => onChange({ pieces: e.target.value })}
               placeholder="6"
-              className="h-9 w-16 rounded-none border-0 text-center"
+              className="h-8 w-16 rounded-none border-0 text-center"
             />
           </div>
         )}
-
         <button
           type="button"
           onClick={() => onChange({ active: !o.active })}
           className={cn(
-            "h-9 rounded-xl border px-2.5 text-xs font-semibold transition",
+            "h-8 rounded-lg border px-2.5 text-xs font-semibold transition",
             o.active ? "text-muted-foreground" : "bg-muted text-foreground",
           )}
           title={o.active ? "متوفر — اضغط لإخفائه من المنيو" : "غير متوفر — مخفي من المنيو"}
         >
           {o.active ? "متوفر" : "مخفي"}
         </button>
-
-        {showCost ? (
-          <button
-            type="button"
-            onClick={() => onChange({ open: !o.open })}
-            className={cn(
-              "ms-auto flex h-9 items-center gap-1.5 rounded-xl border px-2.5 text-xs font-semibold transition",
-              o.open ? "border-primary/40 bg-primary/5 text-primary" : "hover:bg-muted",
-            )}
-          >
-            <Milk className="size-3.5" />
-            المكونات
-            <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">{ingredientsLabel}</span>
-            <ChevronDown className={cn("size-3.5 transition", o.open && "rotate-180")} />
-          </button>
+        {o.mode === "delta" || (showCost && cost > 0 && resolved > 0) ? (
+          <span className="ms-auto flex items-center gap-2 text-[11px] text-muted-foreground">
+            {o.mode === "delta" ? <span>= {resolved.toFixed(2)} ₪</span> : null}
+            {showCost && cost > 0 && resolved > 0 ? <MarginPill price={resolved} cost={cost} /> : null}
+          </span>
         ) : null}
       </div>
-
-      {(o.mode === "delta" || (showCost && cost > 0 && resolved > 0)) && !o.open && (
-        <p className="flex flex-wrap items-center gap-2 px-2.5 pb-2.5 text-[11px] text-muted-foreground">
-          {o.mode === "delta" ? <span>يصير السعر {resolved.toFixed(2)} ₪</span> : null}
-          {showCost ? <MarginPill price={resolved} cost={cost} /> : null}
-        </p>
-      )}
-
-      {/* row 3 — what one of these takes from the shelf */}
-      {showCost && o.open ? (
-        <div className="space-y-2 border-t border-border/60 p-2.5">
-          {inherits ? (
-            <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-dashed p-2.5 text-xs">
-              <span className="text-muted-foreground">
-                «{o.label || "هذا الخيار"}» يُخصم بمكونات المشروب ({baseLines.length}) كما هي.
-              </span>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="h-8 gap-1"
-                onClick={() => onChange({ own: true, lines: copyDraft(baseLines) })}
-              >
-                <Copy className="size-3.5" />
-                مكونات خاصة به
-              </Button>
-            </div>
-          ) : (
-            <>
-              <Ingredients
-                items={items}
-                lines={o.lines}
-                price={resolved}
-                onChange={(lines) => onChange({ own: true, lines })}
-                empty={`أضف ما يأخذه «${o.label || "هذا الخيار"}» من المخزون — مثلاً كوب، حليب، بن.`}
-              />
-              {o.own && baseLines.length > 0 ? (
-                <button
-                  type="button"
-                  onClick={() => onChange({ own: false, lines: [] })}
-                  className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
-                >
-                  <RotateCcw className="size-3" />
-                  ارجع لمكونات المشروب
-                </button>
-              ) : null}
-            </>
-          )}
-        </div>
-      ) : null}
     </div>
+  )
+}
+
+/** A folding section: closed by default, says what is inside when closed. */
+function Fold({
+  title,
+  summary,
+  open,
+  onToggle,
+  action,
+  children,
+}: {
+  title: string
+  summary?: React.ReactNode
+  open: boolean
+  onToggle: () => void
+  action?: React.ReactNode
+  children: React.ReactNode
+}) {
+  return (
+    <section className="rounded-2xl border border-border/80">
+      <div className="flex items-center gap-2 px-3.5 py-3">
+        <button type="button" onClick={onToggle} aria-expanded={open} className="flex min-w-0 flex-1 items-center gap-2 text-start">
+          <ChevronDown className={cn("size-4 shrink-0 text-muted-foreground transition-transform duration-200", !open && "rotate-90")} />
+          <span className="font-heading text-sm font-bold">{title}</span>
+          {summary ? <span className="min-w-0 truncate text-xs text-muted-foreground">{summary}</span> : null}
+        </button>
+        {action}
+      </div>
+      {open ? <div className="border-t border-border/60 p-3 animate-in fade-in duration-200">{children}</div> : null}
+    </section>
+  )
+}
+
+/** One option's ingredients on the المكونات tab: the drink's, or its own. */
+function OptionIngredients({
+  o,
+  price,
+  items,
+  baseLines,
+  onChange,
+}: {
+  o: Option
+  price: number
+  items: InventoryItem[]
+  baseLines: Draft[]
+  onChange: (patch: Partial<Option>) => void
+}) {
+  const own = o.own || baseLines.length === 0
+  return (
+    <section className="rounded-2xl border border-border/80 p-3">
+      <header className="mb-2 flex items-center justify-between gap-2">
+        <h5 className="text-sm font-bold">{o.label}</h5>
+        {o.own && baseLines.length > 0 ? (
+          <button
+            type="button"
+            onClick={() => onChange({ own: false, lines: [] })}
+            className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
+          >
+            <RotateCcw className="size-3" />
+            مثل المشروب
+          </button>
+        ) : null}
+      </header>
+      {own ? (
+        <Ingredients
+          items={items}
+          lines={o.lines}
+          price={price}
+          onChange={(lines) => onChange({ own: true, lines })}
+          empty={`ما يأخذه «${o.label}» من المخزون — كوب، حليب، بن…`}
+        />
+      ) : (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-muted/40 px-3 py-2 text-xs">
+          <span className="text-muted-foreground">نفس مكونات المشروب ({baseLines.length})</span>
+          <Button type="button" size="sm" variant="outline" className="h-7 gap-1" onClick={() => onChange({ own: true, lines: copyDraft(baseLines) })}>
+            <Copy className="size-3.5" />
+            مكونات خاصة
+          </Button>
+        </div>
+      )}
+    </section>
   )
 }
 
@@ -456,7 +458,9 @@ export function DrinkForm({
   const isOwner = useIsOwner()
   const [cost, setCost] = useState("")
   const today = businessToday()
-  const [tab, setTab] = useState<"info" | "report">("info")
+  const [tab, setTab] = useState<"info" | "ingredients" | "report">("info")
+  const [showOptions, setShowOptions] = useState(false)
+  const [showNotes, setShowNotes] = useState(false)
   const [period, setPeriod] = useState<PeriodState>({ period: "month", anchor: today, shiftId: null })
   const showReport = editing && isOwner && product?.id != null
   // Ingredients are the owner's (they are cost). Loaded once per opening and
@@ -480,7 +484,6 @@ export function DrinkForm({
   /** The server's recipe has been merged in (or there is none to merge). */
   const [recipeReady, setRecipeReady] = useState(false)
   const recipeTouched = useRef(false)
-  const recipeCost = baseLines.length ? draftCost(baseLines, byId) : null
 
   const [name, setName] = useState("")
   const [category, setCategory] = useState("")
@@ -535,6 +538,8 @@ export function DrinkForm({
   useEffect(() => {
     if (!open) return
     setTab("info")
+    setShowOptions(false)
+    setShowNotes(false)
     removed.current = []
     recipeTouched.current = false
     setBaseLines([])
@@ -743,7 +748,7 @@ export function DrinkForm({
       title={editing ? "تعديل مشروب" : "إضافة مشروب"}
       icon={<Coffee className="size-4.5" />}
       footer={
-        tab !== "info" ? (
+        tab === "report" ? (
           <Button type="button" variant="outline" className="flex-1" onClick={() => onOpenChange(false)}>
             إغلاق
           </Button>
@@ -775,26 +780,72 @@ export function DrinkForm({
         )
       }
     >
-      {/* The drink's own report sits beside its details: how often it sells,
-          which size, when, what it earns. Owner only — it is money. */}
-      {showReport ? (
+      {/* Three places, simplest first: what the drink IS (and what it costs
+          — the owner's number), what one cup takes from the shelf, and how it
+          sells. Ingredients and reports are the owner's. */}
+      {isOwner ? (
         <SegmentedTabs
           tabs={[
             { id: "info", label: "الأساسية" },
-            { id: "report", label: "التقارير" },
+            { id: "ingredients", label: "المكونات" },
+            ...(showReport ? [{ id: "report", label: "التقارير" }] : []),
           ]}
           active={tab}
-          onChange={(t) => setTab(t as "info" | "report")}
+          onChange={(t) => setTab(t as "info" | "ingredients" | "report")}
         />
       ) : null}
 
       {tab === "report" && showReport && product?.id != null ? (
-        <div className="space-y-3">
+        <div className="space-y-3 animate-in fade-in duration-200">
           <PeriodBar value={period} onChange={setPeriod} today={today} />
           <ItemReport productId={product.id} q={{ period: period.period, date: period.anchor }} />
         </div>
+      ) : tab === "ingredients" && isOwner ? (
+        <div className="space-y-3 animate-in fade-in duration-200">
+          <p className="rounded-xl bg-muted/50 px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
+            ما يأخذه كوب واحد من المخزون. كل بيعة تخصم هذه الكميات، والإلغاء يعيدها. لا تغيّر التكلفة — التكلفة تكتبها أنت في الأساسية.
+          </p>
+          {!recipeReady ? (
+            <Loader2 className="mx-auto my-6 size-5 animate-spin text-muted-foreground" />
+          ) : (
+            <>
+              <section>
+                <h4 className="mb-2 flex items-center gap-1.5 text-sm font-bold">
+                  <Milk className="size-4 text-muted-foreground" />
+                  {name.trim() || "المشروب"}
+                </h4>
+                <Ingredients
+                  items={items}
+                  lines={baseLines}
+                  price={base}
+                  onChange={(l) => {
+                    recipeTouched.current = true
+                    setBaseLines(l)
+                  }}
+                />
+              </section>
+              {options.some((o) => o.label.trim()) ? (
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold text-muted-foreground">الأحجام والنكهات</p>
+                  {options
+                    .filter((o) => o.label.trim())
+                    .map((o) => (
+                      <OptionIngredients
+                        key={o.key}
+                        o={o}
+                        price={resolvePrice(o, base)}
+                        items={items}
+                        baseLines={baseLines}
+                        onChange={(p) => patch(o.key, p)}
+                      />
+                    ))}
+                </div>
+              ) : null}
+            </>
+          )}
+        </div>
       ) : (
-      <>
+      <div className="space-y-3 animate-in fade-in duration-200">
       <div className="grid gap-5 sm:grid-cols-[190px_1fr]">
         {/* the picture, and whether it is on the menu at all */}
         <div className="flex flex-col gap-3">
@@ -816,139 +867,88 @@ export function DrinkForm({
         {/* the drink itself */}
         <div className="flex flex-col gap-3.5">
           <Field label="الاسم">
-            <Input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="لاتيه"
-            />
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="لاتيه" />
           </Field>
 
-          <div className={cn("grid gap-3", isOwner ? "grid-cols-3" : "grid-cols-2")}>
-            <Field label="السعر (₪)" hint="السعر الأساسي — الأحجام تعدّله">
-              <Input
-                inputMode="decimal"
-                value={price}
-                onChange={(e) => setPrice(e.target.value)}
-                placeholder="0.00"
-              />
+          <div className={cn("grid gap-3", isOwner ? "grid-cols-2 sm:grid-cols-3" : "grid-cols-2")}>
+            <Field label="السعر (₪)">
+              <Input inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="0.00" />
             </Field>
             {isOwner ? (
-              <Field
-                label="التكلفة (₪)"
-                hint={
-                  recipeCost != null
-                    ? "من المكونات بآخر سعر شراء"
-                    : "كم يكلّفك الكوب — أو أضف المكونات تحت"
-                }
-              >
-                <Input
-                  inputMode="decimal"
-                  value={recipeCost != null ? recipeCost.toFixed(2) : cost}
-                  readOnly={recipeCost != null}
-                  className={recipeCost != null ? "bg-muted/50" : undefined}
-                  onChange={(e) => setCost(e.target.value)}
-                  placeholder="0.00"
-                />
+              <Field label="التكلفة (₪)">
+                <Input inputMode="decimal" value={cost} onChange={(e) => setCost(e.target.value)} placeholder="0.00" />
               </Field>
             ) : null}
-            <Field label="التصنيف">
-              <TaxonomyCombobox
-                kind="categories"
-                value={category}
-                onChange={setCategory}
-                placeholder="قهوة ساخنة"
-              />
-            </Field>
+            <div className={cn(isOwner && "col-span-2 sm:col-span-1")}>
+              <Field label="التصنيف">
+                <TaxonomyCombobox kind="categories" value={category} onChange={setCategory} placeholder="قهوة ساخنة" />
+              </Field>
+            </div>
           </div>
 
-          {isOwner && (recipeCost ?? num(cost)) > 0 && base > 0 ? (
+          {isOwner && num(cost) > 0 && base > 0 ? (
             <div className="-mt-1">
-              <MarginPill price={base} cost={recipeCost ?? num(cost)} />
+              <MarginPill price={base} cost={num(cost)} />
             </div>
           ) : null}
-
-          <Field label="الوصف" hint="يظهر تحت اسم المشروب في التطبيق">
-            <Textarea
-              rows={2}
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="اسبريسو مزدوج مع حليب مبخّر"
-            />
-          </Field>
         </div>
       </div>
 
-      {/* ── what one cup takes from the shelf ─────────────────────────── */}
-      {isOwner ? (
-        <div className="mt-5 flex flex-col gap-2">
-          <div>
-            <h4 className="flex items-center gap-1.5 font-heading text-base font-bold">
-              <Milk className="size-4 text-muted-foreground" />
-              مكونات الكوب
-            </h4>
-            <p className="text-[11px] text-muted-foreground">
-              كل بيعة تخصم هذه الكميات من المخزون، والإلغاء يعيدها.
-              {options.length ? " الأحجام والنكهات تستخدمها إلا إذا أعطيتها مكونات خاصة." : ""}
-            </p>
-          </div>
-          {!recipeReady ? (
-            <Loader2 className="mx-auto my-3 size-4 animate-spin text-muted-foreground" />
-          ) : (
-            <Ingredients
-              items={items}
-              lines={baseLines}
-              price={base}
-              onChange={(l) => {
-                recipeTouched.current = true
-                setBaseLines(l)
-              }}
-            />
-          )}
-        </div>
-      ) : null}
-
-      {/* ── sizes, flavours, boxes ─────────────────────────────────────── */}
-      <div className="mt-5 flex flex-col gap-2.5">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <h4 className="font-heading text-base font-bold">الأحجام والنكهات</h4>
-            <p className="text-[11px] text-muted-foreground">
-              اضغط ₪ ليصير +₪ إذا بدك تكتب الزيادة على السعر الأساسي بدل السعر
-              الكامل.
-            </p>
-          </div>
-          {/* One button. The row itself says whether it is a size, a flavour
-              or a box — three buttons that all add the same row were three
-              ways to start the same sentence. */}
-          <Button type="button" size="sm" onClick={() => addOption("size")}>
-            <Plus className="size-4" />
-            إضافة خيار
+      {/* ── folded: sizes & flavours, description ─────────────────────── */}
+      <Fold
+        title="الأحجام والنكهات"
+        summary={
+          options.length
+            ? options.map((o) => o.label.trim()).filter(Boolean).join("، ") || `${options.length}`
+            : "بلا — بالسعر الأساسي"
+        }
+        open={showOptions}
+        onToggle={() => setShowOptions((v) => !v)}
+        action={
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-8 gap-1"
+            onClick={() => {
+              addOption("size")
+              setShowOptions(true)
+            }}
+          >
+            <Plus className="size-3.5" />
+            خيار
           </Button>
-        </div>
-
+        }
+      >
         {options.length === 0 ? (
-          <p className="rounded-2xl border border-dashed px-4 py-5 text-center text-sm text-muted-foreground">
-            بلا أحجام — بينباع بالسعر الأساسي.
-          </p>
+          <p className="py-3 text-center text-sm text-muted-foreground">بلا أحجام — يُباع بالسعر الأساسي.</p>
         ) : (
           <div className="flex flex-col gap-2">
+            <p className="text-[11px] text-muted-foreground">اضغط ₪ ليصير +₪ لتكتب الزيادة على السعر الأساسي بدل السعر الكامل.</p>
             {options.map((o) => (
               <OptionRow
                 key={o.key}
                 o={o}
                 base={base}
-                baseCost={recipeCost ?? num(cost)}
-                showCost={isOwner && recipeReady}
-                items={items}
-                baseLines={baseLines}
+                baseCost={num(cost)}
+                showCost={isOwner}
                 onChange={(p) => patch(o.key, p)}
                 onRemove={() => removeOption(o.key)}
               />
             ))}
           </div>
         )}
+      </Fold>
+
+      <Fold
+        title="الوصف"
+        summary={notes.trim() || "يظهر تحت اسم المشروب في التطبيق"}
+        open={showNotes}
+        onToggle={() => setShowNotes((v) => !v)}
+      >
+        <Textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="اسبريسو مزدوج مع حليب مبخّر" />
+      </Fold>
       </div>
-      </>
       )}
     </FormModal>
   )
