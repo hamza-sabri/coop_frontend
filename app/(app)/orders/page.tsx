@@ -1,269 +1,166 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
+/**
+ * الفواتير — every sale the till rang, as one table (DESIGN.md §2).
+ *
+ *   [ابحث برقم الفاتورة أو المشروب…] [اليوم 12][أمس 40][آخر ٧ أيام][هذا الشهر][الكل]   [الدفع ▾][البائع ▾]
+ *   12 فاتورة · 420٫00 ₪
+ *   الزبون · ماذا طلب · المبلغ · الدفع · الوقت · البائع
+ *
+ * The period is a chip, not a form: "today" is one tap. The count and the
+ * total under the chips are the SERVER's for exactly what the table shows
+ * (business days, refunds off) — the money only for the owner.
+ *
+ * Nothing destructive lives here as a button. Cancelling one sale is inside
+ * that sale, behind a confirmation.
+ */
+import { useEffect, useMemo, useState } from "react"
+import Link from "next/link"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
-import { useGSAP } from "@gsap/react"
-import gsap from "gsap"
-import { ScrollTrigger } from "gsap/ScrollTrigger"
+import { Check, ChevronDown, CloudOff, Coins, Pencil, ReceiptText, ShoppingBag, StickyNote } from "lucide-react"
 import { toast } from "sonner"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import {
-  Banknote,
-  StickyNote,
-  CalendarDays,
-  ChevronDown,
-  CloudOff,
-  Coins,
-  Pencil,
-  Printer,
-  ReceiptText,
-  SlidersHorizontal,
-  Trash2,
-  User as UserIcon,
-  UserCog,
-} from "lucide-react"
 
-import {
-  salesList,
-  salesDelete,
-  salesStats,
-  saleItemName,
-  type Sale,
-} from "@/api/sales"
+import { saleItemName, salesDelete, salesList, salesStats, salesSummary, type Sale } from "@/api/sales"
+import { ConfirmDelete } from "@/components/confirm-delete"
+import { DataTable, type Column } from "@/components/data-table"
+import { Enter, PageShell } from "@/components/page-shell"
+import { PaginationBar } from "@/components/pagination-bar"
+import { SaleDetail } from "@/components/sales/sale-detail"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Button } from "@/components/ui/button"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { usePagedList } from "@/hooks/use-paged-list"
 import { useDebounced } from "@/hooks/use-debounced"
-import { useMe, displayName } from "@/hooks/use-me"
-import { useStaggerCards } from "@/hooks/use-stagger-cards"
-import { formatDate, formatMoney, formatNumber, toNumber } from "@/lib/format"
-import { type ReceiptData } from "@/lib/print/receipt"
-import { deliverAndToast } from "@/lib/print/deliver"
-import { loadPrintSettings } from "@/lib/print/settings"
-import Link from "next/link"
-import { cn } from "@/lib/utils"
+import { formatDate, formatMoney, formatNumber } from "@/lib/format"
 import { useIsOwner } from "@/lib/modules"
-import {
-  LOCAL_SALE_LABEL,
-  isLocalSale,
-  saleNumberLabel,
-} from "@/lib/offline/local-sale"
-import { bulkDeleteSales } from "@/api/products"
-
+import { LOCAL_SALE_LABEL, isLocalSale } from "@/lib/offline/local-sale"
+import { businessToday } from "@/lib/period"
 import { invalidateSaleData } from "@/lib/sale-queries"
-import { CustomRangeCard } from "@/components/sales/range-card"
-import { SaleRevisions } from "@/components/sales/sale-revisions"
-import { SaleDetail } from "@/components/sales/sale-detail"
-import { PageHeader } from "@/components/page-header"
-import { ReportsTeaser } from "@/components/reports/reports-teaser"
+import { cn } from "@/lib/utils"
 
-gsap.registerPlugin(ScrollTrigger)
-
-/* The orders board is meant to be left open on the counter screen, so it
-   polls instead of waiting for a reload. Fifteen seconds is a compromise:
-   fast enough that a barista sees a new order without thinking about it,
-   slow enough that a till on a phone hotspot is not making 240 requests an
-   hour for nothing. When the order pipeline lands this becomes a push/SSE
-   stream and the interval turns into the fallback, not the mechanism. */
+/* The list is left open on the counter screen, so it polls. */
 const LIVE_MS = 15_000
-import { SearchInput } from "@/components/search-input"
-import { StickyToolbar } from "@/components/sticky-toolbar"
-import { FilterMenu } from "@/components/filter-menu"
-import { SortMenu, type SortOption } from "@/components/sort-menu"
-import { Button, buttonVariants } from "@/components/ui/button"
-import {
-  SaleFiltersPanel,
-  activeSaleFilterCount,
-  EMPTY_SALE_FILTERS,
-  type SaleFilters,
-} from "@/components/sales/sale-filters-panel"
-import { PaginationBar } from "@/components/pagination-bar"
-import { ConfirmDelete } from "@/components/confirm-delete"
-import { EmptyState, ErrorState } from "@/components/states"
-import { NoDataArt } from "@/components/illustrations"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Skeleton } from "@/components/ui/skeleton"
-import {
-  Dialog,
-  DialogContent,
-  DialogTitle,
-} from "@/components/ui/dialog"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
+const PAGE_SIZE = 20
 
-const PAGE_SIZE = 15
+type PeriodId = "today" | "yesterday" | "week" | "month" | "all"
+type PayId = "all" | "cash" | "return"
 
-const SORTS: SortOption[] = [
-  { value: "-created_at", label: "الأحدث" },
-  { value: "created_at", label: "الأقدم" },
-  { value: "-discounted_total", label: "الأعلى مبلغاً" },
-  { value: "discounted_total", label: "الأقل مبلغاً" },
-]
-
-function PaymentPill({ sale }: { sale: Sale }) {
-  if (sale.is_return) {
-    return <span className="pill pill-danger">إرجاع</span>
-  }
-  return (
-    <span
-      className={cn(
-        "pill",
-        sale.payment_method === "cash" ? "pill-success" : "pill-warning",
-      )}
-    >
-      {sale.payment_method === "cash" ? "نقدي" : "دين"}
-    </span>
-  )
+function days(today: string, back: number): string {
+  const d = new Date(`${today}T00:00:00`)
+  d.setDate(d.getDate() - back)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
+}
+function periodRange(p: PeriodId, today: string): { day_from?: string; day_to?: string } {
+  if (p === "today") return { day_from: today, day_to: today }
+  if (p === "yesterday") return { day_from: days(today, 1), day_to: days(today, 1) }
+  if (p === "week") return { day_from: days(today, 6), day_to: today }
+  if (p === "month") return { day_from: `${today.slice(0, 8)}01`, day_to: today }
+  return {}
 }
 
-/* ── Sale detail dialog ────────────────────────────────────────────── */
+const when = (iso: string) =>
+  new Date(iso).toLocaleString("ar-u-nu-latn", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })
 
-/* ── Page ──────────────────────────────────────────────────────────── */
+function itemsLine(s: Sale): string {
+  const head = s.items
+    .slice(0, 2)
+    .map((it) => `${Number(it.quantity) > 1 ? `${Number(it.quantity)}× ` : ""}${saleItemName(it)}`)
+    .join("، ")
+  return s.items.length > 2 ? `${head} و${formatNumber(s.items.length - 2)} غيرها` : head
+}
+function notesOf(s: Sale): string[] {
+  return [
+    (s as { note?: string }).note?.trim(),
+    ...s.items.map((it) => (it as { note?: string }).note?.trim()),
+  ].filter(Boolean) as string[]
+}
+
 export default function SalesPage() {
   const qc = useQueryClient()
   const isOwner = useIsOwner()
-  const [wipeOpen, setWipeOpen] = useState(false)
-  const [wiping, setWiping] = useState(false)
+  const today = businessToday()
   const [searchRaw, setSearchRaw] = useState("")
-  const dItem = useDebounced(searchRaw, 300)
-  const [payment, setPayment] = useState("all")
-  const [kind, setKind] = useState("all")
-  const [ordering, setOrdering] = useState("-created_at")
+  const search = useDebounced(searchRaw, 300)
+  const [period, setPeriod] = useState<PeriodId>("today")
+  const [pay, setPay] = useState<PayId>("all")
+  const [cashier, setCashier] = useState<{ id: number; name: string } | null>(null)
   const [page, setPage] = useState(1)
   const [detail, setDetail] = useState<Sale | null>(null)
-  const [detailOpen, setDetailOpen] = useState(false)
   const [toVoid, setToVoid] = useState<Sale | null>(null)
   const [voiding, setVoiding] = useState(false)
-  const [filters, setFilters] = useState<SaleFilters>(EMPTY_SALE_FILTERS)
-  const [showFilters, setShowFilters] = useState(false)
-  const patch = (p: Partial<SaleFilters>) =>
-    setFilters((prev) => ({ ...prev, ...p }))
-  const [empOpts, setEmpOpts] = useState<Map<number, string>>(new Map())
-  const scope = useRef<HTMLDivElement>(null)
+  const [cashiers, setCashiers] = useState<Map<number, string>>(new Map())
 
   // ?search= deep link — the stock statement links each movement to its
-  // receipt, and that link has to land on the invoice.
+  // receipt, and that link has to land on the invoice, whatever its day.
   useEffect(() => {
     const q = new URLSearchParams(window.location.search).get("search")
-    if (q) setSearchRaw(q)
+    if (q) {
+      setSearchRaw(q)
+      setPeriod("all")
+    }
   }, [])
-
-  useEffect(() => {
-    setPage(1)
-  }, [
-    dItem,
-    filters.customer,
-    payment,
-    kind,
-    ordering,
-    filters.dateFrom,
-    filters.dateTo,
-    filters.minPrice,
-    filters.maxPrice,
-    filters.employee,
-  ])
-
-  // Period takings are the owner's: the server refuses them to employees, and
-  // the cards are simply not drawn for them. The invoice list itself stays.
-  const { data: stats, isLoading: statsLoading } = useQuery({
-    refetchInterval: LIVE_MS,
-    enabled: isOwner,
-    queryKey: ["sales-stats"],
-    queryFn: async () => (await salesStats()).data,
-    staleTime: 60_000,
-  })
 
   const params = useMemo(
     () => ({
-      payment_method: payment === "all" ? undefined : payment,
-      is_return: kind === "all" ? undefined : kind === "return",
-      ordering,
-      item: dItem || undefined,
-      customer: filters.customer || undefined,
-      created_after: filters.dateFrom || undefined,
-      created_before: filters.dateTo || undefined,
-      min_price: filters.minPrice || undefined,
-      max_price: filters.maxPrice || undefined,
-      created_by: filters.employee || undefined,
+      ...periodRange(period, today),
+      item: search || undefined,
+      payment_method: pay === "cash" ? "cash" : undefined,
+      is_return: pay === "return" ? true : pay === "cash" ? false : undefined,
+      created_by: cashier?.id,
+      ordering: "-created_at",
     }),
-    [
-      payment,
-      kind,
-      ordering,
-      dItem,
-      filters.customer,
-      filters.dateFrom,
-      filters.dateTo,
-      filters.minPrice,
-      filters.maxPrice,
-      filters.employee,
-    ],
+    [period, today, search, pay, cashier],
   )
+  useEffect(() => setPage(1), [params])
 
-  const { results, count, pageCount, isLoading, isError, isFetching, refetch } =
-    usePagedList<Sale>(["sales"], salesList, params, page, PAGE_SIZE, true, LIVE_MS)
+  const { results, count, pageCount, isLoading, isFetching, isPlaceholderData } = usePagedList<Sale>(
+    ["sales"],
+    salesList,
+    params,
+    page,
+    PAGE_SIZE,
+    true,
+    LIVE_MS,
+  )
+  // What the current filter shows, counted by the server.
+  const summary = useQuery({
+    queryKey: ["sales", "summary", params],
+    queryFn: () => salesSummary(params).then((r) => r.data),
+    refetchInterval: LIVE_MS,
+    placeholderData: (p) => p,
+  })
+  // The chips' counts (owner only — period takings are the owner's).
+  const stats = useQuery({
+    queryKey: ["sales-stats"],
+    queryFn: async () => (await salesStats()).data,
+    enabled: isOwner,
+    refetchInterval: LIVE_MS,
+    staleTime: 60_000,
+  })
 
   useEffect(() => {
-    if (results.length === 0) return
-    setEmpOpts((prev) => {
+    if (!results.length) return
+    setCashiers((prev) => {
       const next = new Map(prev)
-      for (const s of results)
-        if (s.created_by != null)
-          next.set(s.created_by, s.created_by_name || "—")
+      for (const s of results) if (s.created_by != null && s.created_by_name) next.set(s.created_by, s.created_by_name)
       return next
     })
   }, [results])
 
-  // Busy = first load, a fetch in flight, or a term typed/scanned that the
-  // debounce has not sent yet. All three must hide the stale rows.
-  const searching =
-    isLoading || isFetching || searchRaw.trim() !== dItem.trim()
-
-  useStaggerCards(scope, "tbody tr", !searching, [
-    dItem,
-    payment,
-    kind,
-    ordering,
-    page,
-  ])
-
-  // Same bouncy scroll-triggered entrances as the reports page.
-  useGSAP(
-    () => {
-      if (statsLoading) return
-      gsap.utils.toArray<HTMLElement>(".sale-stat").forEach((el, i) => {
-        gsap.fromTo(
-          el,
-          { y: 40, opacity: 0, scale: 0.78 },
-          {
-            y: 0,
-            opacity: 1,
-            scale: 1,
-            duration: 0.7,
-            delay: i * 0.05,
-            ease: "back.out(3)",
-            overwrite: "auto",
-            clearProps: "transform,opacity",
-            scrollTrigger: { trigger: el, start: "top 88%", once: true },
-          },
-        )
-      })
-    },
-    { scope, dependencies: [statsLoading] },
-  )
+  // A term typed but not yet sent, or a new filter still loading, hides the
+  // old rows. A background poll (isFetching on the SAME filter) does not —
+  // the counter screen must not blink every fifteen seconds.
+  const searching = isLoading || isPlaceholderData || searchRaw.trim() !== search.trim()
 
   async function confirmVoid() {
     if (!toVoid) return
     setVoiding(true)
     try {
       await salesDelete(toVoid.id)
-      toast.success("أُلغي الطلب واستُرجعت الكمية")
+      toast.success("أُلغيت الفاتورة وعادت المكونات إلى المخزون")
       invalidateSaleData(qc)
       setToVoid(null)
+      setDetail(null)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "تعذر الإلغاء")
     } finally {
@@ -271,500 +168,286 @@ export default function SalesPage() {
     }
   }
 
-  async function wipeAllSales() {
-    setWiping(true)
-    try {
-      await bulkDeleteSales({ all: true })
-      toast.success("حُذفت كل الطلبات واستُرجعت الكميات")
-      invalidateSaleData(qc)
-      setWipeOpen(false)
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "تعذر الحذف")
-    } finally {
-      setWiping(false)
-    }
-  }
-
-  const periodCards = stats
-    ? ([
-        ["اليوم", stats.periods.today],
-        ["أمس", stats.periods.yesterday],
-        ["آخر ٧ أيام", stats.periods.week],
-        ["هذا الشهر", stats.periods.month],
-        ["الشهر الماضي", stats.periods.last_month],
-        ["الإجمالي", stats.periods.all_time],
-      ] as const)
-    : []
-
-  const catTotal = stats
-    ? stats.by_category.reduce((s, c) => s + toNumber(c.amount), 0)
-    : 0
-  const cashAmount = stats ? toNumber(stats.payment_split.cash) : 0
-  const debtAmount = stats ? toNumber(stats.payment_split.debt) : 0
-  const splitTotal = cashAmount + debtAmount
-
-  return (
-    <div ref={scope} className="mx-auto w-full max-w-7xl">
-      <PageHeader
-        title="الطلبات"
-        description={count ? `${formatNumber(count)} طلب` : "سجل الطلبات وإحصاءاتها"}
-        action={
-          <div className="flex items-center gap-2">
-            {/* Debts moved off the mobile bottom bar → reachable here (mobile only). */}
-            <Link
-              href="/debts"
-              className={cn(buttonVariants({ variant: "outline" }), "gap-1.5 md:hidden")}
-            >
-              <ReceiptText className="size-4" />
-              الديون
-            </Link>
-            {isOwner && count ? (
-              <Button variant="destructive" onClick={() => setWipeOpen(true)} className="gap-1.5">
-                <Trash2 className="size-4" />
-                حذف كل الطلبات
-              </Button>
+  const P = stats.data?.periods
+  const columns: Column<Sale>[] = [
+    {
+      key: "customer",
+      header: "الزبون",
+      width: "w-56",
+      cell: (s) => <CustomerCell sale={s} />,
+    },
+    {
+      key: "items",
+      header: "ماذا طلب",
+      cell: (s) => {
+        const notes = notesOf(s)
+        return (
+          <div className="min-w-0 max-w-md">
+            <p className="truncate">{itemsLine(s)}</p>
+            {notes.length ? (
+              <p className="mt-0.5 flex items-center gap-1 truncate text-xs text-amber-800 dark:text-amber-300">
+                <StickyNote className="size-3 shrink-0" />
+                <span className="truncate">{notes.join(" · ")}</span>
+              </p>
             ) : null}
           </div>
-        }
-      />
-
-      {/* Period totals. ONE row: the six fixed windows the server buckets, plus
-          the hand-picked range that used to be a whole panel of its own above
-          them — chips and a single wide card repeating three of these six. */}
-      {isOwner && statsLoading && (
-        <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-7">
-          {Array.from({ length: 7 }).map((_, i) => (
-            <Skeleton key={i} className="h-20 rounded-3xl" />
-          ))}
+        )
+      },
+    },
+    {
+      key: "amount",
+      header: "المبلغ",
+      align: "end",
+      width: "w-32",
+      cell: (s) => (
+        <div>
+          <p className={cn("font-heading font-bold tabular-nums", s.is_return && "text-destructive")}>
+            {s.is_return ? "−" : ""}
+            {formatMoney(s.discounted_total)}
+          </p>
+          {(s.beans_spent ?? 0) > 0 ? (
+            <p className="flex items-center justify-end gap-1 text-[11px] text-amber-700 dark:text-amber-300" title="جزء من الفاتورة دُفع بنقاط الزبون">
+              <Coins className="size-3" />
+              {formatNumber(s.beans_spent ?? 0)} نقطة
+            </p>
+          ) : null}
         </div>
-      )}
-      {isOwner && stats && (
-        <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-7">
-          {periodCards.map(([label, bucket]) => (
-            <Card key={label} className="sale-stat clay-card border-0 gap-0 p-3.5">
-              <p className="text-[11px] font-medium text-muted-foreground">
-                {label}
-              </p>
-              <p className="mt-0.5 font-heading text-lg font-bold tracking-tight">
-                {formatMoney(bucket.amount)}
-              </p>
-              <p className="text-[10px] text-muted-foreground">
-                {formatNumber(bucket.count)} عملية
-              </p>
-            </Card>
-          ))}
-          <CustomRangeCard />
-        </div>
-      )}
-
-      {/* Reports module — live preview or the locked upsell teaser. */}
-      {isOwner ? <ReportsTeaser /> : null}
-
-      {/* Category split + payment split (last 30 days).
-          Collapsed: the owner does not read these, and they pushed the numbers
-          he DOES read below the fold. Still one click away for whoever wants
-          them. */}
-      {stats && (stats.by_category.length > 0 || splitTotal > 0) && (
-        <details className="group mb-5">
-          <summary className="mb-3 flex cursor-pointer list-none items-center gap-2 text-sm font-semibold text-muted-foreground transition hover:text-foreground">
-            <ChevronDown className="size-4 transition group-open:rotate-180" />
-            تحليلات آخر ٣٠ يوماً
-          </summary>
-        <div className="grid gap-4 lg:grid-cols-2">
-          <Card className="sale-stat clay-card border-0">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-base">الطلبات حسب التصنيف</CardTitle>
-              <span className="pill pill-neutral">آخر ٣٠ يوماً</span>
-            </CardHeader>
-            <CardContent>
-              {stats.by_category.length === 0 ? (
-                <div className="flex flex-col items-center gap-2 py-4">
-                  <NoDataArt className="h-20 w-auto" />
-                  <p className="text-sm text-muted-foreground">لا مبيعات بعد</p>
-                </div>
-              ) : (
-                <div className="flex flex-col gap-2.5">
-                  {stats.by_category.map((c) => {
-                    const amount = toNumber(c.amount)
-                    const pct = catTotal ? Math.round((amount / catTotal) * 100) : 0
-                    return (
-                      <div key={c.category} className="flex items-center gap-3">
-                        <span className="w-24 shrink-0 truncate text-sm text-muted-foreground">
-                          {c.category}
-                        </span>
-                        <div className="relative h-6 flex-1 overflow-hidden rounded-lg bg-muted">
-                          <div
-                            className="absolute inset-y-0 start-0 rounded-lg"
-                            style={{
-                              width: `${Math.max(pct, 3)}%`,
-                              backgroundImage:
-                                "linear-gradient(90deg, var(--chart-1), var(--chart-3))",
-                            }}
-                          />
-                        </div>
-                        <span className="w-10 shrink-0 text-end text-xs font-bold tabular-nums">
-                          {pct}٪
-                        </span>
-                        <span className="hidden w-16 shrink-0 text-end text-xs text-muted-foreground tabular-nums sm:block">
-                          {formatNumber(toNumber(c.qty ?? 0))} قطعة
-                        </span>
-                        <span className="hidden w-20 shrink-0 text-end text-xs text-muted-foreground tabular-nums sm:block">
-                          {formatMoney(amount)}
-                        </span>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="sale-stat clay-card border-0">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-base">نقدي مقابل دين</CardTitle>
-              <span className="pill pill-neutral">آخر ٣٠ يوماً</span>
-            </CardHeader>
-            <CardContent className="flex min-h-0 flex-1 flex-col gap-3">
-              {splitTotal === 0 ? (
-                <div className="flex flex-col items-center gap-2 py-4">
-                  <NoDataArt className="h-20 w-auto" />
-                  <p className="text-sm text-muted-foreground">لا مبيعات بعد</p>
-                </div>
-              ) : (
-                <>
-                  <div className="flex h-4 overflow-hidden rounded-full bg-muted">
-                    <div
-                      className="bg-chart-4"
-                      style={{ width: `${(cashAmount / splitTotal) * 100}%` }}
-                    />
-                    <div
-                      className="bg-chart-5"
-                      style={{ width: `${(debtAmount / splitTotal) * 100}%` }}
-                    />
-                  </div>
-                  <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
-                    <span className="flex items-center gap-2 text-sm">
-                      <span className="size-2.5 rounded-full bg-chart-4" />
-                      نقدي
-                      <b className="tabular-nums">{formatMoney(cashAmount)}</b>
-                      <span className="pill pill-neutral px-2 py-0.5 text-[10px]">
-                        {Math.round((cashAmount / splitTotal) * 100)}٪
-                      </span>
-                    </span>
-                    <span className="flex items-center gap-2 text-sm">
-                      <span className="size-2.5 rounded-full bg-chart-5" />
-                      دين
-                      <b className="tabular-nums">{formatMoney(debtAmount)}</b>
-                      <span className="pill pill-neutral px-2 py-0.5 text-[10px]">
-                        {Math.round((debtAmount / splitTotal) * 100)}٪
-                      </span>
-                    </span>
-                  </div>
-                  {/* 14-day mini bars — anchored to the card bottom */}
-                  <div className="mt-auto flex min-h-24 flex-1 items-end gap-1 border-b-2 border-border/70 pb-0">
-                    {stats.daily.map((d) => {
-                      const max = Math.max(
-                        ...stats.daily.map((x) => toNumber(x.amount)),
-                        1,
-                      )
-                      return (
-                        <div
-                          key={d.date}
-                          title={`${d.date}: ${formatMoney(d.amount)}`}
-                          className="bg-brand-gradient flex-1 rounded-t-md opacity-80"
-                          style={{
-                            height: `${Math.max((toNumber(d.amount) / max) * 100, 4)}%`,
-                          }}
-                        />
-                      )
-                    })}
-                  </div>
-                </>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-        </details>
-      )}
-
-      {/* History */}
-      <StickyToolbar>
-        <div className="flex items-center gap-2">
-          <SearchInput
-            value={searchRaw}
-            onChange={setSearchRaw}
-            placeholder="امسح باركود الفاتورة أو ابحث بالصنف…"
-            className="flex-1"
-            scan
-          />
-          <Button
-            type="button"
-            variant={
-              showFilters || activeSaleFilterCount(filters, { ignorePayment: true })
-                ? "default"
-                : "outline"
-            }
-            onClick={() => setShowFilters((v) => !v)}
+      ),
+    },
+    {
+      key: "pay",
+      header: "الدفع",
+      align: "center",
+      width: "w-24",
+      cell: (s) => <PayPill sale={s} />,
+    },
+    {
+      key: "when",
+      header: "الوقت",
+      width: "w-36",
+      cell: (s) => <span className="text-xs text-muted-foreground">{when(s.created_at)}</span>,
+    },
+    {
+      key: "by",
+      header: "البائع",
+      width: "w-28",
+      hideBelow: "lg",
+      cell: (s) => <span className="text-xs text-muted-foreground">{s.created_by_name || "—"}</span>,
+    },
+    {
+      key: "edit",
+      header: "",
+      width: "w-12",
+      align: "end",
+      cell: (s) =>
+        !isLocalSale(s.id) ? (
+          <Link
+            href={`/pos?edit=${s.id}`}
+            onClick={(e) => e.stopPropagation()}
+            title="تعديل الفاتورة على الكاشير"
+            aria-label="تعديل الفاتورة"
+            className="grid size-8 place-items-center rounded-lg text-muted-foreground/60 transition hover:bg-primary/10 hover:text-primary"
           >
-            <SlidersHorizontal className="size-4" />
-            <span className="hidden sm:inline">تصفية</span>
-            {activeSaleFilterCount(filters, { ignorePayment: true }) > 0 && (
-              <span className="grid size-5 place-items-center rounded-full bg-white/25 text-[11px] font-bold">
-                {activeSaleFilterCount(filters, { ignorePayment: true })}
-              </span>
-            )}
-          </Button>
-          <FilterMenu
-            groups={[
-              {
-                label: "طريقة الدفع",
-                value: payment,
-                onChange: setPayment,
-                options: [
-                  { value: "all", label: "الكل" },
-                  { value: "cash", label: "نقدي" },
-                  { value: "debt", label: "دين" },
-                ],
-              },
-              {
-                label: "النوع",
-                value: kind,
-                onChange: setKind,
-                options: [
-                  { value: "all", label: "الكل" },
-                  { value: "sale", label: "طلب" },
-                  { value: "return", label: "إرجاع" },
-                ],
-              },
-            ]}
-          />
-          <SortMenu value={ordering} options={SORTS} onChange={setOrdering} />
-        </div>
-      </StickyToolbar>
+            <Pencil className="size-4" />
+          </Link>
+        ) : null,
+    },
+  ]
 
-      {showFilters && (
-        <div className="mb-3">
-          <SaleFiltersPanel
-            f={filters}
-            patch={patch}
-            empOpts={empOpts}
-            onClear={() => setFilters(EMPTY_SALE_FILTERS)}
-            showPayment={false}
-          />
-        </div>
-      )}
+  return (
+    <PageShell
+      title="الفواتير"
+      action={
+        <Button size="sm" className="bg-brand-gradient gap-1.5 shadow-md shadow-primary/25" render={<Link href="/pos" />} nativeButton={false}>
+          <ShoppingBag className="size-4" />
+          بيع جديد
+        </Button>
+      }
+    >
+      <Enter i={0} className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <p className="font-heading text-2xl font-bold tabular-nums">
+          {summary.data ? `${formatNumber(summary.data.count)} فاتورة` : "…"}
+        </p>
+        {isOwner && summary.data?.total != null ? (
+          <p className="text-lg font-semibold tabular-nums text-muted-foreground">· {formatMoney(summary.data.total)}</p>
+        ) : null}
+        <p className="text-sm text-muted-foreground">
+          {{ today: "اليوم", yesterday: "أمس", week: "في آخر ٧ أيام", month: "هذا الشهر", all: "منذ البداية" }[period]}
+          {search ? ` · تطابق «${search}»` : ""}
+          {cashier ? ` · باعها ${cashier.name}` : ""}
+        </p>
+      </Enter>
 
-      {/*
-        Hide the rows WHILE searching, not only on the first load.
-        React Query keeps the previous page during a refetch, so scanning a
-        receipt left the old sales on screen with no sign anything was
-        happening — the cashier could not tell whether the scan had registered
-        or whether those rows were the answer.
-      */}
-      {searching && (
-        <div className="space-y-2">
-          {Array.from({ length: 8 }).map((_, i) => (
-            <Skeleton key={i} className="h-14 rounded-xl" />
-          ))}
-        </div>
-      )}
-      {isError && <ErrorState onRetry={() => refetch()} />}
-      {!searching && !isError && results.length === 0 && (
-        <EmptyState
-          art={<NoDataArt className="h-32 w-auto" />}
-          title="لا توجد مبيعات"
-          description="سجّل أول طلب من نقطة البيع"
+      <Enter i={1}>
+        <DataTable<Sale>
+          rows={searching ? [] : results}
+          rowKey={(s) => s.id}
+          columns={columns}
+          loading={searching}
+          onRowClick={(s) => setDetail(s)}
+          rowClassName={(s) => (s.is_return ? "bg-rose-500/[0.03]" : undefined)}
+          searchPlaceholder="ابحث برقم الفاتورة أو اسم المشروب…"
+          filters={[
+            { id: "today", label: "اليوم", count: P?.today.count },
+            { id: "yesterday", label: "أمس", count: P?.yesterday.count },
+            { id: "week", label: "آخر ٧ أيام", count: P?.week.count },
+            { id: "month", label: "هذا الشهر", count: P?.month.count },
+            { id: "all", label: "الكل" },
+          ]}
+          manual={{
+            search: searchRaw,
+            onSearch: setSearchRaw,
+            filter: period,
+            onFilter: (id) => setPeriod(id as PeriodId),
+          }}
+          toolbar={
+            <>
+              <Menu
+                label={{ all: "كل الفواتير", cash: "المبيعات فقط", return: "المرتجعات فقط" }[pay]}
+                options={[
+                  { id: "all", label: "كل الفواتير" },
+                  { id: "cash", label: "المبيعات فقط" },
+                  { id: "return", label: "المرتجعات فقط" },
+                ]}
+                value={pay}
+                onChange={(v) => setPay(v as PayId)}
+              />
+              <Menu
+                label={cashier ? cashier.name : "كل البائعين"}
+                options={[{ id: "", label: "كل البائعين" }, ...[...cashiers.entries()].map(([id, name]) => ({ id: String(id), label: name }))]}
+                value={cashier ? String(cashier.id) : ""}
+                onChange={(v) => setCashier(v ? { id: Number(v), name: cashiers.get(Number(v)) ?? "" } : null)}
+              />
+            </>
+          }
+          empty={
+            search
+              ? `لا فاتورة تطابق «${search}».`
+              : period === "today"
+                ? "لا مبيعات اليوم بعد — أول بيعة ستظهر هنا فوراً."
+                : "لا فواتير في هذه الفترة."
+          }
+          footer={
+            pageCount > 1 ? (
+              <div className="border-t border-border/60 px-4 py-2">
+                <PaginationBar page={page} pageCount={pageCount} count={count} onPage={setPage} loading={isFetching} />
+              </div>
+            ) : null
+          }
+          mobileRow={(s) => (
+            <div className="flex items-center gap-3">
+              <SaleAvatar sale={s} />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold">{s.customer_name || "زبون بدون اسم"}</p>
+                <p className="truncate text-xs text-muted-foreground">{itemsLine(s)}</p>
+                {notesOf(s).length ? (
+                  <p className="truncate text-[11px] text-amber-800 dark:text-amber-300">{notesOf(s).join(" · ")}</p>
+                ) : null}
+              </div>
+              <div className="shrink-0 text-end">
+                <p className={cn("font-heading text-sm font-bold tabular-nums", s.is_return && "text-destructive")}>
+                  {s.is_return ? "−" : ""}
+                  {formatMoney(s.discounted_total)}
+                </p>
+                <p className="text-[11px] text-muted-foreground">{when(s.created_at)}</p>
+              </div>
+            </div>
+          )}
         />
-      )}
-      {!searching && !isError && results.length > 0 && (
-        <div className="flex flex-col gap-3">
-          <div data-slot="card" className="clay-card overflow-hidden rounded-3xl">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-muted/40 hover:bg-muted/40">
-                  <TableHead className="text-start">الزبون</TableHead>
-                  <TableHead className="hidden text-start sm:table-cell">
-                    الأصناف
-                  </TableHead>
-                  <TableHead className="text-end">المبلغ</TableHead>
-                  <TableHead className="text-center">الدفع</TableHead>
-                  <TableHead className="hidden text-start sm:table-cell">
-                    التاريخ
-                  </TableHead>
-                  <TableHead className="hidden text-start md:table-cell">
-                    البائع
-                  </TableHead>
-                  <TableHead className="w-10" />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {results.map((s) => (
-                  <TableRow
-                    key={s.id}
-                    onClick={() => {
-                      setDetail(s)
-                      setDetailOpen(true)
-                    }}
-                    className="cursor-pointer transition-colors hover:bg-primary/4"
-                  >
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Avatar className="size-9 shrink-0">
-                          {(s as { customer_avatar?: string }).customer_avatar ? (
-                            <AvatarImage src={(s as { customer_avatar?: string }).customer_avatar} alt="" className="object-cover" />
-                          ) : null}
-                          <AvatarFallback className="bg-brand-gradient text-sm font-bold text-white">
-                            {s.customer_name?.trim().charAt(0) || <ReceiptText className="size-4" />}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-1.5">
-                            <span className="truncate font-semibold">
-                              {s.customer_name || "زبون نقدي"}
-                            </span>
-                            {isLocalSale(s.id) && (
-                              <span
-                                className="pill pill-warning shrink-0 gap-1 text-[10px]"
-                                title="طلب سُجّل أثناء انقطاع الاتصال — سيُرفع تلقائياً عند عودة الشبكة"
-                              >
-                                <CloudOff className="size-3" />
-                                {LOCAL_SALE_LABEL}
-                              </span>
-                            )}
-                            {/* Visible in the LIST, not only after opening the
-                                invoice: an edited sale is the one an owner
-                                scanning the day's takings needs to spot. */}
-                            {(s.revision_count ?? 0) > 0 && (
-                              <span
-                                className="pill pill-warning shrink-0 gap-1 text-[10px]"
-                                title={`عُدّلت ${s.revision_count} مرة — افتح الفاتورة لعرض النسخ السابقة`}
-                              >
-                                <Pencil className="size-3" />
-                                معدّلة
-                              </span>
-                            )}
-                          </div>
-                          {s.customer_phone && (
-                            <div
-                              className="truncate text-xs text-muted-foreground"
-                              dir="ltr"
-                            >
-                              {s.customer_phone}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="hidden sm:table-cell">
-                      {/* What was ordered, by name — and the notes, so a
-                          "بدون سكر" is visible without opening the invoice. */}
-                      <span className="block max-w-[16rem] truncate text-sm">
-                        {s.items
-                          .slice(0, 2)
-                          .map((it) => `${Number(it.quantity) > 1 ? `${Number(it.quantity)}× ` : ""}${saleItemName(it)}`)
-                          .join("، ")}
-                        {s.items.length > 2 ? <span className="text-muted-foreground"> +{formatNumber(s.items.length - 2)}</span> : null}
-                      </span>
-                      {(() => {
-                        const notes = [
-                          (s as { note?: string }).note?.trim(),
-                          ...s.items.map((it) => (it as { note?: string }).note?.trim()),
-                        ].filter(Boolean) as string[]
-                        return notes.length ? (
-                          <span className="mt-0.5 flex max-w-[16rem] items-center gap-1 truncate text-[11px] text-amber-800 dark:text-amber-300">
-                            <StickyNote className="size-3 shrink-0" />
-                            <span className="truncate">{notes.join(" · ")}</span>
-                          </span>
-                        ) : null
-                      })()}
-                    </TableCell>
-                    <TableCell className="text-end">
-                      <span
-                        className={cn(
-                          "font-heading font-bold tabular-nums",
-                          s.is_return && "text-destructive",
-                        )}
-                      >
-                        {s.is_return ? "−" : ""}
-                        {formatMoney(s.discounted_total)}
-                      </span>
-                      {/* The amount alone reads as a cheap sale. Saying which
-                          part of it was paid in points is what stops the owner
-                          scanning the day's takings from thinking the till is
-                          under-charging. */}
-                      {(s.beans_spent ?? 0) > 0 && (
-                        <span
-                          className="mt-0.5 flex items-center justify-end gap-1 text-[11px] font-medium text-lime"
-                          title={`استُخدمت ${s.beans_spent} نقطة على هذه الفاتورة`}
-                        >
-                          <Coins className="size-3" />
-                          {formatNumber(s.beans_spent ?? 0)} نقطة
-                        </span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <PaymentPill sale={s} />
-                    </TableCell>
-                    <TableCell className="hidden text-muted-foreground sm:table-cell">
-                      {formatDate(s.created_at)}
-                    </TableCell>
-                    <TableCell className="hidden text-muted-foreground md:table-cell">
-                      {s.created_by_name || "—"}
-                    </TableCell>
-                    <TableCell className="w-10 p-0 pe-2">
-                      {/* Straight to the till. stopPropagation because the row
-                          itself opens the detail dialog — without it the pencil
-                          would navigate AND leave a dialog open behind it. */}
-                      {!isLocalSale(s.id) && (
-                        <Link
-                          href={`/pos?edit=${s.id}`}
-                          onClick={(e) => e.stopPropagation()}
-                          title="تعديل الفاتورة"
-                          aria-label="تعديل الفاتورة"
-                          className="grid size-8 place-items-center rounded-lg text-muted-foreground/60 transition hover:bg-primary/10 hover:text-primary"
-                        >
-                          <Pencil className="size-4" />
-                        </Link>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-          <PaginationBar
-            page={page}
-            pageCount={pageCount}
-            count={count}
-            onPage={setPage}
-            loading={isFetching}
-          />
-        </div>
-      )}
+      </Enter>
 
-      <SaleDetail
-        sale={detail}
-        open={detailOpen}
-        onOpenChange={setDetailOpen}
-        onVoid={(s) => setToVoid(s)}
-      />
+      <SaleDetail sale={detail} open={detail != null} onOpenChange={(o) => !o && setDetail(null)} onVoid={(s) => setToVoid(s)} />
       <ConfirmDelete
         open={Boolean(toVoid)}
         onOpenChange={(o) => !o && setToVoid(null)}
         onConfirm={confirmVoid}
         loading={voiding}
-        title="إلغاء الطلب"
-        description="سيُلغى الطلب، تُسترجع الكميات، ويُحذف الدين المرتبط به إن وُجد."
+        title="إلغاء الفاتورة؟"
+        description={`تُلغى الفاتورة ${toVoid?.receipt_code ? `#${toVoid.receipt_code} ` : ""}وتعود مكوناتها إلى المخزون. يبقى أثر الإلغاء في سجل المخزون.`}
+        confirmLabel="إلغاء الفاتورة"
       />
-      <ConfirmDelete
-        open={wipeOpen}
-        onOpenChange={setWipeOpen}
-        onConfirm={wipeAllSales}
-        loading={wiping}
-        title="حذف كل الطلبات"
-        description="سيتم حذف جميع الطلبات نهائياً واسترجاع الكميات المرتبطة بها. لا يمكن التراجع عن هذا الإجراء."
-        confirmLabel="حذف الكل"
-      />
+    </PageShell>
+  )
+}
+
+function SaleAvatar({ sale: s }: { sale: Sale }) {
+  const avatar = (s as { customer_avatar?: string }).customer_avatar
+  return (
+    <Avatar className="size-9 shrink-0">
+      {avatar ? <AvatarImage src={avatar} alt="" className="object-cover" /> : null}
+      <AvatarFallback className={cn("text-sm font-bold", s.customer_name ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground")}>
+        {s.customer_name?.trim().charAt(0) || <ReceiptText className="size-4" />}
+      </AvatarFallback>
+    </Avatar>
+  )
+}
+
+function CustomerCell({ sale: s }: { sale: Sale }) {
+  return (
+    <div className="flex items-center gap-2.5">
+      <SaleAvatar sale={s} />
+      <div className="min-w-0">
+        <p className="flex items-center gap-1.5 truncate font-semibold">
+          {s.customer_name || <span className="font-normal text-muted-foreground">زبون بدون اسم</span>}
+          {isLocalSale(s.id) ? (
+            <span className="pill pill-warning shrink-0 gap-1 text-[10px]" title="سُجّلت أثناء انقطاع الاتصال وستُرفع تلقائياً">
+              <CloudOff className="size-3" />
+              {LOCAL_SALE_LABEL}
+            </span>
+          ) : null}
+          {(s.revision_count ?? 0) > 0 ? (
+            <span className="pill pill-warning shrink-0 gap-1 text-[10px]" title={`عُدّلت ${s.revision_count} مرة`}>
+              <Pencil className="size-3" />
+              معدّلة
+            </span>
+          ) : null}
+        </p>
+        <p className="truncate text-xs text-muted-foreground" dir="ltr">
+          {s.receipt_code ? `#${s.receipt_code}` : formatDate(s.created_at)}
+        </p>
+      </div>
     </div>
+  )
+}
+
+function PayPill({ sale }: { sale: Sale }) {
+  if (sale.is_return) return <span className="pill pill-danger">إرجاع</span>
+  return (
+    <span className={cn("pill", sale.payment_method === "cash" ? "pill-success" : "pill-warning")}>
+      {sale.payment_method === "cash" ? "نقدي" : "دين"}
+    </span>
+  )
+}
+
+function Menu({
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  label: string
+  options: { id: string; label: string }[]
+  value: string
+  onChange: (id: string) => void
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Button variant="outline" size="sm" className="h-9 gap-1.5 rounded-xl">
+            {label}
+            <ChevronDown className="size-3.5 opacity-60" />
+          </Button>
+        }
+      />
+      <DropdownMenuContent align="end" className="w-48">
+        {options.map((o) => (
+          <DropdownMenuItem key={o.id} onClick={() => onChange(o.id)}>
+            <Check className={cn("size-4", value === o.id ? "opacity-100" : "opacity-0")} />
+            {o.label}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }

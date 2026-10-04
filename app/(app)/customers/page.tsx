@@ -1,196 +1,73 @@
 "use client"
 
-import { useMemo, useRef, useState } from "react"
-import Link from "next/link"
-import { useQueryClient } from "@tanstack/react-query"
+/**
+ * الزبائن — everyone who has ever been rung up by name, as one table.
+ *
+ *   [ابحث بالاسم أو الهاتف…] [الكل 100][دائمون 22][جدد 9][غابوا 14][على التطبيق 3]
+ *   الزبون · الحالة · الزيارات · آخر زيارة · صرف · النقاط
+ *
+ * The filters are the questions an owner asks: who are my regulars, who is
+ * new, who stopped coming. A row opens the customer's profile.
+ */
+import { useMemo, useState } from "react"
+import { useRouter } from "next/navigation"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { PlusCircle } from "lucide-react"
+import { Eye, MoreVertical, Pencil, Smartphone, Trash2, UserPlus } from "lucide-react"
 
-import { customersList } from "@/api/generated/customers/customers"
+import { customersTable, type CustomerRow } from "@/api/customer-profile"
+import { customersRetrieve } from "@/api/generated/customers/customers"
 import type { Customer } from "@/api/generated/model"
-import { useInfiniteList } from "@/hooks/use-infinite-list"
-import { useDebounced } from "@/hooks/use-debounced"
-import { useStaggerCards } from "@/hooks/use-stagger-cards"
-import { ENDPOINTS, remove } from "@/lib/mutate"
-import { formatMoney, formatNumber, toNumber } from "@/lib/format"
-
-import { PageHeader } from "@/components/page-header"
-import { SearchInput } from "@/components/search-input"
-import { StickyToolbar } from "@/components/sticky-toolbar"
-import { SortMenu, type SortOption } from "@/components/sort-menu"
-import { LoadMore } from "@/components/load-more"
-import { Fab } from "@/components/fab"
-import { RowActions } from "@/components/row-actions"
-import { EmptyState, ErrorState } from "@/components/states"
-import { NoCustomersArt } from "@/components/illustrations"
-import { CustomerForm } from "@/components/forms/customer-form"
 import { ConfirmDelete } from "@/components/confirm-delete"
-import { Card } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Skeleton } from "@/components/ui/skeleton"
+import { StatusPill, ago } from "@/components/customers/status"
+import { DataTable, type Column } from "@/components/data-table"
+import { Fab } from "@/components/fab"
+import { CustomerForm } from "@/components/forms/customer-form"
+import { Enter, PageShell } from "@/components/page-shell"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-
-/** The API returns these; the generated types catch up on `npm run api`. */
-type LoyaltyFields = { points?: number; tier?: string; signed_up?: boolean }
-
-const TIER_LABEL: Record<string, string> = {
-  single: "سنجل", double: "دوبل", triple: "تريبل",
-}
-
-const SORT_OPTIONS: SortOption[] = [
-  // Best customers first, because that is the question this page is usually
-  // asked. Alphabetical is for finding someone you already have a name for,
-  // and that is what the search box is.
-  { value: "-points", label: "الأكثر نقاطاً" },
-  { value: "name", label: "الاسم (أ–ي)" },
-  { value: "-created_at", label: "الأحدث" },
-]
-
-function CustomerCard({
-  customer,
-  onEdit,
-  onDelete,
-}: {
-  customer: Customer
-  onEdit: () => void
-  onDelete: () => void
-}) {
-  const outstanding = toNumber(customer.outstanding)
-  const loyalty = customer as Customer & LoyaltyFields
-  const points = loyalty.points ?? 0
-  const tier = loyalty.tier ?? "single"
-  return (
-    <Card className="customer-card card-interactive gap-0 p-0">
-      <div className="flex items-start gap-3 p-4">
-        <Link href={`/customers/${customer.id}`} className="shrink-0">
-          <div className="rounded-full bg-brand-gradient p-[2px]">
-            <Avatar className="size-12 ring-2 ring-card">
-              <AvatarImage src={customer.avatar || undefined} alt="" />
-              <AvatarFallback className="bg-card text-primary">
-                {customer.name.charAt(0)}
-              </AvatarFallback>
-            </Avatar>
-          </div>
-        </Link>
-        <Link href={`/customers/${customer.id}`} className="min-w-0 flex-1">
-          <p className="truncate font-semibold leading-tight">{customer.name}</p>
-          {customer.phone && (
-            <p dir="ltr" className="mt-0.5 text-start text-xs text-muted-foreground">
-              {customer.phone}
-            </p>
-          )}
-          <div className="mt-2 flex flex-wrap items-center gap-1.5">
-            {loyalty.signed_up && (
-              <Badge className="border-transparent bg-primary/12 font-normal text-primary">
-                عبر التطبيق
-              </Badge>
-            )}
-            {tier !== "single" && (
-              <Badge className="border-transparent bg-lime/20 font-normal text-foreground">
-                {TIER_LABEL[tier] ?? tier}
-              </Badge>
-            )}
-            {customer.status && (
-              <Badge variant="secondary" className="font-normal">
-                {customer.status}
-              </Badge>
-            )}
-          </div>
-        </Link>
-        <RowActions onEdit={onEdit} onDelete={onDelete} />
-      </div>
-      {/* Points, in points and in shekels — the one number a café customer
-          asks about. A tab is shown only when there is one; "owes 0.00" on
-          every card was a pharmacy's ledger, not a café's. */}
-      <div className="flex items-center justify-between gap-3 border-t border-border/60 bg-muted/30 px-4 py-2.5">
-        <span className="text-xs text-muted-foreground">النقاط</span>
-        <span className="flex items-baseline gap-2">
-          {outstanding > 0 ? (
-            <span className="pill pill-warning text-[11px]">عليه {formatMoney(customer.outstanding)}</span>
-          ) : null}
-          <span className="font-heading text-sm font-bold tabular-nums">{formatNumber(points)}</span>
-          <span className="text-[11px] tabular-nums text-muted-foreground">= {formatMoney(points / 10)}</span>
-        </span>
-      </div>
-    </Card>
-  )
-}
-
-function GridSkeleton() {
-  return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-      {Array.from({ length: 6 }).map((_, i) => (
-        <Card key={i} className="gap-0 p-0">
-          <div className="flex items-start gap-3 p-4">
-            <Skeleton className="size-12 rounded-full" />
-            <div className="flex-1 space-y-2">
-              <Skeleton className="h-4 w-32" />
-              <Skeleton className="h-3 w-20" />
-              <Skeleton className="h-5 w-16" />
-            </div>
-          </div>
-          <Skeleton className="h-10 rounded-none" />
-        </Card>
-      ))}
-    </div>
-  )
-}
+import { Button } from "@/components/ui/button"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { formatMoney, formatNumber, toNumber } from "@/lib/format"
+import { useIsOwner } from "@/lib/modules"
+import { ENDPOINTS, remove } from "@/lib/mutate"
 
 export default function CustomersPage() {
   const qc = useQueryClient()
-  const [searchRaw, setSearchRaw] = useState("")
-  const search = useDebounced(searchRaw, 300)
-  const [gender, setGender] = useState("all")
-  const [ordering, setOrdering] = useState("-points")
+  const router = useRouter()
+  const isOwner = useIsOwner()
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<Customer | null>(null)
-  const [toDelete, setToDelete] = useState<Customer | null>(null)
+  const [toDelete, setToDelete] = useState<CustomerRow | null>(null)
   const [deleting, setDeleting] = useState(false)
-  const scope = useRef<HTMLDivElement>(null)
 
-  const params = useMemo(
-    () => ({
-      search: search || undefined,
-      gender: gender === "all" ? undefined : gender,
-      ordering,
-      page_size: 24,
-    }),
-    [search, gender, ordering],
-  )
-
-  const {
-    items,
-    count,
-    isLoading,
-    isError,
-    refetch,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
-  } = useInfiniteList<Customer>(["customers"], customersList, params)
-
-  useStaggerCards(scope, ".customer-card", !isLoading && items.length > 0, [
-    search,
-    gender,
-    ordering,
-  ])
+  const { data, isLoading } = useQuery({
+    queryKey: ["customers", "table"],
+    queryFn: () => customersTable().then((r) => r.data.results),
+    placeholderData: (p) => p,
+  })
+  const rows = useMemo(() => data ?? [], [data])
 
   function openAdd() {
     setEditing(null)
     setFormOpen(true)
   }
-
+  async function openEdit(c: CustomerRow) {
+    try {
+      const full = await customersRetrieve(String(c.id))
+      setEditing(full.data as Customer)
+      setFormOpen(true)
+    } catch {
+      toast.error("تعذر فتح بيانات الزبون")
+    }
+  }
   async function confirmDelete() {
     if (!toDelete) return
     setDeleting(true)
     try {
       await remove(ENDPOINTS.customers, toDelete.id)
-      toast.success("تم حذف الزبون")
+      toast.success(`حُذف «${toDelete.name}»`)
       qc.invalidateQueries({ queryKey: ["customers"] })
-    qc.invalidateQueries({ queryKey: ["customers-quick"] })
-      qc.invalidateQueries({ queryKey: ["dashboard-stats"] })
+      qc.invalidateQueries({ queryKey: ["customers-quick"] })
       setToDelete(null)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "تعذر الحذف")
@@ -199,97 +76,205 @@ export default function CustomersPage() {
     }
   }
 
-  return (
-    <div className="mx-auto w-full max-w-7xl">
-      <PageHeader
-        title="الزبائن"
-        description={count ? `${formatNumber(count)} زبون` : "إدارة ملفات الزبائن"}
-        action={
-          <Button onClick={openAdd} data-tour="page-add" className="hidden md:inline-flex">
-            <PlusCircle className="size-4" />
-            إضافة زبون
-          </Button>
-        }
-      />
-
-      <StickyToolbar>
-        <div className="flex items-center gap-2">
-          <SearchInput
-            value={searchRaw}
-            onChange={setSearchRaw}
-            placeholder="ابحث بالاسم أو الهاتف…"
-            className="flex-1"
-          />
-          <SortMenu
-            value={ordering}
-            options={SORT_OPTIONS}
-            onChange={setOrdering}
-          />
-        </div>
-      </StickyToolbar>
-
-      <Tabs value={gender} onValueChange={setGender} className="mb-5">
-        <TabsList>
-          <TabsTrigger value="all">الكل</TabsTrigger>
-          <TabsTrigger value="male">ذكور</TabsTrigger>
-          <TabsTrigger value="female">إناث</TabsTrigger>
-        </TabsList>
-      </Tabs>
-
-      {isLoading && <GridSkeleton />}
-      {isError && <ErrorState onRetry={() => refetch()} />}
-      {!isLoading && !isError && items.length === 0 && (
-        <EmptyState
-          art={<NoCustomersArt className="h-36 w-auto" />}
-          title="لا يوجد زبائن"
-          description="ابدأ بإضافة أول زبون"
-          action={
-            <Button onClick={openAdd} size="sm">
-              <PlusCircle className="size-4" />
-              إضافة زبون
-            </Button>
-          }
-        />
-      )}
-
-      {items.length > 0 && (
-        <>
-          <div
-            ref={scope}
-            className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
-          >
-            {items.map((c) => (
-              <CustomerCard
-                key={c.id}
-                customer={c}
-                onEdit={() => {
-                  setEditing(c)
-                  setFormOpen(true)
-                }}
-                onDelete={() => setToDelete(c)}
-              />
-            ))}
+  const columns: Column<CustomerRow>[] = [
+    {
+      key: "name",
+      header: "الزبون",
+      sort: (c) => c.name,
+      cell: (c) => (
+        <div className="flex items-center gap-3">
+          <Face c={c} />
+          <div className="min-w-0">
+            <p className="flex items-center gap-1.5 truncate font-semibold">
+              {c.name}
+              {c.app ? (
+                <span title="سجّل في تطبيق كوب" className="text-muted-foreground">
+                  <Smartphone className="size-3.5" />
+                </span>
+              ) : null}
+            </p>
+            <p className="truncate text-xs text-muted-foreground" dir="ltr">
+              {c.phone || "—"}
+            </p>
           </div>
-          <LoadMore
-            hasNext={Boolean(hasNextPage)}
-            isFetchingNext={isFetchingNextPage}
-            onLoad={() => fetchNextPage()}
-          />
-        </>
-      )}
+        </div>
+      ),
+    },
+    {
+      key: "status",
+      header: "الحالة",
+      width: "w-32",
+      sort: (c) => ["regular", "active", "new", "fading", "no_visits"].indexOf(c.status),
+      cell: (c) => <StatusPill status={c.status} female={c.gender === "female"} />,
+    },
+    {
+      key: "visits",
+      header: "الزيارات",
+      width: "w-32",
+      sort: (c) => c.visits,
+      cell: (c) => (
+        <div>
+          <p className="font-semibold tabular-nums">{formatNumber(c.visits)}</p>
+          {c.visits_30d ? <p className="text-[11px] text-muted-foreground">{formatNumber(c.visits_30d)} هذا الشهر</p> : null}
+        </div>
+      ),
+    },
+    {
+      key: "last",
+      header: "آخر زيارة",
+      width: "w-32",
+      sort: (c) => -(c.days_since ?? 99999),
+      cell: (c) => <span className="text-sm text-muted-foreground">{c.last_visit ? ago(c.days_since) : "لم يزر بعد"}</span>,
+    },
+    ...(isOwner
+      ? [
+          {
+            key: "spent",
+            header: "صرف عندنا",
+            width: "w-32",
+            align: "end" as const,
+            hideBelow: "lg" as const,
+            sort: (c: CustomerRow) => toNumber(c.spent),
+            cell: (c: CustomerRow) => <span className="tabular-nums">{formatMoney(c.spent)}</span>,
+          },
+        ]
+      : []),
+    {
+      key: "points",
+      header: "النقاط",
+      width: "w-28",
+      align: "end",
+      sort: (c) => c.points,
+      cell: (c) => (
+        <div>
+          <p className="font-semibold tabular-nums">{formatNumber(c.points)}</p>
+          <p className="text-[11px] tabular-nums text-muted-foreground">= {formatMoney(c.points / 10)}</p>
+        </div>
+      ),
+    },
+    {
+      key: "menu",
+      header: "",
+      width: "w-12",
+      align: "end",
+      cell: (c) => (
+        <div onClick={(e) => e.stopPropagation()}>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button variant="ghost" size="icon" className="size-8" aria-label={`خيارات ${c.name}`}>
+                  <MoreVertical className="size-4" />
+                </Button>
+              }
+            />
+            <DropdownMenuContent align="end" className="w-44">
+              <DropdownMenuItem onClick={() => router.push(`/customers/${c.id}`)}>
+                <Eye className="size-4" />
+                فتح الملف
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => void openEdit(c)}>
+                <Pencil className="size-4" />
+                تعديل
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setToDelete(c)} className="text-destructive focus:text-destructive">
+                <Trash2 className="size-4" />
+                حذف
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      ),
+    },
+  ]
+
+  const has = (s: CustomerRow["status"]) => rows.some((c) => c.status === s)
+
+  return (
+    <PageShell
+      title="الزبائن"
+      action={
+        <Button size="sm" className="bg-brand-gradient gap-1.5 shadow-md shadow-primary/25" onClick={openAdd} data-tour="page-add">
+          <UserPlus className="size-4" />
+          زبون
+        </Button>
+      }
+    >
+      <Enter i={0}>
+        <DataTable<CustomerRow>
+          rows={rows}
+          rowKey={(c) => c.id}
+          columns={columns}
+          loading={isLoading}
+          onRowClick={(c) => router.push(`/customers/${c.id}`)}
+          searchText={(c) => `${c.name} ${c.phone}`}
+          searchPlaceholder="ابحث بالاسم أو رقم الهاتف…"
+          defaultSort={{ key: "visits", dir: "desc" }}
+          filters={[
+            { id: "all", label: "الكل" },
+            { id: "regular", label: "دائمون", test: (c) => c.status === "regular" },
+            { id: "new", label: "جدد", test: (c) => c.status === "new" },
+            { id: "fading", label: "غابوا عنّا", test: (c) => c.status === "fading", tone: "warn" },
+            { id: "app", label: "على التطبيق", test: (c) => c.app },
+            ...(has("no_visits") ? [{ id: "none", label: "لم يزوروا بعد", test: (c: CustomerRow) => c.status === "no_visits" }] : []),
+          ]}
+          empty={
+            rows.length ? (
+              "لا زبون يطابق."
+            ) : (
+              <div className="flex flex-col items-center gap-3">
+                <p>لا زبائن بعد. أضف أول زبون ليجمع النقاط مع كل طلب.</p>
+                <Button size="sm" variant="outline" className="gap-1" onClick={openAdd}>
+                  <UserPlus className="size-4" />
+                  إضافة زبون
+                </Button>
+              </div>
+            )
+          }
+          mobileRow={(c) => (
+            <div className="flex items-center gap-3">
+              <Face c={c} />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold">{c.name}</p>
+                <p className="truncate text-[11px] text-muted-foreground">
+                  {formatNumber(c.visits)} زيارة · {c.last_visit ? `آخرها ${ago(c.days_since)}` : "لم يزر بعد"}
+                </p>
+              </div>
+              <div className="shrink-0 text-end">
+                <StatusPill status={c.status} female={c.gender === "female"} />
+                <p className="mt-1 text-[11px] tabular-nums text-muted-foreground">{formatNumber(c.points)} نقطة</p>
+              </div>
+            </div>
+          )}
+        />
+      </Enter>
 
       <Fab onClick={openAdd} label="إضافة زبون" />
-      <CustomerForm open={formOpen} onOpenChange={setFormOpen} customer={editing} />
+      <CustomerForm
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        customer={editing}
+        onSaved={() => {
+          qc.invalidateQueries({ queryKey: ["customers"] })
+          qc.invalidateQueries({ queryKey: ["customers-quick"] })
+        }}
+      />
       <ConfirmDelete
         open={Boolean(toDelete)}
         onOpenChange={(o) => !o && setToDelete(null)}
         onConfirm={confirmDelete}
         loading={deleting}
-        title="حذف الزبون"
-        description={
-          toDelete ? `سيتم حذف «${toDelete.name}» وكل ديونه.` : undefined
-        }
+        title={toDelete ? `حذف «${toDelete.name}»؟` : "حذف الزبون"}
+        description="يُحذف ملف الزبون ونقاطه. فواتيره السابقة تبقى في السجل بدون اسم."
       />
-    </div>
+    </PageShell>
+  )
+}
+
+function Face({ c }: { c: CustomerRow }) {
+  return (
+    <Avatar className="size-10 shrink-0">
+      {c.avatar ? <AvatarImage src={c.avatar} alt="" className="object-cover" /> : null}
+      <AvatarFallback className="bg-primary/10 text-sm font-bold text-primary">{c.name.charAt(0)}</AvatarFallback>
+    </Avatar>
   )
 }

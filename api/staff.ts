@@ -64,3 +64,16 @@ export const staffResetPassword = (id: number, password: string) =>
     `/api/v1/staff/${id}/reset-password/`,
     jsonInit("POST", { password }),
   )
+
+/** A staff row with what the owner asks about each person this month. */
+export type StaffBoardRow = StaffUser & {
+  photo: string
+  month_sales: number
+  month_total: string
+  last_sale: string | null
+  /** Monthly salary booked in المصاريف, or null when none is. */
+  salary: string | null
+}
+
+export const staffBoard = () =>
+  call<{ month: string; results: StaffBoardRow[] }>("/api/v1/staff/board/")

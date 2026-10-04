@@ -1,8 +1,11 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { Printer, ReceiptText } from "lucide-react"
 
 import { PrintAgentCard } from "@/components/print/print-agent-card"
+import { Choice, SettingRow, SettingsCard } from "@/components/settings/kit"
+import { Switch } from "@/components/ui/switch"
 import {
   DEFAULT_PRINT_SETTINGS,
   loadPrintSettings,
@@ -10,20 +13,18 @@ import {
   type PaperWidth,
   type PrintSettings,
 } from "@/lib/print/settings"
-import { Label } from "@/components/ui/label"
-import { Switch } from "@/components/ui/switch"
 import { cn } from "@/lib/utils"
 
 /**
- * Printing, on the settings page.
+ * Printing, on the settings page — two cards side by side:
+ *
+ *   الفاتورة            what a receipt looks like and when it prints
+ *   الطباعة المباشرة    the small program that prints without a dialog
  *
  * These controls also live in the dialog behind the POS's printer icon, but
- * that dialog is only reachable from the till — so the owner setting the shop
- * up on his own laptop had no way to reach any of it. Anything a person has to
- * be TOLD where to find is in the wrong place.
- *
- * Settings are per browser (localStorage): each counter has its own printer
- * and its own roll.
+ * that dialog is only reachable from the till — the owner setting the shop up
+ * on his own laptop needs them here. Settings are per browser (each counter
+ * has its own printer and its own roll) and save the moment they change.
  */
 export function PrintSection() {
   const [s, setS] = useState<PrintSettings>(DEFAULT_PRINT_SETTINGS)
@@ -45,95 +46,45 @@ export function PrintSection() {
   }
 
   return (
-    <section className="mb-5 rounded-2xl border bg-card p-5">
-      <h2 className="mb-1 font-heading text-base font-bold">الطباعة</h2>
-      <p className="mb-4 text-xs text-muted-foreground">
-        الطابعة، مقاس الورق، وطباعة الفواتير تلقائياً
-      </p>
-
-      <div className={cn("space-y-4", !ready && "opacity-60")}>
-        <PrintAgentCard />
-
-        {/* Where a receipt goes */}
-        <div className="space-y-1.5">
-          <Label>عند الطباعة</Label>
-          <div className="flex gap-2">
-            {(
-              [
-                ["print", "أطبع على الطابعة"],
-                ["download", "نزّل الفاتورة (لا توجد طابعة)"],
-              ] as const
-            ).map(([v, label]) => (
-              <button
-                key={v}
-                type="button"
-                onClick={() => patch({ deliver: v })}
-                className={cn(
-                  "flex-1 rounded-xl border px-3 py-2 text-xs font-semibold transition",
-                  s.deliver === v
-                    ? "border-primary bg-primary/10 text-primary"
-                    : "border-border text-muted-foreground hover:bg-muted/60",
-                )}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+    <div className="grid items-start gap-4 lg:grid-cols-2">
+      <SettingsCard icon={ReceiptText} title="الفاتورة" hint="تُحفظ التغييرات فوراً، لهذا الجهاز فقط.">
+        <div className={cn(!ready && "opacity-60")}>
+          <SettingRow title="عند الطباعة" hint="إن لم تكن هناك طابعة، تُنزَّل الفاتورة كملف.">
+            <Choice
+              value={s.deliver}
+              onChange={(v) => patch({ deliver: v })}
+              options={[
+                { value: "print", label: "أطبع على الطابعة" },
+                { value: "download", label: "نزّل الفاتورة (لا توجد طابعة)" },
+              ]}
+            />
+          </SettingRow>
+          <SettingRow title="مقاس الورق" hint="قِس عرض بكرة الورق — المقاس الخاطئ يقصّ حواف الفاتورة.">
+            <Choice<PaperWidth>
+              value={s.paper}
+              onChange={(v) => patch({ paper: v })}
+              options={[
+                { value: "58", label: "58 مم" },
+                { value: "80", label: "80 مم" },
+              ]}
+            />
+          </SettingRow>
+          <SettingRow title="طباعة تلقائية بعد كل بيع" hint="بدونها تُطبع الفاتورة عند الضغط على زر الطابعة فقط.">
+            <Switch checked={s.autoPrint} onCheckedChange={(v) => patch({ autoPrint: Boolean(v) })} aria-label="طباعة تلقائية" />
+          </SettingRow>
+          <SettingRow title="باركود أسفل الفاتورة" hint="امسحه في صفحة الفواتير لتفتح الفاتورة مباشرة.">
+            <Switch checked={s.receiptBarcode} onCheckedChange={(v) => patch({ receiptBarcode: Boolean(v) })} aria-label="باركود الفاتورة" />
+          </SettingRow>
         </div>
+      </SettingsCard>
 
-        {/* Paper width */}
-        <div className="space-y-1.5">
-          <Label>مقاس الورق</Label>
-          <div className="flex gap-2">
-            {(["58", "80"] as PaperWidth[]).map((w) => (
-              <button
-                key={w}
-                type="button"
-                onClick={() => patch({ paper: w })}
-                className={cn(
-                  "flex-1 rounded-xl border px-3 py-2 text-xs font-semibold transition",
-                  s.paper === w
-                    ? "border-primary bg-primary/10 text-primary"
-                    : "border-border text-muted-foreground hover:bg-muted/60",
-                )}
-              >
-                {w} مم
-              </button>
-            ))}
-          </div>
-          <p className="text-[11px] text-muted-foreground">
-            قِس عرض بكرة الورق. الاختيار الخاطئ يقصّ حواف الفاتورة.
-          </p>
-        </div>
-
-        {/* Auto print */}
-        <div className="flex items-center justify-between gap-3 rounded-xl border p-3">
-          <div>
-            <p className="text-sm font-semibold">طباعة تلقائية بعد كل بيع</p>
-            <p className="text-[11px] text-muted-foreground">
-              بدونها تُطبع الفاتورة فقط عند الضغط على زر الطابعة
-            </p>
-          </div>
-          <Switch
-            checked={s.autoPrint}
-            onCheckedChange={(v) => patch({ autoPrint: Boolean(v) })}
-          />
-        </div>
-
-        {/* Barcode */}
-        <div className="flex items-center justify-between gap-3 rounded-xl border p-3">
-          <div>
-            <p className="text-sm font-semibold">باركود الفاتورة</p>
-            <p className="text-[11px] text-muted-foreground">
-              يُطبع أسفل الفاتورة — امسحه في صفحة المبيعات للوصول إليها مباشرة
-            </p>
-          </div>
-          <Switch
-            checked={s.receiptBarcode}
-            onCheckedChange={(v) => patch({ receiptBarcode: Boolean(v) })}
-          />
-        </div>
-      </div>
-    </section>
+      <SettingsCard
+        icon={Printer}
+        title="الطباعة المباشرة (بدون نافذة طباعة)"
+        hint="برنامج صغير على جهاز الكاشير يطبع فوراً دون أن يفتح المتصفح نافذة الطباعة. لا يثبّت أي تعريف."
+      >
+        <PrintAgentCard embedded />
+      </SettingsCard>
+    </div>
   )
 }

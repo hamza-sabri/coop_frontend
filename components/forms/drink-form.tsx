@@ -126,7 +126,8 @@ function Field({
   )
 }
 
-/** Margin on one price, as the owner reads it: "هامش 66% · ربح 11.90 ₪". */
+/** What one cup earns, as the owner says it: "يربح 11.90 ₪ في الكوب".
+ *  The colour still tells good from thin, without the word "margin". */
 function MarginPill({ price, cost }: { price: number; cost: number }) {
   if (!(price > 0) || !(cost > 0)) return null
   const profit = price - cost
@@ -142,7 +143,7 @@ function MarginPill({ price, cost }: { price: number; cost: number }) {
             : "bg-rose-500/12 text-rose-700 dark:text-rose-300",
       )}
     >
-      هامش {pct.toFixed(0)}% · ربح {profit.toFixed(2)} ₪
+      {profit > 0 ? `يربح ${profit.toFixed(2)} ₪ في الكوب` : `يخسر ${(-profit).toFixed(2)} ₪ في الكوب`}
     </span>
   )
 }

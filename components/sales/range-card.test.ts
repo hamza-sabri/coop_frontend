@@ -91,26 +91,24 @@ describe("the range picker itself", () => {
   })
 })
 
-describe("the orders page", () => {
-  it("keeps the totals to a single row of cards", () => {
-    // The regression this guards: a second summary block creeping back above
-    // the row, saying the same numbers in a different shape.
-    expect(PAGE).not.toContain("<DaySummaryCards")
-    expect(PAGE).toContain("<CustomRangeCard />")
-    const grids = PAGE.match(/lg:grid-cols-7/g) ?? []
-    expect(grids.length).toBe(2) // the skeleton and the real row
+describe("the invoices page", () => {
+  it("is one table, with the period as a chip rather than a wall of cards", () => {
+    // Six period cards, a custom-range card, a reports banner and a collapsed
+    // analytics block used to sit above the list. The period is a filter now,
+    // and its count/total come from the server for exactly what is listed.
+    expect(PAGE).toContain("<DataTable<Sale>")
+    expect(PAGE).toContain("salesSummary(params)")
+    expect(PAGE).not.toContain("<CustomRangeCard")
+    expect(PAGE).not.toContain("تحليلات آخر ٣٠ يوماً")
   })
 
-  it("puts the totals above everything else", () => {
-    const totals = PAGE.indexOf("{/* Period totals")
-    const table = PAGE.indexOf("<TableHeader>")
-    expect(totals).toBeGreaterThan(-1)
-    expect(totals).toBeLessThan(table)
+  it("filters by BUSINESS day, so a 1am sale sits under last night", () => {
+    expect(PAGE).toContain("day_from")
+    expect(PAGE).not.toContain("created_after")
   })
 
-  it("collapses the 30-day analytics the owner does not read", () => {
-    // They pushed the numbers he DOES read below the fold.
-    expect(PAGE).toContain("تحليلات آخر ٣٠ يوماً")
-    expect(PAGE).toContain("<details className=\"group mb-5\">")
+  it("has no destructive button — deleting every sale is not a page action", () => {
+    expect(PAGE).not.toContain("bulkDeleteSales")
+    expect(PAGE).not.toContain("حذف كل")
   })
 })

@@ -409,3 +409,7 @@ export const taxonomyList = (
   customFetch<{ data: { count: number; results: TaxonomyRow[] } }>(
     `/api/v1/${kind}/?page_size=50${search ? `&search=${encodeURIComponent(search)}` : ""}`,
   )
+
+/** How many invoices the current filter shows and (owner only) what they took. */
+export const salesSummary = (params: Record<string, unknown>) =>
+  customFetch<{ data: { count: number; total?: string } }>(`/api/v1/sales/summary/${qs(params)}`)

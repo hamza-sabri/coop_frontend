@@ -182,24 +182,6 @@ export function Failed() {
   )
 }
 
-export function MarginPill({ pct }: { pct: string | number | null | undefined }) {
-  if (pct == null) return <span className="text-[11px] text-muted-foreground">بلا تكلفة</span>
-  const n = toNumber(pct)
-  return (
-    <span
-      className={cn(
-        "inline-flex rounded-md px-1.5 py-0.5 text-[11px] font-semibold tabular-nums",
-        n >= 60
-          ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
-          : n >= 40
-            ? "bg-amber-500/10 text-amber-700 dark:text-amber-400"
-            : "bg-rose-500/10 text-rose-700 dark:text-rose-400",
-      )}
-    >
-      {formatNumber(Math.round(n))}%
-    </span>
-  )
-}
 
 /** Chart chrome shared by every chart: one axis, recessive grid, ltr. */
 export const AXIS = { fontSize: 11, tickLine: false, axisLine: false } as const
@@ -213,4 +195,22 @@ export const TOOLTIP_STYLE = {
     boxShadow: "none",
   },
   cursor: { fill: "var(--muted)", opacity: 0.5 },
+}
+
+/** "أعلى بـ ٨٪ من الفترة السابقة" — a comparison said as a sentence. For
+ *  costs pass invert: going up is bad. Nothing when there is nothing to
+ *  compare with. */
+export function Versus({ now, before, invert = false }: { now: number; before: number | null | undefined; invert?: boolean }) {
+  if (before == null || !Number.isFinite(before) || before === 0) return null
+  const d = ((now - before) / Math.abs(before)) * 100
+  if (!Number.isFinite(d)) return null
+  if (Math.abs(d) < 0.5) return <span className="text-muted-foreground">مثل الفترة السابقة</span>
+  const up = d > 0
+  const good = invert ? !up : up
+  return (
+    <span className={cn("inline-flex items-center gap-0.5 font-medium", good ? "text-emerald-700 dark:text-emerald-400" : "text-rose-700 dark:text-rose-400")}>
+      {up ? <TrendingUp className="size-3" /> : <TrendingDown className="size-3" />}
+      {up ? "أعلى" : "أقل"} بـ {Math.abs(d) >= 100 ? Math.round(Math.abs(d)) : Math.abs(d).toFixed(0)}٪ من الفترة السابقة
+    </span>
+  )
 }

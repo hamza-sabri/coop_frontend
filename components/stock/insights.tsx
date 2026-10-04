@@ -11,14 +11,14 @@
  * each item's statement. */
 import { useState } from "react"
 import { useQuery } from "@tanstack/react-query"
-import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
+import { AreaTrend, Bars } from "@/components/charts"
 import { PackagePlus } from "lucide-react"
 
 import { formatQty, inventoryInsights, type InventoryItem } from "@/api/inventory"
 import { CountUp } from "@/components/count-up"
-import { PeriodBar, type PeriodState } from "@/components/finance/period-bar"
-import { AXIS, BarList, Empty, Failed, Panel, TabSkeleton, TOOLTIP_STYLE } from "@/components/reports/kit"
-import { formatMoney, formatNumber, toNumber } from "@/lib/format"
+import { RangeChips, rollingRange, type RollingDays } from "@/components/range-chips"
+import { BarList, Empty, Failed, Panel, TabSkeleton } from "@/components/reports/kit"
+import { formatDate, formatMoney, formatNumber, toNumber } from "@/lib/format"
 import { businessToday } from "@/lib/period"
 import { cn } from "@/lib/utils"
 
@@ -26,17 +26,18 @@ const PALETTE = ["var(--chart-1)", "var(--chart-3)", "var(--chart-4)", "var(--ch
 
 export function StockInsights({ items, onBuy }: { items: InventoryItem[]; onBuy: (i: InventoryItem) => void }) {
   const today = businessToday()
-  const [p, setP] = useState<PeriodState>({ period: "month", anchor: today, shiftId: null })
+  const [days, setDays] = useState<RollingDays>(30)
+  const range = rollingRange(days, today)
   const { data, isLoading } = useQuery({
-    queryKey: ["inventory", "insights", p.period, p.anchor],
-    queryFn: () => inventoryInsights({ period: p.period, date: p.anchor }).then((r) => r.data),
+    queryKey: ["inventory", "insights", range.start, range.end],
+    queryFn: () => inventoryInsights(range).then((r) => r.data),
     placeholderData: (x) => x,
   })
   const byId = new Map(items.map((i) => [i.id, i]))
 
   return (
     <div className="space-y-3">
-      <PeriodBar value={p} onChange={setP} today={today} />
+      <RangeChips value={days} onChange={setDays} />
       {isLoading && !data ? (
         <TabSkeleton />
       ) : !data ? (
@@ -116,56 +117,12 @@ function Body({
         <Panel
           className="lg:col-span-2"
           title="أين ذهب المخزون"
-          hint={outTotal ? `${lossPct.toFixed(1)}% منه هدر ونقص` : "لا حركة خروج في هذه الفترة"}
+          hint={outTotal ? `خرج من الرف ${formatMoney(outTotal)} — ${lossPct.toFixed(1)}% منه هدر ونقص` : "لا حركة خروج في هذه الفترة"}
         >
           {outTotal ? (
-            <div className="flex items-center gap-4">
-              <div className="relative size-36 shrink-0" dir="ltr">
-                <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 320, height: 180 }}>
-                  <PieChart>
-                    <Pie
-                      data={out}
-                      dataKey="value"
-                      nameKey="label"
-                      innerRadius="68%"
-                      outerRadius="100%"
-                      paddingAngle={out.length > 1 ? 2 : 0}
-                      stroke="none"
-                      startAngle={90}
-                      endAngle={-270}
-                      animationDuration={900}
-                    >
-                      {out.map((r) => (
-                        <Cell key={r.key} fill={r.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip {...TOOLTIP_STYLE} formatter={(v, n) => [formatMoney(Number(v)), String(n)]} />
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="pointer-events-none absolute inset-0 grid place-items-center text-center">
-                  <div>
-                    <p className="font-heading text-base font-bold tabular-nums">{formatMoney(outTotal)}</p>
-                    <p className="text-[10px] text-muted-foreground">خرج من الرف</p>
-                  </div>
-                </div>
-              </div>
-              <ul className="min-w-0 flex-1 space-y-2">
-                {out.map((r) => (
-                  <li key={r.key} className="text-xs">
-                    <div className="flex items-center gap-2">
-                      <span className="size-2.5 shrink-0 rounded-sm" style={{ background: r.color }} />
-                      <span className="min-w-0 truncate">{r.label}</span>
-                      <span className="ms-auto shrink-0 font-semibold tabular-nums">{formatMoney(r.value)}</span>
-                    </div>
-                    <p className="ps-4.5 text-[10px] tabular-nums text-muted-foreground">
-                      {((r.value / outTotal) * 100).toFixed(1)}%
-                    </p>
-                  </li>
-                ))}
-              </ul>
-            </div>
+            <Bars height={200} showValues data={out.map((r) => ({ label: r.label, value: r.value }))} format={(v) => formatMoney(v)} />
           ) : (
-            <Empty>—</Empty>
+            <Empty>لا شيء خرج من الرف في هذه الفترة</Empty>
           )}
         </Panel>
       </div>
@@ -174,40 +131,18 @@ function Body({
         {/* ── buying vs using ─────────────────────────────────────────── */}
         <Panel
           className="lg:col-span-3"
-          title="الشراء مقابل الاستهلاك"
+          title="الاستهلاك يومياً"
           hint={`اشتريت ${formatMoney(F.purchases)} · استُهلك ${formatMoney(toNumber(F.used) + toNumber(F.remakes) + toNumber(F.waste))}`}
         >
           {days.length > 1 ? (
-            <div className="h-60" dir="ltr">
-              <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 320, height: 180 }}>
-                <BarChart data={days} margin={{ left: 0, right: 4, top: 6 }} barGap={2}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
-                  <XAxis dataKey="day" {...AXIS} interval="preserveStartEnd" />
-                  <YAxis {...AXIS} width={44} />
-                  <Tooltip
-                    {...TOOLTIP_STYLE}
-                    cursor={{ fill: "var(--muted)", opacity: 0.5 }}
-                    labelFormatter={(_, p) => (p?.[0]?.payload?.date as string) ?? ""}
-                    formatter={(v, n) => [formatMoney(Number(v)), n === "purchases" ? "مشتريات" : "استهلاك"]}
-                  />
-                  <Bar dataKey="used" fill="var(--chart-1)" radius={[3, 3, 0, 0]} maxBarSize={14} animationDuration={800} />
-                  <Bar dataKey="purchases" fill="var(--chart-5)" radius={[3, 3, 0, 0]} maxBarSize={14} animationDuration={800} animationBegin={150} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+            <AreaTrend
+              height={240}
+              data={days.map((d) => ({ label: `${d.day}/${Number(d.date.slice(5, 7))}`, title: formatDate(d.date), value: d.used }))}
+              format={(v) => `استُهلك ${formatMoney(v)}`}
+            />
           ) : (
             <Empty>اختر أسبوعاً أو شهراً لرؤية الأيام</Empty>
           )}
-          <div className="mt-2 flex gap-4 text-[11px] text-muted-foreground">
-            <span className="flex items-center gap-1.5">
-              <span className="h-2.5 w-2.5 rounded-sm" style={{ background: "var(--chart-5)" }} />
-              مشتريات
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="h-2.5 w-2.5 rounded-sm" style={{ background: "var(--chart-1)" }} />
-              استهلاك (بيع + هدر)
-            </span>
-          </div>
         </Panel>
 
         {/* ── runs out first ─────────────────────────────────────────── */}

@@ -1,56 +1,81 @@
-# Rahma Design System — "Indigo & Lime" (v1)
+# كوب — design rules
 
-Design language for صيدلية الرحمة admin, distilled from 5 store UI references
-(Pharmalink, DOZ Contacts, SmartPharma Inventory, mint Store app, Phermo Orders).
+Who uses this: a café owner who is not technical (think: a busy doctor who
+owns a café), and young baristas working the till between drinks. Nobody
+reads a manual. Every screen has to explain itself in plain Arabic.
 
-## Principles
-1. **Floating, super-rounded surfaces** — white cards (radius 20–24px) hover above a
-   softly tinted lavender canvas. No flat hairline boxes.
-2. **Ink contrast moments** — deep navy-ink panels (hero, sidebar, primary CTAs)
-   give the light UI drama. Lime is the electric accent that only appears on ink
-   or as a status/highlight — never as large fills on white.
-3. **Pills everywhere** — chips, filters, statuses, inputs and buttons are
-   pill/rounded-2xl. Status = soft tinted pill (mint=paid, amber=unpaid).
-4. **Data with personality** — KPI cards with gradient icon chips + trend badges,
-   rounded gradient bars, donut with center total, avatar-first table rows,
-   colored soft-square action buttons (Phermo style).
-5. **Depth & motion** — layered indigo-tinted shadows, GSAP staggered entrances,
-   count-ups, hover lifts, Three.js floating-pills scenes on login + dashboard hero.
-6. **Forms are small** — compact modals, 44px inputs, 2-col grids, only essential
-   fields visible; barcode scan button wherever a product can be entered.
+These rules are not suggestions. A page that breaks one is unfinished.
 
-## Tokens
-| Token | Value | Use |
-|---|---|---|
-| `--background` | `oklch(0.97 0.012 290)` lavender `#F5F4FB` | app canvas |
-| `--foreground` / `--ink` | `oklch(0.26 0.045 284)` `#201F38` | text, ink panels |
-| `--primary` | `oklch(0.55 0.21 277)` indigo `#5B5CE2` | CTAs, active nav, links |
-| `--violet` (`--chart-2`) | `oklch(0.6 0.21 293)` `#7C5CFC` | gradient partner |
-| `--lime` | `oklch(0.92 0.2 122)` `#D8F55A` | accent on ink, highlights |
-| `--success` | `oklch(0.72 0.14 166)` mint | paid / positive |
-| `--warning` | `oklch(0.78 0.15 75)` amber | unpaid / attention |
-| `--destructive` | `oklch(0.64 0.21 25)` | delete / danger |
-| `--radius` | `1rem` (cards use 1.25–1.5rem) | |
+## 1. Words a person would say
 
-Charts: indigo → violet → sky → mint → amber.
+- Plain Arabic sentences, not accounting or engineering terms. No «هامش»,
+  «نقطة التعادل», «صافي الإيراد», heat-maps or percentages that need
+  decoding. Say «ربحت»، «دخل الصندوق»، «يكفي ٤ أيام»، «أزحم وقت: ٥ مساءً».
+- Every number says what it is and what it is in: «٧٣٦ كوب», «١٢٫٠٠ ₪»,
+  «منذ يومين». Never a bare number.
+- Times are spoken: «٥ مساءً», not «17:00». Dates are short: «٤ أكتوبر».
+- People are called by their name, never their login or e-mail.
+- A missing value is said («بلا تكلفة», «لم يُطلب بعد»), never a lone «—»
+  where a sentence fits.
 
-## Type
-- Headings: **Alexandria** (700/800) — geometric, modern Arabic.
-- Body/UI: **IBM Plex Sans Arabic** (400–700). Numbers: `tabular-nums`.
+## 2. No lonely items
 
-## Key utilities (globals.css)
-`.ink-panel` dark hero surface with indigo/lime glows · `.icon-chip` gradient icon
-square · `.pill` base chip · `.pill-success/.pill-warning/.pill-danger/.pill-neutral`
-status pills · `.card-interactive` hover lift · `.surface-glass` frosted chrome ·
-`.text-gradient` indigo→violet headline.
+- Nothing sits alone in its own row: no single card in a grid row of three,
+  no lone button floating in a corner, no one-item section.
+- Lists of things (invoices, customers, stock, expenses, staff, returns) are
+  a **table** (`components/data-table.tsx`): search, filter chips with
+  counts, sortable headers, animated rows; on the phone each row collapses
+  into a compact two-line row. Grouping is a filter, not a separate grid.
+- Cards are for things you look at as pictures (the menu, the till).
 
-## Signature components
-- **Sidebar**: floating ink rounded-3xl rail (inset from edges), active item =
-  indigo gradient pill + lime dot; brand lockup on ink.
-- **Top bar**: transparent glass, page greeting, global search pill, scan button.
-- **Dashboard hero**: ink-panel with greeting, outstanding-total headline (lime),
-  Three.js floating pills on the far side.
-- **Tables**: avatar cell, status pill, soft-square action icons (view/edit/delete
-  = indigo/mint/red tinted squares).
-- **Scan**: `ScanDialog` (BarcodeDetector + zxing ponyfill), scan icon inside
-  search inputs and the debt form's product picker.
+## 3. Space is used, not wasted
+
+- Every page uses `PageShell` (`components/page-shell.tsx`): one width
+  (`max-w-7xl`), one gap (`space-y-4`), one padding. No narrow centred
+  columns with empty sides.
+- Related things sit side by side (two charts, a chart and its table), not
+  stacked so the owner has to scroll to compare.
+- Panels use `p-4`. No decorative empty space inside a panel.
+
+## 4. Charts
+
+- Over time (hours, days, weeks): **vertical bars**, or an **area** chart
+  with the space under the line filled. Time runs left → right.
+- Rankings with names (top drinks, top customers): a ranked bar list.
+- No pie or doughnut charts. No grids of numbers.
+- Two related charts next to each other on desktop, stacked on the phone.
+- The busiest/best bar is highlighted; the rest are muted. A one-line
+  sentence above the chart says what it shows.
+- Primitives: `components/charts.tsx` (`Bars`, `Area`).
+
+## 5. Forms fit the task
+
+- The form changes with what you pick: a salary asks which employee; a bill
+  asks which month it covers; maintenance asks what was fixed.
+- Only the fields that matter are shown first. Everything else is folded
+  («تفاصيل إضافية»).
+- Every field has a plain label and an example placeholder. Money fields
+  show ₪. The primary button says what it does («حفظ المصروف», not «حفظ»).
+- Destructive actions are never a page's main button. They live in a «⋯»
+  menu and ask before acting.
+
+## 6. Smooth and fast
+
+- Content enters with a short fade/slide; lists stagger (≤ 15 rows).
+- Every tap answers immediately: a pressed state, a spinner on the button,
+  a toast that says what happened.
+- Skeletons, never a blank screen. Previous data stays visible while the
+  next period loads (`placeholderData`).
+- Respect `prefers-reduced-motion`.
+
+## 7. One place for the main action
+
+- The page name and its main action sit together at the start of the top
+  bar (`PageHeader`). Secondary actions sit beside it, smaller.
+- The same action never appears twice on one page.
+
+## 8. Money is the owner's
+
+- Costs, profit, salaries, expenses and reports are owner-only, enforced on
+  the server. Owners and platform superusers get full access; superusers
+  never appear in staff lists.

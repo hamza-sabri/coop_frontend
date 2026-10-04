@@ -22,7 +22,6 @@ import {
   type InventoryItem,
   type RecipeLine,
 } from "@/api/inventory"
-import { MarginPill } from "@/components/reports/kit"
 import { Button } from "@/components/ui/button"
 import { Command, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { Input } from "@/components/ui/input"
@@ -235,7 +234,9 @@ export function Ingredients({
         {lines.length ? (
           <span className="ms-auto flex items-center gap-2 text-xs">
             تكلفة المكونات <b className="tabular-nums" title={`${cost.toFixed(4)} ₪`}>{formatMoney(cost)}</b>
-            {price > 0 && cost > 0 ? <MarginPill pct={((price - cost) / price) * 100} /> : null}
+            {price > 0 && cost > 0 ? (
+              <span className="text-muted-foreground">· يبقى من السعر {formatMoney(price - cost)}</span>
+            ) : null}
           </span>
         ) : null}
       </div>

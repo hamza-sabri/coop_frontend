@@ -2,12 +2,13 @@
 
 import { useEffect, useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
-import { Loader2, RefreshCw } from "lucide-react"
+import { Loader2, Monitor, Moon, Palette, RefreshCw, Sun, Volume2 } from "lucide-react"
+import { useTheme } from "next-themes"
 
-import { PageHeader } from "@/components/page-header"
-import { ThemeToggle } from "@/components/theme-toggle"
+import { PageShell } from "@/components/page-shell"
+import { Choice, SettingsCard } from "@/components/settings/kit"
+import { Button } from "@/components/ui/button"
 import { BrandingSection } from "@/components/settings/branding-section"
-import { StaffSection } from "@/components/settings/staff-section"
 import { PlanLockedSection } from "@/components/settings/plan-locked-section"
 import { PrintSection } from "@/components/settings/print-section"
 import { TillSound } from "@/components/settings/till-sound"
@@ -31,11 +32,10 @@ import { formatNumber } from "@/lib/format"
 import { cn } from "@/lib/utils"
 
 /**
- * Neither staff management nor sync-mode control is part of what this store
- * bought. Both stay in the tree behind these switches so turning one back on
- * is one line, not a re-implementation.
+ * Sync-mode control is not part of what this store bought. It stays in the
+ * tree behind this switch so turning it back on is one line, not a
+ * re-implementation. (Staff moved to its own page, الموظفون.)
  */
-const STAFF_ENABLED = false
 const SYNC_CONTROLS_ENABLED = false
 
 /** One tab per reason to open this page, in the order they are opened — the
@@ -97,128 +97,154 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-2xl">
-      <PageHeader title="الإعدادات" description="المظهر والمزامنة" />
-
+    <PageShell title="الإعدادات">
       <SegmentedTabs
         tabs={TABS.filter((t) => !t.ownerOnly || isOwner)}
         active={tab}
         onChange={setTab}
+        className="mb-0 w-fit max-w-full"
       />
 
-      {/* «هذا الجهاز» — settings that belong to the MACHINE, not the account:
-          the counter's tablet and the owner's phone answer them differently. */}
-      {tab === "device" && (
-      <>
-      {/* Appearance */}
-      <section className="mb-5 rounded-2xl border bg-card p-5">
-        <h2 className="mb-1 font-heading text-base font-bold">المظهر</h2>
-        <p className="mb-3 text-xs text-muted-foreground">فاتح، داكن، أو حسب النظام</p>
-        <ThemeToggle tone="surface" />
-      </section>
-
-      {/* Till sound. It used to be a speaker button in the POS header, one tap
-          from a cashier's elbow — and a muted till is a till that stops telling
-          you a scan landed. It is a preference, so it lives with the other
-          preferences. */}
-      <section className="mb-5 rounded-2xl border bg-card p-5">
-        <h2 className="mb-1 font-heading text-base font-bold">صوت الكاشير</h2>
-        <p className="mb-3 text-xs text-muted-foreground">
-          نغمة قصيرة عند إضافة صنف أو مسح باركود
-        </p>
-        <TillSound />
-      </section>
-
-      <ScannerSection />
-      </>
-      )}
-
-      {/* Owner-only, double-checked: filtered out of the tab list AND
-          re-checked here. The server refuses either way. */}
-      {tab === "points" && isOwner && <PointsSection />}
-      {tab === "shifts" && isOwner && <ShiftsSection />}
-      {tab === "brand" && isOwner && <BrandingSection />}
-      {tab === "brand" && isOwner && STAFF_ENABLED && <StaffSection />}
-
-      {/* Printing. Also in the POS's printer dialog, but that is only reachable
-          from the till — the owner sets the shop up from here. */}
-      {tab === "print" && <PrintSection />}
-
-      {/* Sync */}
-      {tab === "sync" && (SYNC_CONTROLS_ENABLED ? (
-        <section className="rounded-2xl border bg-card p-5">
-          <div className="mb-1 flex items-center justify-between gap-2">
-            <h2 className="font-heading text-base font-bold">المزامنة</h2>
-            {offlineOn && (
-              <span className="pill pill-neutral">
-                {pending > 0 ? `${formatNumber(pending)} بانتظار المزامنة` : "لا شيء بانتظار"}
-              </span>
-            )}
+      {/* Each tab fades in on its own — switching never jumps. */}
+      <div key={tab} className="animate-in fade-in slide-in-from-bottom-1 duration-300">
+        {/* «هذا الجهاز» — settings that belong to the MACHINE, not the account:
+            the counter's tablet and the owner's phone answer them differently.
+            Three cards, one row. */}
+        {tab === "device" && (
+          <div className="grid gap-4 md:grid-cols-3">
+            <SettingsCard icon={Palette} title="المظهر" hint="فاتح للنهار، داكن للمساء، أو حسب إعداد الجهاز.">
+              <ThemeChoice />
+            </SettingsCard>
+            {/* Till sound. It used to be a speaker button in the POS header, one
+                tap from a cashier's elbow — a muted till stops telling you a
+                scan landed. It is a preference, so it lives here. */}
+            <SettingsCard icon={Volume2} title="صوت الكاشير" hint="نغمة قصيرة عند إضافة صنف للسلة أو مسح باركود.">
+              <TillSound className="mt-auto self-start" />
+            </SettingsCard>
+            <ScannerSection />
           </div>
+        )}
 
-          {!offlineOn ? (
-            <p className="mt-2 rounded-xl bg-muted/50 p-3 text-sm text-muted-foreground">
-              العمل دون اتصال والتحكم بالمزامنة متاحان في الباقة الأعلى.
-            </p>
-          ) : (
-            <>
-              <p className="mb-3 text-xs leading-relaxed text-muted-foreground">
-                تحكّم بمتى تُرفع فواتيرك وتُنزَّل التحديثات — مفيد على الاتصال الضعيف. السحابة تبقى
-                المصدر الأساسي، وفواتيرك تُحفظ محلياً دائماً.
-              </p>
-              <div className="flex flex-col gap-2">
-                {SYNC_MODES.map((o) => {
-                  const active = mode === o.value
-                  return (
-                    <button
-                      key={o.value}
-                      type="button"
-                      onClick={() => pick(o.value)}
-                      aria-pressed={active}
-                      className={cn(
-                        "flex items-start gap-3 rounded-xl border p-3 text-start transition",
-                        active
-                          ? "border-primary bg-primary/5 ring-1 ring-primary/30"
-                          : "border-border hover:bg-muted/50",
-                      )}
-                    >
-                      <span
-                        className={cn(
-                          "mt-0.5 grid size-5 shrink-0 place-items-center rounded-full border",
-                          active ? "border-primary" : "border-muted-foreground/40",
-                        )}
-                      >
-                        {active && <span className="size-2.5 rounded-full bg-primary" />}
-                      </span>
-                      <span className="min-w-0">
-                        <span className="block text-sm font-semibold">{o.label}</span>
-                        <span className="block text-xs leading-relaxed text-muted-foreground">
-                          {o.hint}
-                        </span>
-                      </span>
-                    </button>
-                  )
-                })}
-              </div>
+        {/* Owner-only, double-checked: filtered out of the tab list AND
+            re-checked here. The server refuses either way. */}
+        {tab === "points" && isOwner && <PointsSection />}
+        {tab === "shifts" && isOwner && <ShiftsSection />}
+        {tab === "brand" && isOwner && <BrandingSection />}
 
-              <button
-                type="button"
-                onClick={() => void syncNow()}
-                disabled={syncing}
-                className="clay-btn mt-4 inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold disabled:opacity-70"
-              >
-                {syncing ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
-                زامن الآن
-              </button>
-            </>
-          )}
-        </section>
+        {/* Printing. Also in the POS's printer dialog, but that is only reachable
+            from the till — the owner sets the shop up from here. */}
+        {tab === "print" && <PrintSection />}
+
+        {tab === "sync" && (SYNC_CONTROLS_ENABLED ? (
+          <SyncControls
+            offlineOn={offlineOn}
+            pending={pending}
+            mode={mode}
+            pick={pick}
+            syncing={syncing}
+            syncNow={syncNow}
+          />
+        ) : (
+          <PlanLockedSection
+            title="العمل دون إنترنت"
+            description="يستمر البيع حين ينقطع الإنترنت، وتُرفع الفواتير وحدها حين يعود — ولا تضيع فاتورة واحدة."
+            benefits={[
+              "الكاشير يبيع ويطبع والإنترنت مقطوع",
+              "الفواتير تُرفع تلقائياً عند عودة الاتصال",
+              "تختار متى تتم المزامنة على الاتصال الضعيف",
+              "ترى كم فاتورة تنتظر الرفع",
+            ]}
+          />
+        ))}
+      </div>
+    </PageShell>
+  )
+}
+
+function ThemeChoice() {
+  const { theme, setTheme } = useTheme()
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
+  return (
+    <Choice
+      className="mt-auto self-start"
+      value={mounted ? (theme as "light" | "dark" | "system") : undefined}
+      onChange={setTheme}
+      options={[
+        { value: "light", label: "فاتح", icon: Sun },
+        { value: "dark", label: "داكن", icon: Moon },
+        { value: "system", label: "تلقائي", icon: Monitor },
+      ]}
+    />
+  )
+}
+
+function SyncControls({
+  offlineOn,
+  pending,
+  mode,
+  pick,
+  syncing,
+  syncNow,
+}: {
+  offlineOn: boolean
+  pending: number
+  mode: SyncMode
+  pick: (m: SyncMode) => void
+  syncing: boolean
+  syncNow: () => Promise<void>
+}) {
+  return (
+    <SettingsCard
+      icon={RefreshCw}
+      title="المزامنة"
+      hint="تحكّم بمتى تُرفع فواتيرك وتُنزَّل التحديثات — مفيد على الاتصال الضعيف. فواتيرك تُحفظ على الجهاز دائماً."
+      action={
+        offlineOn ? (
+          <span className="pill pill-neutral">{pending > 0 ? `${formatNumber(pending)} بانتظار المزامنة` : "لا شيء بانتظار"}</span>
+        ) : undefined
+      }
+    >
+      {!offlineOn ? (
+        <p className="rounded-xl bg-muted/50 p-3 text-sm text-muted-foreground">العمل دون اتصال متاح في الباقة الأعلى.</p>
       ) : (
-        <PlanLockedSection
-          title="المزامنة"
-          description="تحكّم بمتى تُرفع فواتيرك وتُنزَّل التحديثات — مفيد على الاتصال الضعيف"
-        />
-      ))}
-    </div>
+        <>
+          <div className="grid gap-2 md:grid-cols-3">
+            {SYNC_MODES.map((o) => {
+              const active = mode === o.value
+              return (
+                <button
+                  key={o.value}
+                  type="button"
+                  onClick={() => pick(o.value)}
+                  aria-pressed={active}
+                  className={cn(
+                    "flex items-start gap-3 rounded-xl border p-3 text-start transition",
+                    active ? "border-primary bg-primary/5 ring-1 ring-primary/30" : "border-border hover:bg-muted/50",
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "mt-0.5 grid size-5 shrink-0 place-items-center rounded-full border",
+                      active ? "border-primary" : "border-muted-foreground/40",
+                    )}
+                  >
+                    {active && <span className="size-2.5 rounded-full bg-primary" />}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-sm font-semibold">{o.label}</span>
+                    <span className="block text-xs leading-relaxed text-muted-foreground">{o.hint}</span>
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+          <Button className="mt-4 self-start gap-2" onClick={() => void syncNow()} disabled={syncing}>
+            {syncing ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
+            زامن الآن
+          </Button>
+        </>
+      )}
+    </SettingsCard>
   )
 }

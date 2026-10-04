@@ -17,7 +17,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { ClipboardCheck, Plus } from "lucide-react"
 
 import { listItems, type InventoryItem } from "@/api/inventory"
-import { PageHeader } from "@/components/page-header"
+import { Enter, PageShell } from "@/components/page-shell"
 import { SegmentedTabs } from "@/components/segmented-tabs"
 import { PurchaseForm, WasteForm } from "@/components/stock/forms"
 import { StockInsights } from "@/components/stock/insights"
@@ -44,25 +44,23 @@ export default function StockPage() {
   const showOverview = isOwner && tab === "overview"
 
   return (
-    <div className="mx-auto w-full max-w-5xl pb-24">
-      <PageHeader
-        title="المخزون"
-        action={
-          <div className="flex gap-1.5">
-            <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setCounting(true)}>
-              <ClipboardCheck className="size-4" />
-              جرد
+    <PageShell
+      title="المخزون"
+      action={
+        <>
+          {isOwner ? (
+            <Button size="sm" className="bg-brand-gradient gap-1.5 shadow-md shadow-primary/25" onClick={() => setOpen("new")}>
+              <Plus className="size-4" />
+              صنف
             </Button>
-            {isOwner ? (
-              <Button size="sm" className="bg-brand-gradient gap-1.5 shadow-md shadow-primary/25" onClick={() => setOpen("new")}>
-                <Plus className="size-4" />
-                صنف
-              </Button>
-            ) : null}
-          </div>
-        }
-      />
-
+          ) : null}
+          <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setCounting(true)} aria-label="جرد المخزون">
+            <ClipboardCheck className="size-4" />
+            <span className="max-sm:hidden">جرد</span>
+          </Button>
+        </>
+      }
+    >
       {isOwner ? (
         <SegmentedTabs
           tabs={[
@@ -74,7 +72,7 @@ export default function StockPage() {
         />
       ) : null}
 
-      <div key={showOverview ? "o" : "i"} className="animate-in fade-in duration-300">
+      <Enter key={showOverview ? "o" : "i"} i={1}>
         {showOverview ? (
           <StockInsights items={items.data ?? []} onBuy={setBuying} />
         ) : (
@@ -87,7 +85,7 @@ export default function StockPage() {
             onWaste={setWasting}
           />
         )}
-      </div>
+      </Enter>
 
       <ItemDrawer
         item={open === "new" ? null : open}
@@ -100,6 +98,6 @@ export default function StockPage() {
       <PurchaseForm item={buying} onClose={() => setBuying(null)} onSaved={refresh} />
       <WasteForm item={wasting} onClose={() => setWasting(null)} onSaved={refresh} />
       <Stocktake open={counting} onClose={() => setCounting(false)} items={items.data ?? []} onSaved={refresh} />
-    </div>
+    </PageShell>
   )
 }

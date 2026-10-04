@@ -117,10 +117,16 @@ export type Expense = {
   id: number
   category: number
   category_name: string
+  category_key: string
   amount: string
   period: string
   paid_on: string | null
   note: string
+  /** The employee — salaries only. */
+  staff: number | null
+  staff_name: string
+  /** Who was paid. */
+  payee: string
   client_uuid?: string | null
   created_at?: string
 }
@@ -128,12 +134,17 @@ export type RecurringExpense = {
   id: number
   category: number
   category_name: string
+  category_key: string
   name: string
   amount: string
+  staff: number | null
+  staff_name: string
+  payee: string
   start_month: string
   end_month: string | null
 }
 export type ExpenseMonth = {
+  trend: { month: string; total: string }[]
   month: string
   expenses: Expense[]
   recurring: RecurringExpense[]
@@ -295,7 +306,7 @@ export type CustomersReport = {
     outstanding: number
     outstanding_value: string
   }
-  top: { id: number; name: string; phone: string; spend: string; visits: number; avg: string; last: string | null; points: number }[]
+  top: { id: number; name: string; phone: string; avatar: string; spend: string; visits: number; avg: string; last: string | null; points: number }[]
 }
 export type ReturnsReport = {
   count: number

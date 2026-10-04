@@ -31,17 +31,22 @@ export function SegmentedTabs({
   tabs,
   active,
   onChange,
+  className,
 }: {
   tabs: SegmentedTab[]
   active: string
   onChange: (id: string) => void
+  className?: string
 }) {
   return (
     // `overflow-x-auto` with no scrollbar chrome: six Arabic labels fit on a
     // laptop and swipe on a phone.
     <div
       role="tablist"
-      className="mb-4 flex gap-1.5 overflow-x-auto rounded-2xl bg-muted/50 p-1.5"
+      className={cn(
+        "mb-4 flex gap-1.5 overflow-x-auto rounded-2xl bg-muted/50 p-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+        className,
+      )}
     >
       {tabs.map((t) => {
         const on = t.id === active

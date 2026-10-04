@@ -15,6 +15,7 @@ import { Empty, Failed, Panel, Stat, TabSkeleton } from "@/components/reports/ki
 import { Input } from "@/components/ui/input"
 import { formatMoney, formatNumber, toNumber } from "@/lib/format"
 import { cn } from "@/lib/utils"
+import { Bars } from "@/components/charts"
 
 type Sort = "qty" | "profit" | "margin" | "dead"
 
@@ -71,12 +72,21 @@ export function ItemsTab({ q, onOpenItem }: { q: PnlQuery; onOpenItem: (id: numb
   const dead = all.filter((i) => toNumber(i.qty) === 0 && i.is_active).length
   const noCost = all.filter((i) => i.is_active && toNumber(i.cost) <= 0).length
   const maxQty = Math.max(1, ...rows.map((r) => toNumber(r.qty)))
+  const byCat = Object.entries(
+    sold.reduce<Record<string, number>>((m, i) => {
+      const k = i.category || "بلا تصنيف"
+      m[k] = (m[k] ?? 0) + toNumber(i.qty)
+      return m
+    }, {}),
+  )
+    .sort((a, b) => b[1] - a[1])
+    .map(([label, value]) => ({ label, value }))
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat label="الأكواب المباعة" value={formatNumber(Math.round(toNumber(data.totals.qty)))} />
-        <Stat label="ربح المنيو" value={formatMoney(data.totals.profit)} sub="المبيعات ناقص تكلفة المشروبات" />
+        <Stat label="مشروبات بيعت" value={formatNumber(Math.round(toNumber(data.totals.qty)))} />
+        <Stat label="ربح المشروبات" value={formatMoney(data.totals.profit)} sub="ما بعته ناقص كلفة المشروبات" />
         <Stat label="أصناف بيعت" value={`${formatNumber(sold.length)} من ${formatNumber(all.filter((i) => i.is_active).length)}`} />
         <Stat
           label="لم تُطلب أبداً"
@@ -84,6 +94,41 @@ export function ItemsTab({ q, onOpenItem }: { q: PnlQuery; onOpenItem: (id: numb
           tone={dead ? "warn" : undefined}
           sub={noCost ? `${formatNumber(noCost)} بلا تكلفة مسجلة` : undefined}
         />
+      </div>
+
+      {/* the picture first, the table under it */}
+      <div className="grid gap-4 lg:grid-cols-5">
+        <Panel
+          className="lg:col-span-3"
+          title={sort === "profit" ? "الأكثر ربحاً" : "الأكثر طلباً"}
+          hint={sort === "profit" ? "كم ربحت من كل مشروب في هذه الفترة" : "كم مرة طُلب كل مشروب في هذه الفترة"}
+        >
+          {sold.length ? (
+            <Bars
+              height={240}
+              showValues
+              data={sold
+                .slice()
+                .sort((a, b) => (sort === "profit" ? toNumber(b.profit) - toNumber(a.profit) : toNumber(b.qty) - toNumber(a.qty)))
+                .slice(0, 10)
+                .map((i) => ({
+                  label: i.name.length > 10 ? `${i.name.slice(0, 9)}…` : i.name,
+                  title: i.name,
+                  value: sort === "profit" ? toNumber(i.profit) : toNumber(i.qty),
+                }))}
+              format={(v) => (sort === "profit" ? formatMoney(v) : `${formatNumber(Math.round(v))} مرة`)}
+            />
+          ) : (
+            <Empty>لا مبيعات في هذه الفترة</Empty>
+          )}
+        </Panel>
+        <Panel className="lg:col-span-2" title="حسب التصنيف" hint="كم مرة طُلب كل نوع">
+          {byCat.length ? (
+            <Bars height={240} showValues data={byCat} format={(v) => `${formatNumber(Math.round(v))} مرة`} />
+          ) : (
+            <Empty>—</Empty>
+          )}
+        </Panel>
       </div>
 
       <Panel flush>

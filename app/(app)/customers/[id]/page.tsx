@@ -22,12 +22,14 @@ import { ArrowRight, MessageCircle, Pencil, Phone, Receipt, StickyNote } from "l
 import { customersRetrieve } from "@/api/generated/customers/customers"
 import { salesList } from "@/api/generated/sales/sales"
 import type { Customer, Sale } from "@/api/generated/model"
-import { customerProfile, type CustomerProfile, type CustomerStatus } from "@/api/customer-profile"
+import { customerProfile, type CustomerProfile } from "@/api/customer-profile"
+import { STATUS, ago } from "@/components/customers/status"
 import { CountUp } from "@/components/count-up"
 import { PointsCard } from "@/components/customers/points-card"
 import { CustomerForm } from "@/components/forms/customer-form"
-import { LoadMore } from "@/components/load-more"
-import { CustomerAppOrders } from "@/components/orders/customer-app-orders"
+import { ordersList, type Order as AppOrder } from "@/api/orders"
+import { DataTable, type Column } from "@/components/data-table"
+import { PaginationBar } from "@/components/pagination-bar"
 import { AXIS, Panel, TOOLTIP_STYLE } from "@/components/reports/kit"
 import { SaleDetail } from "@/components/sales/sale-detail"
 import { ErrorState } from "@/components/states"
@@ -56,14 +58,6 @@ const WEEKDAYS = ["السبت", "الأحد", "الإثنين", "الثلاثا�
 
 /* ── wording ─────────────────────────────────────────────────────────── */
 
-function ago(days: number | null): string {
-  if (days == null) return "—"
-  if (days <= 0) return "اليوم"
-  if (days === 1) return "أمس"
-  if (days === 2) return "منذ يومين"
-  if (days <= 10) return `منذ ${days} أيام`
-  return `منذ ${days} يوماً`
-}
 
 function hourLabel(h: number): string {
   const p = h < 12 ? "ص" : "م"
@@ -71,13 +65,6 @@ function hourLabel(h: number): string {
   return `${x}${p}`
 }
 
-const STATUS: Record<CustomerStatus, { m: string; f: string; cls: string; dot: string }> = {
-  regular: { m: "زبون دائم", f: "زبونة دائمة", cls: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300", dot: "bg-emerald-500" },
-  active: { m: "زبون نشط", f: "زبونة نشطة", cls: "bg-primary/10 text-primary", dot: "bg-primary" },
-  new: { m: "زبون جديد", f: "زبونة جديدة", cls: "bg-sky-500/10 text-sky-700 dark:text-sky-300", dot: "bg-sky-500" },
-  fading: { m: "غاب عنّا", f: "غابت عنّا", cls: "bg-amber-500/12 text-amber-800 dark:text-amber-300", dot: "bg-amber-500" },
-  no_visits: { m: "لم يزرنا بعد", f: "لم تزرنا بعد", cls: "bg-muted text-muted-foreground", dot: "bg-muted-foreground" },
-}
 
 /* ── the page ────────────────────────────────────────────────────────── */
 
@@ -169,33 +156,20 @@ export default function CustomerDetailPage() {
           >
             {p ? <Rhythm profile={p} isOwner={isOwner} /> : <Skeleton className="h-48 rounded-xl" />}
           </Panel>
-          <div className={cn(STAGGER, "lg:col-span-5 [animation-delay:320ms]")}>
-            <CustomerAppOrders customerId={id} />
-          </div>
         </div>
       ) : tab === "receipts" ? (
-        <Panel key="receipts" className={cn(STAGGER, "sm:p-4")} flush>
-          {ordersLoading && orders.length === 0 ? (
-            <div className="space-y-2 p-4">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <Skeleton key={i} className="h-12 rounded-xl" />
-              ))}
-            </div>
-          ) : orders.length === 0 ? (
-            <p className="p-6 text-center text-sm text-muted-foreground">لا فواتير بعد — أول طلب سيظهر هنا.</p>
-          ) : (
-            <ul className="divide-y divide-border/60">
-              {orders.map((o, i) => (
-                <OrderRow key={o.id} order={o} index={i} onOpen={() => setDetail(o)} />
-              ))}
-            </ul>
-          )}
-          {orders.length > 0 ? (
-            <div className="px-4 pb-3">
-              <LoadMore hasNext={page < pageCount} isFetchingNext={ordersLoading} onLoad={() => setPage((x) => x + 1)} />
-            </div>
-          ) : null}
-        </Panel>
+        <div key="receipts" className={STAGGER}>
+          <OrdersTable
+            customerId={id}
+            sales={orders}
+            salesCount={p?.visits ?? orders.length}
+            loading={ordersLoading}
+            page={page}
+            pageCount={pageCount}
+            onPage={setPage}
+            onOpenSale={(o) => setDetail(o)}
+          />
+        </div>
       ) : (
         <div key="points" className={STAGGER}>
           {Number.isFinite(id) ? <PointsCard customerId={id} /> : null}
@@ -455,44 +429,166 @@ function Rhythm({ profile: p, isOwner }: { profile: CustomerProfile; isOwner: bo
 
 /* ── receipts ────────────────────────────────────────────────────────── */
 
-function OrderRow({ order, index, onOpen }: { order: Order; index: number; onOpen: () => void }) {
-  const when = order.created_at ? new Date(order.created_at) : null
-  const names = (order.items ?? [])
+type OrderLine =
+  | { kind: "sale"; id: string; s: Order }
+  | { kind: "app"; id: string; o: AppOrder }
+
+const whenText = (iso?: string | null) =>
+  iso ? new Date(iso).toLocaleString("ar-u-nu-latn", { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }) : "—"
+
+function saleItems(o: Order): string {
+  return (o.items ?? [])
     .map((it) => {
       const r = it as { medication_name?: string; variant_label?: string; quantity?: string | number }
       const q = Number(r.quantity ?? 1)
       return `${q > 1 ? `${q}× ` : ""}${r.medication_name ?? ""}${r.variant_label ? ` ${r.variant_label}` : ""}`
     })
     .filter(Boolean)
-  const earned = order.beans_earned ?? 0
-  const spent = order.beans_spent ?? 0
-  return (
-    <li className="animate-in fade-in slide-in-from-bottom-1 fill-mode-both duration-300" style={{ animationDelay: `${Math.min(index, 12) * 30}ms` }}>
-      <button type="button" onClick={onOpen} className="flex w-full items-center gap-3 px-4 py-2.5 text-start transition hover:bg-muted/40">
-        <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-muted text-muted-foreground">
-          <Receipt className="size-4" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium">{names.join("، ") || "—"}</p>
-          <p className="mt-0.5 text-[11px] text-muted-foreground">
-            {when ? when.toLocaleString("ar-u-nu-latn", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—"}
-            {order.receipt_code ? (
-              <span dir="ltr" className="ms-1.5">
-                #{order.receipt_code}
-              </span>
+    .join("، ")
+}
+function saleNotes(o: Order): string {
+  return [(o as { note?: string }).note, ...(o.items ?? []).map((it) => (it as { note?: string }).note)]
+    .map((n) => n?.trim())
+    .filter(Boolean)
+    .join(" · ")
+}
+
+/** Everything this customer ordered: at the till, or from the app — one table. */
+function OrdersTable({
+  customerId,
+  sales,
+  salesCount,
+  loading,
+  page,
+  pageCount,
+  onPage,
+  onOpenSale,
+}: {
+  customerId: number
+  sales: Order[]
+  salesCount: number
+  loading: boolean
+  page: number
+  pageCount: number
+  onPage: (p: number) => void
+  onOpenSale: (o: Order) => void
+}) {
+  const [src, setSrc] = useState<"sale" | "app">("sale")
+  const app = useQuery({
+    queryKey: ["orders", "customer", customerId],
+    queryFn: () => ordersList({ customer: customerId, page_size: 50 }).then((r) => r.data.results ?? []),
+    enabled: Number.isFinite(customerId),
+  })
+  const appRows = app.data ?? []
+  const rows: OrderLine[] =
+    src === "sale"
+      ? sales.map((s) => ({ kind: "sale", id: `s${s.id}`, s }))
+      : appRows.map((o) => ({ kind: "app", id: `a${o.id}`, o }))
+
+  const columns: Column<OrderLine>[] = [
+    {
+      key: "when",
+      header: "متى",
+      width: "w-44",
+      cell: (r) => <span className="text-xs text-muted-foreground">{whenText(r.kind === "sale" ? r.s.created_at : r.o.created_at)}</span>,
+    },
+    {
+      key: "what",
+      header: "ماذا طلب",
+      cell: (r) => {
+        const items = r.kind === "sale" ? saleItems(r.s) : r.o.items.map((it) => `${Math.round(Number(it.quantity)) > 1 ? `${Math.round(Number(it.quantity))}× ` : ""}${it.name}`).join("، ")
+        const notes = r.kind === "sale" ? saleNotes(r.s) : r.o.items.map((it) => it.note).filter(Boolean).join(" · ")
+        return (
+          <div className="min-w-0 max-w-lg">
+            <p className="truncate">{items || "—"}</p>
+            {notes ? (
+              <p className="mt-0.5 flex items-center gap-1 truncate text-xs text-amber-800 dark:text-amber-300">
+                <StickyNote className="size-3 shrink-0" />
+                <span className="truncate">{notes}</span>
+              </p>
             ) : null}
-          </p>
+          </div>
+        )
+      },
+    },
+    {
+      key: "status",
+      header: src === "sale" ? "الفاتورة" : "الحالة",
+      width: "w-32",
+      cell: (r) =>
+        r.kind === "sale" ? (
+          <span className="text-xs text-muted-foreground" dir="ltr">
+            {r.s.receipt_code ? `#${r.s.receipt_code}` : ""}
+          </span>
+        ) : (
+          <span className="rounded-full bg-muted px-2 py-0.5 text-xs">{r.o.status_label}</span>
+        ),
+    },
+    {
+      key: "points",
+      header: "النقاط",
+      width: "w-24",
+      align: "end",
+      cell: (r) => {
+        const earned = r.kind === "sale" ? r.s.beans_earned ?? 0 : 0
+        const spent = r.kind === "sale" ? r.s.beans_spent ?? 0 : Number(r.o.beans_spent ?? 0)
+        return earned || spent ? (
+          <span className="text-xs tabular-nums" dir="ltr">
+            {spent ? <span className="text-muted-foreground">−{formatNumber(spent)} </span> : null}
+            {earned ? <span className="text-emerald-700 dark:text-emerald-400">+{formatNumber(earned)}</span> : null}
+          </span>
+        ) : (
+          <span className="text-xs text-muted-foreground">—</span>
+        )
+      },
+    },
+    {
+      key: "amount",
+      header: "المبلغ",
+      width: "w-28",
+      align: "end",
+      cell: (r) => (
+        <span className="font-heading font-bold tabular-nums">
+          {formatMoney(r.kind === "sale" ? (r.s.discounted_total ?? r.s.total) : Number(r.o.cash_total ?? r.o.total))}
+        </span>
+      ),
+    },
+  ]
+
+  return (
+    <DataTable<OrderLine>
+      rows={rows}
+      rowKey={(r) => r.id}
+      columns={columns}
+      loading={src === "sale" ? loading : app.isLoading}
+      onRowClick={(r) => (r.kind === "sale" ? onOpenSale(r.s) : undefined)}
+      filters={[
+        { id: "sale", label: "من الكاشير", count: salesCount },
+        { id: "app", label: "من التطبيق", count: appRows.length },
+      ]}
+      manual={{ filter: src, onFilter: (v) => setSrc(v as "sale" | "app") }}
+      empty={src === "sale" ? "لا فواتير بعد — أول طلب سيظهر هنا." : "لم يطلب من التطبيق بعد."}
+      footer={
+        src === "sale" && pageCount > 1 ? (
+          <div className="border-t border-border/60 px-4 py-2">
+            <PaginationBar page={page} pageCount={pageCount} count={salesCount} onPage={onPage} />
+          </div>
+        ) : null
+      }
+      mobileRow={(r) => (
+        <div className="flex items-center gap-3">
+          <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-muted text-muted-foreground">
+            <Receipt className="size-4" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium">{r.kind === "sale" ? saleItems(r.s) : r.o.items.map((it) => it.name).join("، ")}</p>
+            <p className="text-[11px] text-muted-foreground">{whenText(r.kind === "sale" ? r.s.created_at : r.o.created_at)}</p>
+          </div>
+          <span className="shrink-0 font-heading text-sm font-bold tabular-nums">
+            {formatMoney(r.kind === "sale" ? (r.s.discounted_total ?? r.s.total) : Number(r.o.cash_total ?? r.o.total))}
+          </span>
         </div>
-        <div className="shrink-0 text-end">
-          <p className="font-heading text-sm font-bold tabular-nums">{formatMoney(order.discounted_total ?? order.total)}</p>
-          {earned || spent ? (
-            <p className="text-[11px] tabular-nums" dir="ltr">
-              {spent ? <span className="text-muted-foreground">−{formatNumber(spent)} </span> : null}
-              {earned ? <span className="text-emerald-700 dark:text-emerald-400">+{formatNumber(earned)}</span> : null}
-            </p>
-          ) : null}
-        </div>
-      </button>
-    </li>
+      )}
+    />
   )
 }

@@ -12,6 +12,8 @@ import { Empty, Failed, Panel, SURFACE, TabSkeleton } from "@/components/reports
 import { formatMoney, formatNumber, toNumber } from "@/lib/format"
 import { cn } from "@/lib/utils"
 
+const COLS: Record<number, string> = { 1: "", 2: "md:grid-cols-2", 3: "md:grid-cols-3", 4: "md:grid-cols-2 xl:grid-cols-4" }
+
 export function ShiftsTab({ q }: { q: PnlQuery }) {
   const { data, isLoading } = useQuery({
     queryKey: ["reports", "shifts", q.period, q.date],
@@ -34,13 +36,14 @@ export function ShiftsTab({ q }: { q: PnlQuery }) {
   }
   const best = data.shifts.reduce((a, b) => (toNumber(a.contribution) >= toNumber(b.contribution) ? a : b))
   return (
-    <div className="space-y-3">
-      <div className={cn("grid gap-3", data.shifts.length > 1 ? "md:grid-cols-2" : "")}>
+    <div className="space-y-4">
+      {/* As many columns as shifts, so no card is ever left alone on a row. */}
+      <div className={cn("grid gap-4", COLS[Math.min(data.shifts.length, 4)])}>
         {data.shifts.map((s) => {
           const c = toNumber(s.contribution)
           const rows: [string, string, boolean?][] = [
-            ["صافي الإيراد", formatMoney(s.net_revenue)],
-            ["− تكلفة المشروبات", formatMoney(s.cogs), true],
+            ["دخل الصندوق", formatMoney(s.net_revenue)],
+            ["− كلفة المشروبات", formatMoney(s.cogs), true],
             ["− أجور الوردية", formatMoney(s.wages), true],
           ]
           return (
@@ -52,7 +55,7 @@ export function ShiftsTab({ q }: { q: PnlQuery }) {
                     <span dir="ltr">{s.start}–{s.end}</span> · {toNumber(s.hours)} ساعات
                   </p>
                 </div>
-                <span className="rounded-lg bg-muted px-2 py-1 text-xs font-semibold tabular-nums">{s.share}% من الإيراد</span>
+                <span className="rounded-lg bg-muted px-2 py-1 text-xs font-semibold tabular-nums">{s.share}٪ من المبيعات</span>
               </header>
               <div className="grid grid-cols-3 gap-2 text-center">
                 <div className="rounded-xl bg-muted/50 p-2.5">
@@ -65,7 +68,7 @@ export function ShiftsTab({ q }: { q: PnlQuery }) {
                 </div>
                 <div className="rounded-xl bg-muted/50 p-2.5">
                   <p className="font-heading text-lg font-bold tabular-nums">{formatMoney(s.per_hour)}</p>
-                  <p className="text-[11px] text-muted-foreground">إيراد الساعة</p>
+                  <p className="text-[11px] text-muted-foreground">في الساعة</p>
                 </div>
               </div>
               <dl className="mt-4 divide-y divide-border/70 text-sm">
@@ -76,7 +79,7 @@ export function ShiftsTab({ q }: { q: PnlQuery }) {
                   </div>
                 ))}
                 <div className="flex justify-between pt-2.5">
-                  <dt className="font-semibold">ما ساهمت به</dt>
+                  <dt className="font-semibold">ما بقي من الوردية</dt>
                   <dd className={cn("font-heading text-lg font-bold tabular-nums", c >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-rose-700 dark:text-rose-400")}>
                     {formatMoney(c)}
                   </dd>

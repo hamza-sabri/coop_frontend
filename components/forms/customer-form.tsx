@@ -25,8 +25,6 @@ const GENDERS: { value: GenderEnum; label: string }[] = [
   { value: "female", label: "أنثى" },
 ]
 
-/** Pick-not-type: the app is used on phones/touch screens. */
-const STATUS_CHOICES = ["منتظم", "جديد", "متأخر", "مميز"]
 
 export function CustomerForm({
   open,
@@ -165,27 +163,29 @@ export function CustomerForm({
     >
       <div className="flex flex-col gap-1.5">
         <Label>الاسم</Label>
-        <Input {...register("name", { required: "أدخل اسم الزبون" })} />
+        <Input autoFocus={!editing} placeholder="مثال: لين عودة" {...register("name", { required: "اكتب اسم الزبون" })} />
         {errors.name && (
           <p className="text-xs text-destructive">{errors.name.message}</p>
         )}
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <Label>رقم الهاتف</Label>
+        <Label>
+          رقم الهاتف <span className="text-xs font-normal text-muted-foreground">(ليجده الكاشير بسرعة)</span>
+        </Label>
         <Input
           dir="ltr"
-          placeholder="05…"
+          placeholder="059…"
           inputMode="tel"
           className="text-start"
           {...register("phone")}
         />
       </div>
 
-      {/* Creation stays minimal (name + phone + status); the extras live in
-          the edit form / customer profile. */}
-      {editing && (
-        <div className="flex flex-col gap-1.5">
+      {/* Creation stays minimal (name, phone, ذكر/أنثى); the photo and notes
+          live in the edit form. Whether a customer is new, a regular or has
+          stopped coming is worked out from their visits — never typed. */}
+      <div className="flex flex-col gap-1.5">
           <Label>الجنس</Label>
           <RadioGroup
             value={gender}
@@ -209,32 +209,6 @@ export function CustomerForm({
             ))}
           </RadioGroup>
         </div>
-      )}
-
-      <div className="flex flex-col gap-1.5">
-        <Label>الحالة</Label>
-        <div className="flex flex-wrap gap-1.5">
-          {["", ...STATUS_CHOICES].map((s) => {
-            const active = status === s
-            return (
-              <button
-                key={s || "none"}
-                type="button"
-                onClick={() => setStatus(s)}
-                aria-pressed={active}
-                className={cn(
-                  "rounded-full px-3.5 py-2 text-xs font-semibold transition-all",
-                  active
-                    ? "bg-ink text-white shadow-md shadow-ink/25"
-                    : "bg-muted text-muted-foreground hover:text-foreground",
-                )}
-              >
-                {s || "بدون"}
-              </button>
-            )
-          })}
-        </div>
-      </div>
 
       {editing && (
         <>
@@ -249,7 +223,7 @@ export function CustomerForm({
 
           <div className="flex flex-col gap-1.5">
             <Label>ملاحظات</Label>
-            <Textarea rows={3} {...register("notes")} />
+            <Textarea rows={3} placeholder="مثلاً: يحب قهوته بلا سكر" {...register("notes")} />
           </div>
         </>
       )}

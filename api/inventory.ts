@@ -81,9 +81,9 @@ export type InventoryInsights = {
   running_out: { id: number; name: string; unit: BaseUnit; stock: string; per_day: string; days_left: number }[]
 }
 
-export const inventoryInsights = (q: { period: string; date: string }) =>
+export const inventoryInsights = (q: { start: string; end: string }) =>
   customFetch<Env<InventoryInsights>>(
-    `/api/v1/inventory-items/insights/?${new URLSearchParams({ period: q.period, date: q.date })}`,
+    `/api/v1/inventory-items/insights/?${new URLSearchParams({ period: "custom", start: q.start, end: q.end })}`,
   )
 export const listItems = async (params: { search?: string; category?: string } = {}) => {
   const u = new URLSearchParams({ page_size: "500" })

@@ -256,7 +256,7 @@ function MacSteps() {
   )
 }
 
-export function PrintAgentCard() {
+export function PrintAgentCard({ embedded = false }: { /** Inside a settings card that already says what this is. */ embedded?: boolean } = {}) {
   const [os, setOs] = useState<Os>("windows")
   const [status, setStatus] = useState<AgentStatus | null>(null)
   const [checking, setChecking] = useState(false)
@@ -350,7 +350,8 @@ export function PrintAgentCard() {
   const pdfTrap = Boolean(effective) && NOT_A_PRINTER.test(effective)
 
   return (
-    <div className="space-y-3 rounded-2xl border p-3">
+    <div className={embedded ? "space-y-3" : "space-y-3 rounded-2xl border p-3"}>
+      {embedded ? null : (
       <div className="space-y-0.5">
         <p className="text-sm font-bold">الطباعة المباشرة (بدون نافذة طباعة)</p>
         <p className="text-[11px] leading-relaxed text-muted-foreground">
@@ -361,6 +362,7 @@ export function PrintAgentCard() {
           الطابعة الموجود على الجهاز أصلاً.
         </p>
       </div>
+      )}
 
       {/* The answer to "did it work" — the reason this card exists. */}
       <div

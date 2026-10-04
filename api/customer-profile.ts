@@ -26,3 +26,26 @@ export type CustomerProfile = {
 
 export const customerProfile = (id: number) =>
   customFetch<{ data: CustomerProfile; status: number }>(`/api/v1/customers/${id}/profile/`)
+
+export type CustomerRow = {
+  id: number
+  name: string
+  phone: string
+  avatar: string
+  gender: "male" | "female"
+  /** Signed up in the app. */
+  app: boolean
+  visits: number
+  visits_30d: number
+  last_visit: string | null
+  days_since: number | null
+  joined: string
+  points: number
+  status: CustomerStatus
+  /** Owner only. */
+  spent?: string
+}
+
+/** Every customer with visits and status — the customers table. */
+export const customersTable = () =>
+  customFetch<{ data: { results: CustomerRow[]; count: number }; status: number }>(`/api/v1/customers/table/`)

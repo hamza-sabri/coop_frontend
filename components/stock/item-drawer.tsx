@@ -138,10 +138,13 @@ export function ItemDrawer({
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="left" size="lg" className="flex flex-col gap-0 p-0">
-        <div className="border-b px-5 pb-3 pt-5">
-          <SheetTitle className="flex items-center gap-2 font-heading text-lg">
-            <Package className="size-5 text-primary" />
-            {isNew ? "صنف جديد" : item.name}
+        <div className="bg-brand-soft relative shrink-0 overflow-hidden border-b border-border/70 px-6 py-4.5 pe-14">
+          <div aria-hidden="true" className="bg-brand-gradient pointer-events-none absolute -end-10 -top-12 size-28 rounded-full opacity-15" />
+          <SheetTitle className="flex items-center gap-2.5">
+            <span className="icon-chip bg-brand-gradient size-10">
+              <Package className="size-4.5" />
+            </span>
+            <span className="font-heading text-lg">{isNew ? "صنف جديد في المخزون" : item.name}</span>
           </SheetTitle>
           {!isNew ? (
             <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
@@ -170,7 +173,7 @@ export function ItemDrawer({
           ) : null}
         </div>
 
-        <div className="flex-1 overflow-y-auto px-5 pt-4">
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 pt-5">
           {!isNew ? (
             <SegmentedTabs
               tabs={[
@@ -217,8 +220,10 @@ export function ItemDrawer({
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <Label>المورّد</Label>
-                  <Input value={f.supplier} onChange={(e) => setF({ ...f, supplier: e.target.value })} />
+                  <Label>
+                    المورّد <span className="text-xs font-normal text-muted-foreground">(اختياري)</span>
+                  </Label>
+                  <Input value={f.supplier} onChange={(e) => setF({ ...f, supplier: e.target.value })} placeholder="مثال: ألبان الجنيدي" />
                 </div>
               </div>
 
@@ -272,13 +277,18 @@ export function ItemDrawer({
                   <Label>نبّهني عندما يقلّ عن ({reorderWord})</Label>
                   <Input inputMode="decimal" dir="ltr" className="text-end" value={f.reorder} onChange={(e) => setF({ ...f, reorder: e.target.value })} placeholder="0" />
                 </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label>تاريخ الصلاحية</Label>
+                {/* Never half a row on its own: a new item has three fields here. */}
+                <div className={cn("flex flex-col gap-1.5", isNew && "col-span-2")}>
+                  <Label>
+                    تاريخ الصلاحية <span className="text-xs font-normal text-muted-foreground">(اختياري)</span>
+                  </Label>
                   <Input type="date" dir="ltr" value={f.expiry_date} onChange={(e) => setF({ ...f, expiry_date: e.target.value })} />
                 </div>
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label>ملاحظات</Label>
+                <Label>
+                  ملاحظات <span className="text-xs font-normal text-muted-foreground">(اختياري)</span>
+                </Label>
                 <Textarea rows={2} value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} />
               </div>
             </div>
@@ -288,10 +298,13 @@ export function ItemDrawer({
         </div>
 
         {tab === "info" ? (
-          <div className="flex gap-2 border-t p-4">
-            <Button className="bg-brand-gradient flex-1" disabled={saving} data-form-primary onClick={save}>
+          <div className="flex shrink-0 gap-2.5 border-t border-border/70 bg-muted/30 px-6 py-4">
+            <Button className="bg-brand-gradient flex-1 shadow-md shadow-primary/25" disabled={saving} data-form-primary onClick={save}>
               {saving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
-              حفظ
+              {isNew ? "إضافة الصنف" : "حفظ"}
+            </Button>
+            <Button variant="outline" className="flex-1" onClick={() => onOpenChange(false)} disabled={saving}>
+              إلغاء
             </Button>
             {!isNew && isOwner ? (
               <Button variant="outline" className="text-rose-600" onClick={() => setConfirm(true)} aria-label="حذف الصنف">

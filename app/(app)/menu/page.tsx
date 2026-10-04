@@ -1,487 +1,118 @@
 "use client"
 
-import { Suspense, useEffect, useMemo, useRef, useState } from "react"
-import Link from "next/link"
-import { useRouter, useSearchParams } from "next/navigation"
-import { useQueryClient } from "@tanstack/react-query"
+/**
+ * المنيو — every drink and sweet, as the customer sees it: photo, name, price.
+ *
+ *   [ابحث…] [الكل 32][قهوة 12][سموذي 6][حلويات 5]…          [ترتيب ▾]
+ *   ┌──────┐┌──────┐┌──────┐┌──────┐┌──────┐
+ *   │ 📷   ││ 📷   ││ 📷   ││ 📷   ││ 📷   │   name · category
+ *   │      ││      ││      ││      ││      │   ₪ price · يربح ₪ (owner)
+ *   └──────┘└──────┘└──────┘└──────┘└──────┘
+ *
+ * A café menu is a few dozen items, so the whole menu is loaded once and the
+ * chips and search are instant. Tapping a card opens the drink drawer; the ⋯
+ * on a card holds the rarer actions. What the owner earns on each cup is said
+ * as money ("يربح ٦٫٢٠ ₪"), never as a margin percentage.
+ */
+import { useMemo, useState } from "react"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import {
-  BarChart3,
-  CalendarClock,
-  CalendarX2,
-  Check,
-  CheckSquare,
-  Layers,
-  Loader2,
-  Package,
-  PackageCheck,
-  PackagePlus,
-  PlusCircle,
-  Tag,
-  Trash2,
-} from "lucide-react"
+import { Coffee, Layers, MoreVertical, Pencil, Plus, Trash2 } from "lucide-react"
 
-import { productsList } from "@/api/generated/products/products"
-import {
-  bulkDeleteMedications,
-  seedDemoMedications,
-} from "@/api/products"
 import type { Product } from "@/api/generated/model"
-import { useInfiniteList } from "@/hooks/use-infinite-list"
-import { useDebounced } from "@/hooks/use-debounced"
-import { useGlobalScanner } from "@/hooks/use-global-scanner"
-import { ENDPOINTS, remove } from "@/lib/mutate"
-import { formatMoney, formatNumber } from "@/lib/format"
-import { cn } from "@/lib/utils"
-import { useIsOwner } from "@/lib/modules"
-
-import { useMedStats } from "@/hooks/use-med-stats"
-import { useStaggerCards } from "@/hooks/use-stagger-cards"
-import { PageHeader } from "@/components/page-header"
-import { StickyToolbar } from "@/components/sticky-toolbar"
-import { SearchInput } from "@/components/search-input"
-import { FilterMenu } from "@/components/filter-menu"
-import { SortMenu } from "@/components/sort-menu"
-import { LoadMore } from "@/components/load-more"
-import { Fab } from "@/components/fab"
-import { RowActions } from "@/components/row-actions"
-import { EmptyState, ErrorState } from "@/components/states"
-import { NoMedsArt } from "@/components/illustrations"
-import { DrinkForm } from "@/components/forms/drink-form"
-import { VariantsManager } from "@/components/variants-manager"
-import { PrintLabelDialog } from "@/components/print/print-label-dialog"
+import { productsList } from "@/api/generated/products/products"
 import { ConfirmDelete } from "@/components/confirm-delete"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
-import { Card } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Button, buttonVariants } from "@/components/ui/button"
+import { FilterChips, SearchBox } from "@/components/data-table"
+import { Fab } from "@/components/fab"
+import { DrinkForm } from "@/components/forms/drink-form"
+import { Enter, PageShell } from "@/components/page-shell"
+import { SortMenu } from "@/components/sort-menu"
+import { ErrorState } from "@/components/states"
+import { Button } from "@/components/ui/button"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Skeleton } from "@/components/ui/skeleton"
+import { formatMoney, formatNumber } from "@/lib/format"
+import { useIsOwner } from "@/lib/modules"
+import { ENDPOINTS, remove } from "@/lib/mutate"
+import { cn } from "@/lib/utils"
 
-/** Every barcode that resolves this product: primary + the extras. */
-function productCodes(m: Product): string[] {
-  const alts = (m as { alt_barcodes?: unknown }).alt_barcodes
-  return [
-    m.barcode,
-    ...(Array.isArray(alts) ? alts.map(String) : []),
-  ].filter((c): c is string => Boolean(c))
+const NO_CATEGORY = "بلا تصنيف"
+
+/** The whole menu, page by page (the API caps a page at 100). */
+async function fetchMenu(): Promise<Product[]> {
+  const all: Product[] = []
+  for (let page = 1; page <= 20; page++) {
+    const r = await productsList({ page, page_size: 100, ordering: "name" } as Parameters<typeof productsList>[0])
+    const body = r.data as unknown as { results: Product[]; next: string | null }
+    all.push(...body.results)
+    if (!body.next) break
+  }
+  return all
 }
 
-const SORT_OPTIONS = [
-  { value: "name", label: "الاسم (أ–ي)" },
-  { value: "-price", label: "الأعلى سعراً" },
-  { value: "price", label: "الأقل سعراً" },
-  { value: "expiry_date", label: "الأقرب انتهاءً" },
-  { value: "-created_at", label: "الأحدث" },
-]
+const num = (v: unknown) => Number(v ?? 0) || 0
+const profitOf = (p: Product) => num(p.price) - num(p.cost)
 
-const STOCK_OPTIONS = [
-  { value: "all", label: "الكل" },
-  { value: "in", label: "متوفر" },
-  { value: "low", label: "مخزون منخفض" },
-  { value: "out", label: "نافد" },
-]
-
-const EXPIRY_OPTIONS = [
-  { value: "all", label: "الكل" },
-  { value: "expired", label: "منتهي الصلاحية" },
-  { value: "soon", label: "قريب الانتهاء" },
-  { value: "none", label: "بدون تاريخ صلاحية" },
-]
-
-// How a product is sold. 404 of the shop's 2,398 products carry a box unit,
-// and a box is priced differently from the pieces inside it — those are the
-// rows to check before a stocktake or a price change. The card already showed
-// a "١ أنواع" badge; this makes it searchable.
-const UNITS_OPTIONS = [
-  { value: "all", label: "الكل" },
-  { value: "pack", label: "له عبوة" },
-  { value: "variant", label: "له أنواع" },
-  { value: "plain", label: "قطعة فقط" },
-]
-
-function MedCard({
-  med,
-  onEdit,
-  onDelete,
-  onPrintLabel,
-  onVariants,
-  onBox,
-  selectMode = false,
-  selected = false,
-  onToggleSelect,
-}: {
-  med: Product
-  onEdit: () => void
-  onDelete: () => void
-  onPrintLabel: () => void
-  onVariants: () => void
-  onBox: () => void
-  selectMode?: boolean
-  selected?: boolean
-  onToggleSelect?: () => void
-}) {
-  // DRF serialises DecimalField as a string, so this arrived as
-  // `string | number` and every `stock <= 5` was relying on JS
-  // coercion. Coerce once, here.
-  const cost = Number((med as { cost?: string | number | null }).cost ?? 0)
-  const price = Number(med.price ?? 0)
-  const margin = price > 0 ? ((price - cost) / price) * 100 : 0
-  const variants =
-    (med as unknown as { variants?: { pack_size?: string | null }[] }).variants ?? []
-  const variantCount = variants.length
-  // A box is a variant with a real pack size — not a colour or a flavour.
-  const hasBox = variants.some((v) => Number(v.pack_size ?? 0) > 0)
-  const primaryAction = selectMode ? onToggleSelect : onEdit
-  return (
-    <Card
-      onClick={primaryAction}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault()
-          primaryAction?.()
-        }
-      }}
-      className={cn(
-        /* The photo is the card. A 112px strip above the text made every
-           product read as a row in a spreadsheet; full-bleed with the name on
-           a scrim reads as a shelf, which is what stock actually is. */
-        "med-card card-interactive relative flex aspect-[3/4] cursor-pointer flex-col justify-end gap-0 overflow-hidden p-0",
-        selected && "ring-2 ring-primary",
-      )}
-    >
-      <div className="absolute inset-0">
-        {med.image ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={med.image} alt="" loading="lazy" decoding="async" className="size-full object-cover" />
-        ) : (
-          <span className="bg-brand-soft grid size-full place-items-center">
-            <Package className="size-10 text-primary/40" />
-          </span>
-        )}
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-card/95 via-card/25 via-40% to-transparent" />
-        {med.category && (
-          <Badge
-            variant="secondary"
-            className="absolute start-2 top-2 rounded-full border-transparent bg-card/85 font-normal backdrop-blur-sm"
-          >
-            {med.category}
-          </Badge>
-        )}
-        {variantCount > 0 && (
-          <Badge className="absolute start-2 top-11 gap-1 rounded-full border-transparent bg-primary/90 backdrop-blur-sm">
-            <Layers className="size-3" />
-            {formatNumber(variantCount)} أنواع
-          </Badge>
-        )}
-        {med.expiry_status === "expired" ? (
-          <Badge className="absolute end-2 top-11 gap-1 rounded-full border-transparent bg-destructive/90 text-white backdrop-blur-sm">
-            <CalendarX2 className="size-3" />
-            منتهي
-          </Badge>
-        ) : med.expiry_status === "soon" ? (
-          <Badge className="absolute end-2 top-11 gap-1 rounded-full border-transparent bg-warning/90 text-warning-foreground backdrop-blur-sm">
-            <CalendarClock className="size-3" />
-            {med.days_to_expiry != null
-              ? `${formatNumber(med.days_to_expiry)} يوم`
-              : "قريب"}
-          </Badge>
-        ) : null}
-        {selectMode ? (
-          <span
-            className={cn(
-              "absolute end-1.5 top-1.5 grid size-7 place-items-center rounded-full border-2 shadow-sm backdrop-blur-sm",
-              selected
-                ? "border-primary bg-primary text-white"
-                : "border-muted-foreground/40 bg-card/85",
-            )}
-          >
-            {selected && <Check className="size-4" />}
-          </span>
-        ) : (
-          <div
-            className="absolute end-1.5 top-1.5 flex items-center gap-1"
-            onClick={(e) => e.stopPropagation()}
-            onKeyDown={(e) => e.stopPropagation()}
-          >
-            {/* Straight to the form that holds the product's boxes — plural.
-                A product can come in several: a 24, a 12, a different flavour,
-                each with its own barcode, price and piece count. This used to
-                open a single-box dialog, so a second box meant hunting through
-                the row menu into «الأنواع». The icon is filled when the product
-                already has one, so the grid reads at a glance. */}
-            <button
-              type="button"
-              onClick={onBox}
-              title={hasBox ? "تعديل العبوات" : "إضافة عبوة"}
-              aria-label={hasBox ? "تعديل العبوات" : "إضافة عبوة"}
-              className={cn(
-                "grid size-8 place-items-center rounded-full shadow-sm backdrop-blur-sm transition",
-                hasBox
-                  ? "bg-primary text-white hover:bg-primary/90"
-                  : "bg-card/80 text-muted-foreground hover:text-primary",
-              )}
-            >
-              {hasBox ? (
-                <PackageCheck className="size-4" />
-              ) : (
-                <PackagePlus className="size-4" />
-              )}
-            </button>
-            <div className="rounded-full bg-card/80 shadow-sm backdrop-blur-sm">
-            <RowActions
-              onEdit={onEdit}
-              onDelete={onDelete}
-              extra={[
-                {
-                  label: "الأنواع",
-                  icon: <Layers className="size-4" />,
-                  onClick: onVariants,
-                },
-                {
-                  label: "طباعة ملصق",
-                  icon: <Tag className="size-4" />,
-                  onClick: onPrintLabel,
-                },
-              ]}
-            />
-            </div>
-          </div>
-        )}
-      </div>
-      <div className="relative flex flex-col px-3 pb-3 pt-2">
-        <p className="line-clamp-2 min-h-[2.6rem] text-sm font-semibold leading-snug text-foreground">
-          {med.name}
-        </p>
-        <div className="mt-2 flex items-center justify-between">
-          <span className="font-heading text-lg font-bold text-primary">
-            {formatMoney(med.price)}
-          </span>
-          {/* Margin, not stock: a café does not count lattes (selling never
-              moves the number, it read 999), but the owner does want to see
-              which drinks earn. Cost is owner-only — absent for employees. */}
-          {cost > 0 && price > 0 ? (
-            <span
-              className={`pill backdrop-blur-sm ${
-                margin >= 60 ? "pill-success" : margin >= 40 ? "pill-warning" : "pill-danger"
-              }`}
-              title={`التكلفة ${formatMoney(cost)}`}
-            >
-              هامش {margin.toFixed(0)}%
-            </span>
-          ) : null}
-        </div>
-        {med.expiry_date && (
-          <p
-            className={cn(
-              "mt-1.5 flex items-center gap-1 text-[11px] font-medium",
-              "",
-              med.expiry_status === "expired"
-                ? "text-destructive"
-                : med.expiry_status === "soon"
-                  ? "text-warning"
-                  : "text-muted-foreground",
-            )}
-          >
-            <CalendarClock className="size-3 shrink-0" />
-            <span dir="ltr">ينتهي {med.expiry_date}</span>
-          </p>
-        )}
-      </div>
-    </Card>
-  )
-}
-
-function GridSkeleton() {
-  return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-      {Array.from({ length: 8 }).map((_, i) => (
-        <Card key={i} className="gap-0 p-0">
-          <Skeleton className="h-28 rounded-none" />
-          <div className="space-y-2 p-3">
-            <Skeleton className="h-4 w-full" />
-            <Skeleton className="h-4 w-2/3" />
-            <Skeleton className="mt-2 h-5 w-20" />
-          </div>
-        </Card>
-      ))}
-    </div>
-  )
-}
-
-function MedicationsPageInner() {
+export default function MenuPage() {
   const qc = useQueryClient()
-  const router = useRouter()
-  const searchParams = useSearchParams()
-  const scannedQ = searchParams.get("q") ?? ""
-  const urlStockState = searchParams.get("stock_state") ?? "all"
-  const urlCategory = searchParams.get("category") ?? ""
-  const [searchRaw, setSearchRaw] = useState(scannedQ)
-  const [stockState, setStockState] = useState(urlStockState)
-  const [category, setCategory] = useState(urlCategory)
-  const [expiry, setExpiry] = useState(searchParams.get("expiry") ?? "all")
-  const [units, setUnits] = useState(searchParams.get("units") ?? "all")
-  const scope = useRef<HTMLDivElement>(null)
-
-  // Category choices come from the (Redis-cached) stats endpoint.
-  const { data: medStats } = useMedStats()
-  const categoryOptions = useMemo(
-    () => [
-      { value: "", label: "الكل" },
-      ...(medStats?.by_category ?? []).map((c) => ({
-        value: c.category,
-        label: c.category,
-      })),
-      // Keep a deep-linked category visible even if it's not in the top list.
-      ...(urlCategory &&
-      !(medStats?.by_category ?? []).some((c) => c.category === urlCategory)
-        ? [{ value: urlCategory, label: urlCategory }]
-        : []),
-    ],
-    [medStats, urlCategory],
-  )
-
-  // Show how many rows each choice holds, so the owner knows the size of the
-  // job before he opens it. The backend may predate the field — then the
-  // labels stay bare rather than reading "له عبوة (0)".
-  const unitsOptions = useMemo(() => {
-    const u = medStats?.units
-    const n = (v?: number) => (typeof v === "number" ? ` (${formatNumber(v)})` : "")
-    return [
-      { value: "all", label: UNITS_OPTIONS[0].label },
-      { value: "pack", label: `${UNITS_OPTIONS[1].label}${n(u?.pack)}` },
-      { value: "variant", label: `${UNITS_OPTIONS[2].label}${n(u?.variant)}` },
-      { value: "plain", label: `${UNITS_OPTIONS[3].label}${n(u?.plain)}` },
-    ]
-  }, [medStats])
-
-  // A scan from anywhere lands here as ?q=<barcode>; the stats page links in
-  // with ?stock_state= / ?category= to show a filtered breakdown.
-  useEffect(() => {
-    if (scannedQ) setSearchRaw(scannedQ)
-  }, [scannedQ])
-  useEffect(() => {
-    setStockState(urlStockState)
-  }, [urlStockState])
-  useEffect(() => {
-    setCategory(urlCategory)
-  }, [urlCategory])
-  const search = useDebounced(searchRaw, 300)
-  // Hardware scanner works without clicking into the search box.
-  useGlobalScanner(setSearchRaw)
-  const [ordering, setOrdering] = useState("name")
+  const isOwner = useIsOwner()
+  const [q, setQ] = useState("")
+  const [cat, setCat] = useState("all")
+  const [sort, setSort] = useState("category")
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<Product | null>(null)
   const [toDelete, setToDelete] = useState<Product | null>(null)
-  const [toLabel, setToLabel] = useState<Product | null>(null)
-  const [toVariants, setToVariants] = useState<Product | null>(null)
   const [deleting, setDeleting] = useState(false)
-  const isOwner = useIsOwner()
-  const [selectMode, setSelectMode] = useState(false)
-  const [selected, setSelected] = useState<Set<number>>(new Set())
-  const [flushOpen, setFlushOpen] = useState(false)
-  const [flushAll, setFlushAll] = useState(false)
-  const [flushing, setFlushing] = useState(false)
-  const [seeding, setSeeding] = useState(false)
 
-  const params = useMemo(
-    () => ({
-      search: search || undefined,
-      ordering,
-      stock_state: stockState === "all" ? undefined : stockState,
-      category: category || undefined,
-      expiry: expiry === "all" ? undefined : expiry,
-      units: units === "all" ? undefined : units,
-      page_size: 24,
-    }),
-    [search, ordering, stockState, category, expiry, units],
-  )
+  const { data, isLoading, isError, refetch } = useQuery({
+    queryKey: ["products", "menu"],
+    queryFn: fetchMenu,
+    placeholderData: (p) => p,
+  })
+  const items = useMemo(() => data ?? [], [data])
 
-  const {
-    items,
-    count,
-    isLoading,
-    isError,
-    refetch,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
-  } = useInfiniteList<Product>(["products"], productsList, params)
+  // Chips in the order the menu is mostly made of: biggest category first.
+  const cats = useMemo(() => {
+    const n = new Map<string, number>()
+    for (const p of items) {
+      const c = p.category || NO_CATEGORY
+      n.set(c, (n.get(c) ?? 0) + 1)
+    }
+    return [...n.entries()].sort((a, b) => b[1] - a[1])
+  }, [items])
+  const catRank = useMemo(() => new Map(cats.map(([c], i) => [c, i])), [cats])
 
-  // Bouncy staggered entrance whenever a new result set arrives.
-  useStaggerCards(scope, ".med-card", !isLoading && items.length > 0, [
-    search,
-    ordering,
-    stockState,
-    category,
-    units,
-  ])
+  const shown = useMemo(() => {
+    const needle = q.trim()
+    let list = items.filter(
+      (p) => (cat === "all" || (p.category || NO_CATEGORY) === cat) && (!needle || (p.name ?? "").includes(needle)),
+    )
+    list = [...list].sort((a, b) => {
+      if (sort === "price") return num(b.price) - num(a.price)
+      if (sort === "profit") return profitOf(b) - profitOf(a)
+      if (sort === "name") return (a.name ?? "").localeCompare(b.name ?? "", "ar")
+      const c = (catRank.get(a.category || NO_CATEGORY) ?? 0) - (catRank.get(b.category || NO_CATEGORY) ?? 0)
+      return c || (a.name ?? "").localeCompare(b.name ?? "", "ar")
+    })
+    return list
+  }, [items, cat, q, sort, catRank])
 
   function openAdd() {
     setEditing(null)
     setFormOpen(true)
   }
-
-  /** A scan with no match opens the "new drink" form. The code itself is not
-   *  carried over any more: the café form has no barcode field, because a
-   *  café finds a latte by name. */
-  function openAddWithBarcode(_code: string) {
-    setEditing(null)
+  function openEdit(p: Product) {
+    setEditing(p)
     setFormOpen(true)
   }
-
-  // The current search looks like a scanned barcode (digits, scanner range).
-  const searchIsBarcode = /^\d{4,20}$/.test(search.trim())
-
-  /**
-   * Scan-to-open: the scan button sends `?open=<barcode>` from this page,
-   * meaning "show me this product", not "search for this string".
-   *
-   *   exactly one match → open its edit sheet, as if the row had been tapped
-   *   no match          → offer to create it, barcode pre-filled
-   *   several matches   → leave the filtered list; picking is the user's call
-   *
-   * The param is consumed once (stripped from the URL) so a back-navigation
-   * or a refetch doesn't pop the sheet open again underneath the cashier.
-   */
-  const openBarcode = searchParams.get("open") ?? ""
-  const openHandled = useRef("")
-  useEffect(() => {
-    if (!openBarcode || isLoading || openHandled.current === openBarcode) return
-    openHandled.current = openBarcode
-
-    // ANY of the product's codes, not just the primary one. Matching only
-    // `barcode` meant scanning a product's second sticker fell through to
-    // "no match → create it", which silently offers to make a DUPLICATE of
-    // an item the shop already has.
-    const hits = items.filter((m) => productCodes(m).includes(openBarcode))
-    if (hits.length === 1) {
-      setEditing(hits[0])
-      setFormOpen(true)
-    } else if (hits.length === 0) {
-      openAddWithBarcode(openBarcode)
-    }
-
-    const next = new URLSearchParams(searchParams.toString())
-    next.delete("open")
-    router.replace(`/menu${next.size ? `?${next}` : ""}`, { scroll: false })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [openBarcode, isLoading, items])
-
   async function confirmDelete() {
     if (!toDelete) return
     setDeleting(true)
     try {
       await remove(ENDPOINTS.products, toDelete.id)
-      toast.success("تم حذف المنتج")
+      toast.success(`حُذف «${toDelete.name}» من المنيو`)
       qc.invalidateQueries({ queryKey: ["products"] })
+      qc.invalidateQueries({ queryKey: ["pos-catalog"] })
       setToDelete(null)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "تعذر الحذف")
@@ -490,360 +121,202 @@ function MedicationsPageInner() {
     }
   }
 
-  function toggleSelect(id: number) {
-    setSelected((s) => {
-      const next = new Set(s)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
-  function exitSelect() {
-    setSelectMode(false)
-    setSelected(new Set())
-  }
-  const allLoadedSelected =
-    items.length > 0 && items.every((m) => selected.has(m.id))
-  function toggleSelectAllLoaded() {
-    setSelected(allLoadedSelected ? new Set() : new Set(items.map((m) => m.id)))
-  }
-  async function handleSeed() {
-    setSeeding(true)
-    try {
-      const res = await seedDemoMedications()
-      toast.success(
-        `تم استيراد ${formatNumber(res.data.created)} صنف من «${res.data.source}»`,
-      )
-      qc.invalidateQueries({ queryKey: ["products"] })
-      qc.invalidateQueries({ queryKey: ["pos-catalog"] })
-      qc.invalidateQueries({ queryKey: ["med-stats"] })
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "تعذر الاستيراد")
-    } finally {
-      setSeeding(false)
-    }
-  }
-  async function runFlush() {
-    setFlushing(true)
-    try {
-      const res = await bulkDeleteMedications(
-        flushAll ? { all: true } : { ids: [...selected] },
-      )
-      toast.success(`تم حذف ${formatNumber(res.data.deleted)} صنف`)
-      qc.invalidateQueries({ queryKey: ["products"] })
-      qc.invalidateQueries({ queryKey: ["pos-catalog"] })
-      qc.invalidateQueries({ queryKey: ["med-stats"] })
-      setFlushOpen(false)
-      exitSelect()
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "تعذر الحذف")
-    } finally {
-      setFlushing(false)
-    }
-  }
+  const sortOptions = [
+    { value: "category", label: "حسب التصنيف" },
+    { value: "name", label: "الاسم (أ–ي)" },
+    { value: "price", label: "الأعلى سعراً" },
+    ...(isOwner ? [{ value: "profit", label: "الأكثر ربحاً" }] : []),
+  ]
 
   return (
-    <div className="mx-auto w-full max-w-7xl">
-      <PageHeader
-        title="المنيو"
-        description={count ? `${formatNumber(count)} صنف` : "أصناف المنيو وأسعارها"}
-        /* One labelled button — the one anybody presses — and icons for the
-           rest. Four full-width pills across the top of a touchscreen is a
-           toolbar competing with the menu it sits above.
-
-           «تصدير إلى حسابات» is gone entirely: Hesabate is the pharmacy
-           accounting package this template arrived with, and a café has no
-           reason to know the name. */
-        action={
-          <>
-            {isOwner && (
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={() => (selectMode ? exitSelect() : setSelectMode(true))}
-                title={selectMode ? "إلغاء التحديد" : "تحديد عدة أصناف"}
-                aria-label={selectMode ? "إلغاء التحديد" : "تحديد عدة أصناف"}
-                className={cn(selectMode && "border-primary text-primary")}
-              >
-                <CheckSquare className="size-4" />
-              </Button>
-            )}
-            <Link
-              href="/inventory/stats"
-              title="إحصائيات المنيو"
-              aria-label="إحصائيات المنيو"
-              className={cn(
-                buttonVariants({ variant: "outline", size: "icon" }),
-                "hidden sm:inline-flex",
-              )}
-            >
-              <BarChart3 className="size-4" />
-            </Link>
-            <Button onClick={openAdd} data-tour="page-add" className="hidden md:inline-flex">
-              <PlusCircle className="size-4" />
-              إضافة منتج
-            </Button>
-          </>
-        }
-      />
-
-      <StickyToolbar>
-        <div className="flex items-center gap-2">
-          <SearchInput
-            value={searchRaw}
-            onChange={setSearchRaw}
-            placeholder="ابحث بالاسم…"
-            className="flex-1"
-          />
-          <FilterMenu
-            groups={[
-              {
-                label: "المنيو",
-                value: stockState,
-                onChange: setStockState,
-                options: STOCK_OPTIONS,
-              },
-              {
-                label: "التصنيف",
-                value: category,
-                onChange: setCategory,
-                defaultValue: "",
-                options: categoryOptions,
-              },
-              {
-                label: "الصلاحية",
-                value: expiry,
-                onChange: setExpiry,
-                options: EXPIRY_OPTIONS,
-              },
-              {
-                label: "الوحدات",
-                value: units,
-                onChange: setUnits,
-                options: unitsOptions,
-              },
-            ]}
-          />
-          <SortMenu
-            value={ordering}
-            options={SORT_OPTIONS}
-            onChange={setOrdering}
-          />
-        </div>
-      </StickyToolbar>
-
-      {selectMode && (
-        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-2xl border bg-card p-2.5 shadow-sm">
-          <button
-            type="button"
-            onClick={toggleSelectAllLoaded}
-            className="inline-flex items-center gap-2 text-sm font-medium"
-          >
-            <span
-              className={cn(
-                "grid size-5 place-items-center rounded-md border-2",
-                allLoadedSelected
-                  ? "border-primary bg-primary text-white"
-                  : "border-muted-foreground/40",
-              )}
-            >
-              {allLoadedSelected && <Check className="size-3.5" />}
-            </span>
-            تحديد المعروض
-          </button>
-          <span className="text-sm text-muted-foreground">
-            {formatNumber(selected.size)} محدد
-          </span>
-          <div className="ms-auto flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={selected.size === 0}
-              onClick={() => {
-                setFlushAll(false)
-                setFlushOpen(true)
-              }}
-            >
-              <Trash2 className="size-4" />
-              حذف المحدد
-            </Button>
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={() => {
-                setFlushAll(true)
-                setFlushOpen(true)
-              }}
-            >
-              <Trash2 className="size-4" />
-              حذف كل المنتجات
-            </Button>
+    <PageShell
+      title="المنيو"
+      action={
+        <Button size="sm" className="bg-brand-gradient gap-1.5 shadow-md shadow-primary/25" onClick={openAdd} data-tour="page-add">
+          <Plus className="size-4" />
+          صنف
+        </Button>
+      }
+    >
+      {/* Same toolbar as every table: search · chips · sort, one row. */}
+      <Enter i={0}>
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-2xl border border-border/80 bg-card p-3 lg:flex">
+          <SearchBox value={q} onChange={setQ} placeholder="ابحث في المنيو…" />
+          <div className="shrink-0 lg:order-last lg:ms-auto">
+            <SortMenu value={sort} options={sortOptions} onChange={setSort} />
           </div>
+          {cats.length > 1 ? (
+            <FilterChips
+              className="col-span-2"
+              active={cat}
+              onPick={setCat}
+              chips={[{ id: "all", label: "الكل", count: items.length }, ...cats.map(([c, n]) => ({ id: c, label: c, count: n }))]}
+            />
+          ) : null}
         </div>
-      )}
+      </Enter>
 
-      {isLoading && <GridSkeleton />}
-      {isError && <ErrorState onRetry={() => refetch()} />}
-      {!isLoading && !isError && items.length === 0 && searchIsBarcode && (
-        <EmptyState
-          art={<NoMedsArt className="h-36 w-auto" />}
-          title="الباركود غير موجود"
-          description={`لا يوجد صنف بالباركود ${search.trim()} — أنشئه الآن والباركود معبّأ جاهز، يكفي الاسم والسعر.`}
-          action={
-            <Button onClick={() => openAddWithBarcode(search.trim())} size="sm">
-              <PlusCircle className="size-4" />
-              إنشاء صنف بهذا الباركود
-            </Button>
-          }
-        />
-      )}
-      {!isLoading && !isError && items.length === 0 && !searchIsBarcode && (
-        <EmptyState
-          art={<NoMedsArt className="h-36 w-auto" />}
-          title="لا توجد منتجات"
-          description="ابدأ بإضافة أول منتج، أو استورد بيانات تجريبية جاهزة"
-          action={
-            <div className="flex flex-col items-center gap-2">
-              <Button onClick={openAdd} size="sm">
-                <PlusCircle className="size-4" />
-                إضافة منتج
-              </Button>
-              <Button
-                onClick={handleSeed}
-                size="sm"
-                variant="outline"
-                disabled={seeding}
-              >
-                {seeding ? (
-                  <Loader2 className="size-4 animate-spin" />
-                ) : (
-                  <PackagePlus className="size-4" />
-                )}
-                استيراد بيانات تجريبية
-              </Button>
+      {isError && !data ? (
+        <ErrorState onRetry={() => refetch()} />
+      ) : isLoading && !data ? (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5">
+          {Array.from({ length: 10 }).map((_, i) => (
+            <div key={i} className="overflow-hidden rounded-2xl border bg-card">
+              <Skeleton className="aspect-[4/3] rounded-none" />
+              <div className="space-y-2 p-3">
+                <Skeleton className="h-4 w-3/4" />
+                <Skeleton className="h-4 w-1/3" />
+              </div>
             </div>
-          }
-        />
+          ))}
+        </div>
+      ) : items.length === 0 ? (
+        <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed bg-card px-6 py-16 text-center animate-in fade-in">
+          <span className="grid size-14 place-items-center rounded-2xl bg-primary/10 text-primary">
+            <Coffee className="size-7" />
+          </span>
+          <p className="font-heading text-base font-bold">المنيو فارغ</p>
+          <p className="max-w-sm text-sm text-muted-foreground">أضف أول مشروب: صورته، اسمه وسعره — ويظهر فوراً في شاشة البيع.</p>
+          <Button className="bg-brand-gradient mt-1 gap-1.5" onClick={openAdd}>
+            <Plus className="size-4" />
+            أضف أول صنف
+          </Button>
+        </div>
+      ) : shown.length === 0 ? (
+        <p className="rounded-2xl border bg-card px-4 py-12 text-center text-sm text-muted-foreground animate-in fade-in">
+          لا صنف يطابق «{q}».
+        </p>
+      ) : (
+        <div key={`${cat}|${sort}`} className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5">
+          {shown.map((p, i) => (
+            <MenuCard
+              key={p.id}
+              p={p}
+              i={i}
+              isOwner={isOwner}
+              onOpen={() => openEdit(p)}
+              onDelete={() => setToDelete(p)}
+            />
+          ))}
+        </div>
       )}
 
-      {items.length > 0 && (
-        <>
-          <div
-            ref={scope}
-            className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4"
-          >
-            {items.map((m) => (
-              <MedCard
-                key={m.id}
-                med={m}
-                onEdit={() => {
-                  setEditing(m)
-                  setFormOpen(true)
-                }}
-                onDelete={() => setToDelete(m)}
-                onPrintLabel={() => setToLabel(m)}
-                onVariants={() => setToVariants(m)}
-                onBox={() => setToVariants(m)}
-                selectMode={selectMode}
-                selected={selected.has(m.id)}
-                onToggleSelect={() => toggleSelect(m.id)}
-              />
-            ))}
-          </div>
-          <LoadMore
-            hasNext={Boolean(hasNextPage)}
-            isFetchingNext={isFetchingNextPage}
-            onLoad={() => fetchNextPage()}
-          />
-        </>
-      )}
-
-      {/* Also on desktop: on a long list the toolbar's "إضافة منتج" scrolls
-          away, and this is the page the owner adds things from all day. */}
-      <Fab onClick={openAdd} label="إضافة منتج" always />
-      {/* Sizes and flavours live INSIDE this form now, so there is no
-          "manage variants" hand-off to a second dialog. VariantsManager is
-          still mounted below because the card's own ⋯ menu opens it, and for
-          the odd product with twenty sub-SKUs a dedicated table is still the
-          better tool. */}
-      <DrinkForm
-        open={formOpen}
-        onOpenChange={setFormOpen}
-        product={editing}
-      />
-      <VariantsManager
-        open={Boolean(toVariants)}
-        onOpenChange={(o) => !o && setToVariants(null)}
-        medicationId={toVariants?.id ?? null}
-        medicationName={toVariants?.name ?? ""}
-        medicationPrice={toVariants?.price ?? ""}
-      />
+      <Fab onClick={openAdd} label="إضافة صنف" />
+      <DrinkForm open={formOpen} onOpenChange={setFormOpen} product={editing} />
       <ConfirmDelete
         open={Boolean(toDelete)}
         onOpenChange={(o) => !o && setToDelete(null)}
         onConfirm={confirmDelete}
         loading={deleting}
-        title="حذف المنتج"
-        description={toDelete ? `سيتم حذف «${toDelete.name}».` : undefined}
+        title={toDelete ? `حذف «${toDelete.name}» من المنيو؟` : "حذف الصنف"}
+        description="يختفي من شاشة البيع. الفواتير السابقة التي فيه تبقى كما هي."
       />
-      <PrintLabelDialog
-        open={Boolean(toLabel)}
-        onOpenChange={(o) => !o && setToLabel(null)}
-        med={
-          toLabel
-            ? {
-                name: toLabel.name ?? "",
-                price: toLabel.price,
-                barcode: toLabel.barcode,
-              }
-            : null
-        }
-      />
-      <Dialog
-        open={flushOpen}
-        onOpenChange={(o) => !o && !flushing && setFlushOpen(false)}
-      >
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>
-              {flushAll
-                ? "حذف كل المنتجات؟"
-                : `حذف ${formatNumber(selected.size)} صنف؟`}
-            </DialogTitle>
-            <DialogDescription>
-              {flushAll
-                ? "سيتم حذف كل منتجات متجرك وأنواعها نهائياً لبدء استيراد جديد. سجلات المبيعات والديون تبقى محفوظة كما هي."
-                : "سيتم حذف الأصناف المحددة وأنواعها نهائياً. سجلات المبيعات والديون تبقى محفوظة كما هي."}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex justify-end gap-2">
-            <Button
-              variant="ghost"
-              onClick={() => setFlushOpen(false)}
-              disabled={flushing}
-            >
-              إلغاء
-            </Button>
-            <Button variant="destructive" onClick={runFlush} disabled={flushing}>
-              {flushing ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <Trash2 className="size-4" />
-              )}
-              حذف
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-    </div>
+    </PageShell>
   )
 }
 
-// useSearchParams() needs a Suspense boundary for the static prerender pass.
-export default function MedicationsPage() {
+function MenuCard({
+  p,
+  i,
+  isOwner,
+  onOpen,
+  onDelete,
+}: {
+  p: Product
+  i: number
+  isOwner: boolean
+  onOpen: () => void
+  onDelete: () => void
+}) {
+  const price = num(p.price)
+  const cost = num(p.cost)
+  const profit = price - cost
+  const sizes = (p.variants ?? []).filter((v) => v.is_active !== false).length
   return (
-    <Suspense fallback={null}>
-      <MedicationsPageInner />
-    </Suspense>
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault()
+          onOpen()
+        }
+      }}
+      className="group relative flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-border/80 bg-card text-start shadow-xs transition hover:-translate-y-0.5 hover:shadow-lg hover:shadow-primary/5 focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:outline-none animate-in fade-in slide-in-from-bottom-2 fill-mode-both duration-300"
+      style={{ animationDelay: `${Math.min(i, 14) * 28}ms` }}
+    >
+      <div className="relative aspect-[4/3] overflow-hidden bg-brand-soft">
+        {p.image ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={p.image}
+            alt=""
+            loading="lazy"
+            decoding="async"
+            className="size-full object-cover transition duration-500 group-hover:scale-[1.04]"
+          />
+        ) : (
+          <span className="grid size-full place-items-center">
+            <Coffee className="size-10 text-primary/35" />
+          </span>
+        )}
+        {sizes > 0 ? (
+          <span className="absolute start-2 top-2 inline-flex items-center gap-1 rounded-full bg-card/90 px-2 py-0.5 text-[11px] font-semibold text-foreground shadow-sm backdrop-blur-sm">
+            <Layers className="size-3" />
+            {formatNumber(sizes)} {sizes === 1 ? "حجم" : "أحجام"}
+          </span>
+        ) : null}
+        <div className="absolute end-2 top-2 opacity-100 transition md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100" onClick={(e) => e.stopPropagation()}>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <button
+                  type="button"
+                  aria-label={`خيارات ${p.name}`}
+                  className="grid size-8 place-items-center rounded-full bg-card/90 text-foreground shadow-sm backdrop-blur-sm transition hover:bg-card"
+                >
+                  <MoreVertical className="size-4" />
+                </button>
+              }
+            />
+            <DropdownMenuContent align="end" className="w-40">
+              <DropdownMenuItem onClick={onOpen}>
+                <Pencil className="size-4" />
+                تعديل
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={onDelete} className="text-destructive focus:text-destructive">
+                <Trash2 className="size-4" />
+                حذف
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </div>
+
+      <div className="flex flex-1 flex-col gap-2 p-3">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold leading-snug">{p.name}</p>
+          <p className="truncate text-[11px] text-muted-foreground">{p.category || NO_CATEGORY}</p>
+        </div>
+        <div className="mt-auto flex items-end justify-between gap-2">
+          <span className="font-heading text-lg font-bold leading-none text-primary tabular-nums">{formatMoney(price)}</span>
+          {/* What a cup earns, in money. Cost is owner-only — absent for staff. */}
+          {isOwner && cost > 0 && price > 0 ? (
+            <span
+              className={cn(
+                "text-[11px] font-semibold tabular-nums",
+                profit > 0 ? "text-emerald-700 dark:text-emerald-400" : "text-rose-600",
+              )}
+              title={`التكلفة ${formatMoney(cost)}`}
+            >
+              {profit > 0 ? `يربح ${formatMoney(profit)}` : `يخسر ${formatMoney(-profit)}`}
+            </span>
+          ) : isOwner && price > 0 ? (
+            <span className="text-[11px] text-muted-foreground">بلا تكلفة</span>
+          ) : null}
+        </div>
+      </div>
+    </div>
   )
 }

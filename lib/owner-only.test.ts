@@ -23,7 +23,8 @@ describe("owner-only money", () => {
   it("the invoices page does not fetch period totals for employees", () => {
     const src = read("app/(app)/orders/page.tsx")
     expect(src).toContain("enabled: isOwner")
-    expect(src).toContain("isOwner && stats &&")
+    // The filtered total is drawn only for the owner (the server omits it too).
+    expect(src).toContain("isOwner && summary.data?.total != null")
   })
 
   it("the stock badge is gone from the till and the menu", () => {

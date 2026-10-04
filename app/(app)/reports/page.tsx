@@ -21,7 +21,7 @@
 import { useEffect, useState } from "react"
 
 import { PeriodBar, type PeriodState } from "@/components/finance/period-bar"
-import { PageHeader } from "@/components/page-header"
+import { PageShell } from "@/components/page-shell"
 import { ItemReportSheet } from "@/components/reports/item-report"
 import { SURFACE } from "@/components/reports/kit"
 import { CustomersTab } from "@/components/reports/tabs/customers"
@@ -79,10 +79,9 @@ export default function ReportsPage() {
   }
   if (ownerState !== "owner") {
     return (
-      <div className="mx-auto w-full max-w-xl pt-10">
-        <PageHeader title="التقارير" />
-        <p className={`${SURFACE} p-8 text-center text-sm text-muted-foreground`}>التقارير والأرقام المالية للمالك فقط.</p>
-      </div>
+      <PageShell title="التقارير">
+        <p className={`${SURFACE} mx-auto max-w-xl p-8 text-center text-sm text-muted-foreground`}>التقارير والأرقام المالية للمالك فقط.</p>
+      </PageShell>
     )
   }
 
@@ -90,10 +89,12 @@ export default function ReportsPage() {
   const openItem = (id: number, name = "") => setItem({ id, name })
 
   return (
-    <div className="mx-auto w-full max-w-7xl pb-28 md:pb-10">
-      <PageHeader title="التقارير" />
-      <SegmentedTabs tabs={tabs} active={active} onChange={pick} />
-      <PeriodBar value={period} onChange={setPeriod} today={today} className="mb-4" />
+    <PageShell title="التقارير">
+      {/* One row: which question (tabs) · which period. */}
+      <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+        <SegmentedTabs tabs={tabs} active={active} onChange={pick} className="mb-0 min-w-0 xl:w-fit" />
+        <PeriodBar value={period} onChange={setPeriod} today={today} className="shrink-0" />
+      </div>
 
       {active === "overview" && <OverviewTab q={q} onOpenItem={(id) => openItem(id)} goTo={pick} />}
       {active === "profit" && <ProfitTab q={q} />}
@@ -104,6 +105,6 @@ export default function ReportsPage() {
       {active === "returns" && <ReturnsTab q={q} />}
 
       <ItemReportSheet productId={item?.id ?? null} name={item?.name} q={q} onClose={() => setItem(null)} />
-    </div>
+    </PageShell>
   )
 }

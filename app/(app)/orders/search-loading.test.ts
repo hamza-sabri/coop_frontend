@@ -10,10 +10,7 @@ import { readFileSync } from "node:fs"
  * The rows have to disappear the moment a term is entered — including during
  * the debounce window, before the request has even been sent.
  */
-const PAGES = [
-  "app/(app)/orders/page.tsx",
-  "components/print/print-receipt-dialog.tsx",
-]
+const PAGES = ["components/print/print-receipt-dialog.tsx"]
 
 describe("the sales search hides stale rows", () => {
   it.each(PAGES)("%s computes a `searching` flag from all three states", (f) => {
@@ -30,5 +27,23 @@ describe("the sales search hides stale rows", () => {
     // No row-rendering branch may still key off isLoading alone.
     expect(src).not.toMatch(/\{!isLoading && !isError/)
     expect(src).toMatch(/\{searching && \(/)
+  })
+})
+
+describe("the invoices table hides stale rows without blinking", () => {
+  const src = readFileSync("app/(app)/orders/page.tsx", "utf8")
+  it("counts a typed-but-unsent term and a still-loading filter as searching", () => {
+    const line = src.match(/const searching =[\s\S]{0,160}/)?.[0] ?? ""
+    expect(line).toContain("isLoading")
+    expect(line).toContain("isPlaceholderData")
+    expect(line).toMatch(/trim\(\) !==/)
+  })
+  it("a background poll does not blank the table", () => {
+    // isFetching is true on every 15-second poll; it must not hide the rows.
+    const line = src.match(/const searching =[^\n]*/)?.[0] ?? ""
+    expect(line).not.toContain("isFetching")
+  })
+  it("the table gets no rows while searching", () => {
+    expect(src).toContain("rows={searching ? [] : results}")
   })
 })

@@ -4,11 +4,11 @@
  * (tab التقارير) and the الأصناف report tab. Same component, so the numbers
  * cannot disagree between them. */
 import { useQuery } from "@tanstack/react-query"
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
 import { Clock } from "lucide-react"
 
 import { fetchItem, type PnlQuery } from "@/api/finance"
-import { AXIS, BarList, Empty, Failed, MarginPill, Panel, Stat, TOOLTIP_STYLE } from "@/components/reports/kit"
+import { Bars, hourShort, hourSpoken } from "@/components/charts"
+import { BarList, Empty, Failed, Panel, Stat } from "@/components/reports/kit"
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet"
 import { Skeleton } from "@/components/ui/skeleton"
 import { formatMoney, formatNumber, toNumber } from "@/lib/format"
@@ -77,15 +77,15 @@ export function ItemReport({ productId, q }: { productId: number; q: PnlQuery })
             <dd className="font-heading text-lg font-bold tabular-nums">{formatMoney(P.profit)}</dd>
           </div>
           <div>
-            <dt className="text-[11px] text-muted-foreground">الهامش</dt>
-            <dd className="mt-1"><MarginPill pct={P.margin_pct} /></dd>
+            <dt className="text-[11px] text-muted-foreground">ربح الكوب الواحد</dt>
+            <dd className="font-heading text-lg font-bold tabular-nums">
+              {data.product.unit_profit ? formatMoney(data.product.unit_profit) : "—"}
+            </dd>
           </div>
         </dl>
         <p className="mt-3 text-xs text-muted-foreground">
           يساهم بـ<b className="text-foreground"> {P.profit_share}% </b>من ربح كل المنيو
-          {data.product.unit_profit ? (
-            <> · ربح الكوب الواحد <b className="text-foreground">{formatMoney(data.product.unit_profit)}</b></>
-          ) : (
+          {data.product.unit_profit ? null : (
             <> · <span className="text-amber-700 dark:text-amber-400">أضف تكلفته في الأساسية ليظهر ربحه</span></>
           )}
         </p>
@@ -93,33 +93,22 @@ export function ItemReport({ productId, q }: { productId: number; q: PnlQuery })
 
       {days.length > 1 ? (
         <Panel title="الأكواب يومياً">
-          <div className="h-40" dir="ltr">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={days} margin={{ left: 0, right: 4, top: 4 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
-                <XAxis dataKey="day" {...AXIS} interval="preserveStartEnd" />
-                <YAxis {...AXIS} width={28} allowDecimals={false} />
-                <Tooltip {...TOOLTIP_STYLE} formatter={(v) => [n0(Number(v)), "كوب"]} labelFormatter={(l) => `يوم ${l}`} />
-                <Bar dataKey="qty" fill="var(--chart-1)" radius={[4, 4, 0, 0]} maxBarSize={22} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+          <Bars
+            height={160}
+            data={days.map((d) => ({ label: String(d.day), value: Number(d.qty), title: `يوم ${d.day}` }))}
+            format={(v) => `${n0(v)} كوب`}
+          />
         </Panel>
       ) : null}
 
       <div className="grid gap-3 sm:grid-cols-2">
         <Panel title="متى يُطلب" hint="حسب الساعة">
           {hours.length ? (
-            <div className="h-36" dir="ltr">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={hours} margin={{ left: 0, right: 4, top: 4 }}>
-                  <XAxis dataKey="hour" {...AXIS} />
-                  <YAxis hide allowDecimals={false} />
-                  <Tooltip {...TOOLTIP_STYLE} formatter={(v) => [n0(Number(v)), "كوب"]} labelFormatter={(l) => `${l}:00`} />
-                  <Bar dataKey="qty" fill="var(--chart-1)" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+            <Bars
+              height={150}
+              data={hours.map((h) => ({ label: hourShort(Number(h.hour)), value: Number(h.qty), title: hourSpoken(Number(h.hour)) }))}
+              format={(v) => `${n0(v)} كوب`}
+            />
           ) : (
             <Empty>لا طلبات في الفترة</Empty>
           )}
@@ -127,13 +116,19 @@ export function ItemReport({ productId, q }: { productId: number; q: PnlQuery })
         <Panel title="الأحجام" hint="أي حجم يُطلب وكم يربح">
           {data.sizes.length ? (
             <table className="w-full text-sm">
+              <thead>
+                <tr className="text-[11px] text-muted-foreground">
+                  <th className="pb-1.5 text-start font-medium">الحجم</th>
+                  <th className="pb-1.5 text-center font-medium">كم كوب</th>
+                  <th className="pb-1.5 text-end font-medium">الربح</th>
+                </tr>
+              </thead>
               <tbody className="divide-y divide-border/70">
                 {data.sizes.map((s) => (
                   <tr key={s.label}>
                     <td className="py-1.5">{s.label}</td>
                     <td className="py-1.5 text-center tabular-nums">{n0(s.qty)}</td>
-                    <td className="py-1.5 text-end tabular-nums">{formatMoney(s.profit)}</td>
-                    <td className="py-1.5 text-end"><MarginPill pct={s.margin_pct} /></td>
+                    <td className="py-1.5 text-end font-semibold tabular-nums">{formatMoney(s.profit)}</td>
                   </tr>
                 ))}
               </tbody>
