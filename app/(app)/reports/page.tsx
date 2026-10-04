@@ -1,101 +1,65 @@
 "use client"
 
 /**
- * التقارير — the coffee shop's report, and only that.
+ * التقارير — one question per tab, one period bar for all of them.
  *
- * This page used to carry four tabs: an inventory audit (zero-priced, below
- * cost, expiring, no barcode, dead stock), deep sales analytics, and a
- * price-check log. All three are real, and all three were written for a shop
- * that holds stock and answers to a pharmacist. A café holds a menu. Asking
- * كوب's owner to scroll past "باركود مكسور" to reach "الأكثر مبيعاً" was asking
- * him to look at somebody else's business.
+ *   نظرة عامة  the four numbers that matter, one chart, the top drinks
+ *   الأرباح    the statement: sales → what came off → costs → profit
+ *   الأصناف    every drink: cups, revenue, profit, margin; tap for its page
+ *   الأوقات    by hour × category, and the average weekday
+ *   الورديات   the shifts side by side
+ *   الزبائن    regulars, newcomers, points
+ *   المرتجعات  what came back, and why
  *
- * The tabs are gone from the navigation, not from the codebase: the endpoints,
- * `components/reports/sales-tab.tsx` and `scan-tab.tsx` are all untouched, so
- * a vertical that needs them gets them back by restoring the switcher.
+ * The page used to be one long scroll (التقارير as a single "café report")
+ * and the owner had to know where on it each answer lived. A tab per question
+ * means each answer is the whole screen, and the period bar above them means
+ * switching tab never loses the month you were looking at.
+ *
+ * Owner only — the server refuses every endpoint to employees as well.
  */
 import { useEffect, useState } from "react"
-import { CalendarRange, Check, ChevronDown } from "lucide-react"
 
-import { CafeTab } from "@/components/reports/cafe-tab"
-import { HoursTab } from "@/components/finance/hours-tab"
-import { PnlTab } from "@/components/finance/pnl-tab"
-import { SegmentedTabs, type SegmentedTab } from "@/components/segmented-tabs"
-import { hasModule, useModules, useOwnerState } from "@/lib/modules"
+import { PeriodBar, type PeriodState } from "@/components/finance/period-bar"
 import { PageHeader } from "@/components/page-header"
+import { ItemReportSheet } from "@/components/reports/item-report"
+import { SURFACE } from "@/components/reports/kit"
+import { CustomersTab } from "@/components/reports/tabs/customers"
+import { ItemsTab } from "@/components/reports/tabs/items"
+import { OverviewTab } from "@/components/reports/tabs/overview"
+import { ProfitTab } from "@/components/reports/tabs/profit"
+import { ReturnsTab } from "@/components/reports/tabs/returns"
+import { ShiftsTab } from "@/components/reports/tabs/shifts"
+import { TimesTab } from "@/components/reports/tabs/times"
+import { SegmentedTabs, type SegmentedTab } from "@/components/segmented-tabs"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { cn } from "@/lib/utils"
+import { hasModule, useModules, useOwnerState } from "@/lib/modules"
+import { businessToday } from "@/lib/period"
 
-const DAY_OPTIONS = [7, 30, 90] as const
-
-const DAY_LABEL = (d: number) =>
-  d === 7 ? "آخر ٧ أيام" : d === 30 ? "آخر ٣٠ يوماً" : "آخر ٩٠ يوماً"
-
-function PeriodDropdown({
-  days,
-  onChange,
-}: {
-  days: number
-  onChange: (d: (typeof DAY_OPTIONS)[number]) => void
-}) {
-  const [open, setOpen] = useState(false)
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger
-        render={
-          <button
-            type="button"
-            className="clay-chip inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-medium"
-          >
-            <CalendarRange className="size-3.5" />
-            {DAY_LABEL(days)}
-            <ChevronDown className="size-3.5 opacity-70" />
-          </button>
-        }
-      />
-      <PopoverContent align="start" className="w-40 rounded-2xl p-1.5">
-        {DAY_OPTIONS.map((d) => (
-          <button
-            key={d}
-            type="button"
-            onClick={() => {
-              onChange(d)
-              setOpen(false)
-            }}
-            className={cn(
-              "flex w-full items-center justify-between rounded-lg px-3 py-2 text-xs transition hover:bg-muted/60",
-              days === d && "font-semibold text-primary",
-            )}
-          >
-            {DAY_LABEL(d)}
-            {days === d && <Check className="size-3.5" />}
-          </button>
-        ))}
-      </PopoverContent>
-    </Popover>
-  )
-}
-
-const TABS: SegmentedTab[] = [
-  { id: "pnl", label: "الأرباح" },
-  { id: "sales", label: "المبيعات" },
-  { id: "hours", label: "الساعات" },
+const TABS: (SegmentedTab & { pnl?: boolean })[] = [
+  { id: "overview", label: "نظرة عامة" },
+  { id: "profit", label: "الأرباح", pnl: true },
+  { id: "items", label: "الأصناف" },
+  { id: "times", label: "الأوقات" },
+  { id: "shifts", label: "الورديات", pnl: true },
+  { id: "customers", label: "الزبائن" },
+  { id: "returns", label: "المرتجعات" },
 ]
 
 export default function ReportsPage() {
-  const [days, setDays] = useState<(typeof DAY_OPTIONS)[number]>(30)
   const ownerState = useOwnerState()
-  const isOwner = ownerState === "owner"
   const { modules } = useModules()
   const pnlOn = hasModule(modules, "pnl")
-  const tabs = TABS.filter((t) => t.id !== "pnl" || pnlOn)
-  const [tab, setTab] = useState<string>("pnl")
+  const tabs = TABS.filter((t) => !t.pnl || pnlOn)
+  const today = businessToday()
+  const [tab, setTab] = useState("overview")
+  const [period, setPeriod] = useState<PeriodState>({ period: "month", anchor: today, shiftId: null })
+  const [item, setItem] = useState<{ id: number; name: string } | null>(null)
 
   // ?tab= deep link (read after mount — no Suspense boundary needed).
   useEffect(() => {
-    const q = new URLSearchParams(window.location.search).get("tab")
-    if (q && TABS.some((t) => t.id === q)) setTab(q)
+    const t = new URLSearchParams(window.location.search).get("tab")
+    if (t && TABS.some((x) => x.id === t)) setTab(t)
   }, [])
   const active = tabs.some((t) => t.id === tab) ? tab : tabs[0].id
 
@@ -107,32 +71,39 @@ export default function ReportsPage() {
   }
 
   if (ownerState === "loading") {
-    return <div className="mx-auto w-full max-w-6xl pt-6"><Skeleton className="h-64 rounded-[26px]" /></div>
+    return (
+      <div className="mx-auto w-full max-w-7xl pt-4">
+        <Skeleton className="h-64 rounded-2xl" />
+      </div>
+    )
   }
-  if (!isOwner) {
+  if (ownerState !== "owner") {
     return (
       <div className="mx-auto w-full max-w-xl pt-10">
         <PageHeader title="التقارير" />
-        <p className="clay-card p-8 text-center text-sm text-muted-foreground">
-          التقارير والأرقام المالية للمالك فقط.
-        </p>
+        <p className={`${SURFACE} p-8 text-center text-sm text-muted-foreground`}>التقارير والأرقام المالية للمالك فقط.</p>
       </div>
     )
   }
 
+  const q = { period: period.period, date: period.anchor }
+  const openItem = (id: number, name = "") => setItem({ id, name })
+
   return (
-    <div className="mx-auto w-full max-w-7xl">
-      {/* The period picker had a row to itself under the heading. It is an
-          action, so it goes where the actions go — and only the sales tab
-          uses it; the others carry their own day/week/month bar. */}
-      <PageHeader
-        title="التقارير"
-        action={
-          active === "sales" ? <PeriodDropdown days={days} onChange={setDays} /> : undefined
-        }
-      />
+    <div className="mx-auto w-full max-w-7xl pb-28 md:pb-10">
+      <PageHeader title="التقارير" />
       <SegmentedTabs tabs={tabs} active={active} onChange={pick} />
-      {active === "pnl" ? <PnlTab /> : active === "hours" ? <HoursTab /> : <CafeTab days={days} />}
+      <PeriodBar value={period} onChange={setPeriod} today={today} className="mb-4" />
+
+      {active === "overview" && <OverviewTab q={q} onOpenItem={(id) => openItem(id)} goTo={pick} />}
+      {active === "profit" && <ProfitTab q={q} />}
+      {active === "items" && <ItemsTab q={q} onOpenItem={openItem} />}
+      {active === "times" && <TimesTab q={q} />}
+      {active === "shifts" && <ShiftsTab q={q} />}
+      {active === "customers" && <CustomersTab q={q} />}
+      {active === "returns" && <ReturnsTab q={q} />}
+
+      <ItemReportSheet productId={item?.id ?? null} name={item?.name} q={q} onClose={() => setItem(null)} />
     </div>
   )
 }

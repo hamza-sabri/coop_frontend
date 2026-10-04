@@ -17,7 +17,7 @@ import { RETURN_REASONS, saleItemName, type ReturnReason, type Sale, type SaleIt
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
-import { SegmentedControl } from "@/components/ui/segmented-control"
+import { FlatToggle } from "@/components/flat-toggle"
 import { formatMoney, toNumber } from "@/lib/format"
 import { sendOrQueue } from "@/lib/offline/outbox"
 import { uuid } from "@/lib/offline/queue"
@@ -123,7 +123,7 @@ export function ReturnDialog({
               </div>
             ) : null}
 
-            <SegmentedControl
+            <FlatToggle
               className="w-full"
               options={[
                 { value: "full", label: "استرداد المبلغ" },
@@ -142,8 +142,8 @@ export function ReturnDialog({
                     type="button"
                     onClick={() => setReason(r.value)}
                     className={cn(
-                      "rounded-full px-3 py-1.5 text-xs font-semibold transition",
-                      reason === r.value ? "bg-primary text-primary-foreground" : "clay-chip text-muted-foreground",
+                      "rounded-lg px-3 py-1.5 text-xs font-semibold transition",
+                      reason === r.value ? "bg-primary text-primary-foreground" : "border border-border bg-card text-muted-foreground",
                     )}
                   >
                     {r.label}

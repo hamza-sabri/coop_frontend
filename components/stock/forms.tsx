@@ -14,6 +14,7 @@ import {
   type BuyUnit,
   type InventoryItem,
 } from "@/api/inventory"
+import { Chip } from "@/components/finance/period-bar"
 import { FormModal } from "@/components/form-modal"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -31,20 +32,8 @@ export function perUnitLabel(item: InventoryItem): string | null {
   return `${formatMoney(c)} / قطعة`
 }
 
-export function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold transition",
-        on ? "bg-primary text-primary-foreground" : "clay-chip text-muted-foreground hover:text-foreground",
-      )}
-    >
-      {children}
-    </button>
-  )
-}
+/** One chip look across the money screens (see period-bar). */
+export { Chip }
 
 /* ── شراء ───────────────────────────────────────────────────────────── */
 export function PurchaseForm({
@@ -160,7 +149,7 @@ export function UnitPicker({ units, value, onChange }: { units: BuyUnit[]; value
             onClick={() => onChange(u)}
             className={cn(
               "rounded-lg px-3 text-xs font-semibold",
-              value === u ? "bg-primary text-primary-foreground" : "clay-chip text-muted-foreground",
+              value === u ? "bg-primary text-primary-foreground" : "border border-border bg-card text-muted-foreground",
             )}
           >
             {UNIT_LABEL[u]}

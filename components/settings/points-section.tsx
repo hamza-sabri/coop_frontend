@@ -192,7 +192,7 @@ export function PointsSection() {
                   key={a}
                   type="button"
                   onClick={() => setSample(String(a))}
-                  className="clay-chip rounded-full px-2.5 py-1 text-[11px] text-muted-foreground"
+                  className="border border-border bg-card rounded-lg px-2.5 py-1 text-[11px] text-muted-foreground"
                 >
                   {a} ₪ → {formatNumber(pointsFor(chained, a, defaultPct))}
                 </button>

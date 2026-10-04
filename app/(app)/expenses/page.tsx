@@ -46,7 +46,7 @@ import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { SegmentedControl } from "@/components/ui/segmented-control"
+import { FlatToggle } from "@/components/flat-toggle"
 import { Skeleton } from "@/components/ui/skeleton"
 import { formatDate, formatMoney, toNumber } from "@/lib/format"
 import { useOwnerState } from "@/lib/modules"
@@ -92,7 +92,7 @@ export default function ExpensesPage() {
     return (
       <div className="mx-auto w-full max-w-xl pt-10">
         <PageHeader title="المصاريف" />
-        <p className="clay-card p-8 text-center text-sm text-muted-foreground">المصاريف للمالك فقط.</p>
+        <p className="rounded-2xl border border-border/80 bg-card p-8 text-center text-sm text-muted-foreground">المصاريف للمالك فقط.</p>
       </div>
     )
   }
@@ -118,7 +118,7 @@ export default function ExpensesPage() {
       />
 
       <div className="mb-4 flex items-center gap-2">
-        <div className="clay-well inline-flex items-center rounded-full p-1">
+        <div className="border border-border bg-card inline-flex items-center rounded-full p-1">
           <button
             type="button"
             aria-label="الشهر السابق"
@@ -150,7 +150,7 @@ export default function ExpensesPage() {
       ) : data ? (
         <div className="grid gap-4 lg:grid-cols-3">
           {/* ── the month at a glance ───────────────────────────────── */}
-          <div className="clay-card p-5">
+          <div className="rounded-2xl border border-border/80 bg-card p-5">
             <p className="text-[11px] text-muted-foreground">مصاريف {monthName(anchor)}</p>
             <p className="font-heading text-3xl font-bold tabular-nums">{formatMoney(total)}</p>
             {prevTotal > 0 ? (
@@ -191,7 +191,7 @@ export default function ExpensesPage() {
 
           <div className="space-y-4 lg:col-span-2">
             {/* ── recurring ───────────────────────────────────────────── */}
-            <section className="clay-card p-5">
+            <section className="rounded-2xl border border-border/80 bg-card p-5">
               <div className="mb-3 flex items-center justify-between gap-2">
                 <h3 className="flex items-center gap-2 font-heading text-base font-bold">
                   <Repeat className="size-4 text-primary" />
@@ -224,7 +224,7 @@ export default function ExpensesPage() {
             </section>
 
             {/* ── one-offs ────────────────────────────────────────────── */}
-            <section className="clay-card p-5">
+            <section className="rounded-2xl border border-border/80 bg-card p-5">
               <div className="mb-3 flex items-center justify-between gap-2">
                 <h3 className="flex items-center gap-2 font-heading text-base font-bold">
                   <Receipt className="size-4 text-primary" />
@@ -448,7 +448,7 @@ function ExpenseForm({
       }
     >
       {!isEdit ? (
-        <SegmentedControl
+        <FlatToggle
           className="w-full"
           options={[
             { value: "once", label: "مرة واحدة" },
@@ -468,8 +468,8 @@ function ExpenseForm({
               type="button"
               onClick={() => setCategory(c.id)}
               className={cn(
-                "rounded-full px-3 py-1.5 text-xs font-semibold transition",
-                category === c.id ? "bg-primary text-primary-foreground" : "clay-chip text-muted-foreground",
+                "rounded-lg px-3 py-1.5 text-xs font-semibold transition",
+                category === c.id ? "bg-primary text-primary-foreground" : "border border-border bg-card text-muted-foreground",
               )}
             >
               {c.name}

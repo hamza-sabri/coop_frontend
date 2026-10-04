@@ -41,6 +41,10 @@ import {
   type Variant,
 } from "@/api/variants"
 import { useIsOwner } from "@/lib/modules"
+import { businessToday } from "@/lib/period"
+import { PeriodBar, type PeriodState } from "@/components/finance/period-bar"
+import { ItemReport } from "@/components/reports/item-report"
+import { SegmentedTabs } from "@/components/segmented-tabs"
 import { cn } from "@/lib/utils"
 import type { Product } from "@/api/generated/model"
 
@@ -364,6 +368,10 @@ export function DrinkForm({
   const editing = Boolean(product)
   const isOwner = useIsOwner()
   const [cost, setCost] = useState("")
+  const today = businessToday()
+  const [tab, setTab] = useState<"info" | "report">("info")
+  const [period, setPeriod] = useState<PeriodState>({ period: "month", anchor: today, shiftId: null })
+  const showReport = editing && isOwner && product?.id != null
 
   const [name, setName] = useState("")
   const [category, setCategory] = useState("")
@@ -412,6 +420,7 @@ export function DrinkForm({
 
   useEffect(() => {
     if (!open) return
+    setTab("info")
     removed.current = []
     if (product) {
       setName(product.name ?? "")
@@ -552,6 +561,11 @@ export function DrinkForm({
       title={editing ? "تعديل مشروب" : "إضافة مشروب"}
       icon={<Coffee className="size-4.5" />}
       footer={
+        tab === "report" ? (
+          <Button type="button" variant="outline" className="flex-1" onClick={() => onOpenChange(false)}>
+            إغلاق
+          </Button>
+        ) : (
         <>
           <Button
             type="button"
@@ -576,8 +590,29 @@ export function DrinkForm({
             إلغاء
           </Button>
         </>
+        )
       }
     >
+      {/* The drink's own report sits beside its details: how often it sells,
+          which size, when, what it earns. Owner only — it is money. */}
+      {showReport ? (
+        <SegmentedTabs
+          tabs={[
+            { id: "info", label: "الأساسية" },
+            { id: "report", label: "التقارير" },
+          ]}
+          active={tab}
+          onChange={(t) => setTab(t as "info" | "report")}
+        />
+      ) : null}
+
+      {tab === "report" && showReport && product?.id != null ? (
+        <div className="space-y-3">
+          <PeriodBar value={period} onChange={setPeriod} today={today} />
+          <ItemReport productId={product.id} q={{ period: period.period, date: period.anchor }} />
+        </div>
+      ) : (
+      <>
       <div className="grid gap-5 sm:grid-cols-[190px_1fr]">
         {/* the picture, and whether it is on the menu at all */}
         <div className="flex flex-col gap-3">
@@ -691,7 +726,8 @@ export function DrinkForm({
           </div>
         )}
       </div>
-
+      </>
+      )}
     </FormModal>
   )
 }

@@ -218,8 +218,8 @@ export function ItemDrawer({
                       type="button"
                       onClick={() => setF({ ...f, purchase_unit: u })}
                       className={cn(
-                        "rounded-full px-3 py-1.5 text-xs font-semibold",
-                        f.purchase_unit === u ? "bg-primary text-primary-foreground" : "clay-chip text-muted-foreground",
+                        "rounded-lg px-3 py-1.5 text-xs font-semibold",
+                        f.purchase_unit === u ? "bg-primary text-primary-foreground" : "border border-border bg-card text-muted-foreground",
                       )}
                     >
                       {UNIT_LABEL[u]}
@@ -281,7 +281,7 @@ export function ItemDrawer({
                     const q = toNumber(m.quantity)
                     return (
                       <li key={m.id} className="flex items-center gap-3 py-2.5">
-                        <span className={cn("rounded-full px-2.5 py-1 text-[11px] font-semibold", KIND_TONE[m.kind])}>
+                        <span className={cn("rounded-lg px-2.5 py-1 text-[11px] font-semibold", KIND_TONE[m.kind])}>
                           {m.kind_label}
                         </span>
                         <div className="min-w-0 flex-1">

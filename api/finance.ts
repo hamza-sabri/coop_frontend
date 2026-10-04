@@ -197,3 +197,122 @@ export type EarnRules = {
 export const fetchEarnRules = () => customFetch<Env<EarnRules>>(`/api/v1/points/rules/`)
 export const saveEarnRules = (rules: EarnRule[]) =>
   customFetch<Env<EarnRules>>(`/api/v1/points/rules/`, json("PUT", { rules }))
+
+// ── report tabs ────────────────────────────────────────────────────────
+export type ItemRow = {
+  product_id: number
+  name: string
+  category: string
+  image: string
+  price: string
+  cost: string
+  is_active: boolean
+  qty: string
+  prev_qty: string
+  revenue: string
+  cogs: string
+  profit: string
+  margin_pct: string | null
+  revenue_share: string
+  profit_share: string
+  tickets: number
+  has_cost: boolean
+  returned: string
+  last_sold_at: string | null
+}
+export type ItemsReport = {
+  items: ItemRow[]
+  totals: { qty: string; revenue: string; profit: string }
+  previous: { start: string; end: string }
+  range: { start: string; end: string; period: Period }
+}
+export type ItemDetail = {
+  product: {
+    id: number
+    name: string
+    price: string
+    cost: string
+    category: string
+    unit_margin_pct: string | null
+    unit_profit: string | null
+  }
+  last_sold_at: string | null
+  cups: { today: string; week: string; month: string }
+  period: {
+    start: string
+    end: string
+    qty: string
+    revenue: string
+    profit: string
+    tickets: number
+    margin_pct: string | null
+    profit_share: string
+    rank: number | null
+    of: number
+  }
+  days: { date: string; qty: string }[]
+  by_hour: { hour: number; qty: string }[]
+  sizes: { label: string; qty: string; revenue: string; profit: string; margin_pct: string | null }[]
+  buyers: { customer_id: number; name: string; qty: string }[]
+  returns: { reason: string; count: number }[]
+}
+export type TimesReport = HourGrid & {
+  weekdays: { weekday: string; avg_revenue: string; avg_tickets: string; days: number }[]
+  best_weekday: string | null
+}
+export type ShiftRow = {
+  id: number
+  name: string
+  start: string
+  end: string
+  hours: string
+  tickets: number
+  avg_ticket: string
+  net_revenue: string
+  cogs: string
+  gross_profit: string
+  wages: string
+  contribution: string
+  per_hour: string
+  top_item: string | null
+  share: string
+}
+export type CustomersReport = {
+  tickets: number
+  identified: number
+  identified_share: string
+  customers: number
+  returning: number
+  new: number
+  added: number
+  points: {
+    earned: number
+    earned_value: string
+    redeemed: number
+    redeemed_value: string
+    outstanding: number
+    outstanding_value: string
+  }
+  top: { id: number; name: string; phone: string; spend: string; visits: number; avg: string; last: string | null; points: number }[]
+}
+export type ReturnsReport = {
+  count: number
+  remakes: number
+  refunds: string
+  written_off: string
+  rate_pct: string
+  by_reason: { reason: string; label: string; count: number; refunds: string }[]
+  by_item: { name: string; count: number; refunds: string }[]
+  latest: { id: number; sale_id: number; item: string; reason: string; note: string; refund: string; quantity: string; by: string; at: string }[]
+}
+
+export const fetchItems = (q: PnlQuery) => customFetch<Env<ItemsReport>>(`/api/v1/reports/items/${qs(q)}`)
+export const fetchItem = (id: number, q: PnlQuery) =>
+  customFetch<Env<ItemDetail>>(`/api/v1/reports/items/${id}/${qs(q)}`)
+export const fetchTimes = (q: PnlQuery) => customFetch<Env<TimesReport>>(`/api/v1/reports/times/${qs(q)}`)
+export const fetchShiftsReport = (q: PnlQuery) =>
+  customFetch<Env<{ shifts: ShiftRow[] }>>(`/api/v1/reports/shifts/${qs(q)}`)
+export const fetchCustomersReport = (q: PnlQuery) =>
+  customFetch<Env<CustomersReport>>(`/api/v1/reports/customers/${qs(q)}`)
+export const fetchReturnsReport = (q: PnlQuery) =>
+  customFetch<Env<ReturnsReport>>(`/api/v1/reports/returns/${qs(q)}`)

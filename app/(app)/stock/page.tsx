@@ -174,7 +174,7 @@ export default function StockPage() {
           ))}
         </div>
       ) : rows.length === 0 ? (
-        <div className="clay-card flex flex-col items-center gap-2 p-10 text-center">
+        <div className="rounded-2xl border border-border/80 bg-card flex flex-col items-center gap-2 p-10 text-center">
           <ShoppingBasket className="size-8 text-muted-foreground" />
           <p className="text-sm text-muted-foreground">
             {items.data?.length ? "لا شيء يطابق البحث." : "لا أصناف بعد. أضف ما تشتريه: أكواب، حليب، بن…"}
@@ -185,7 +185,7 @@ export default function StockPage() {
           {groups.map(([cat, list]) => (
             <section key={cat}>
               <h3 className="mb-1.5 px-1 text-xs font-semibold text-muted-foreground">{cat}</h3>
-              <ul className="clay-card divide-y divide-border/60 overflow-hidden p-0">
+              <ul className="rounded-2xl border border-border/80 bg-card divide-y divide-border/60 overflow-hidden p-0">
                 {list.map((i) => (
                   <ItemRow
                     key={i.id}
@@ -233,7 +233,7 @@ function Stat({
       type="button"
       onClick={onClick}
       disabled={!onClick}
-      className="clay-card p-3.5 text-start disabled:cursor-default"
+      className="rounded-2xl border border-border/80 bg-card p-3.5 text-start disabled:cursor-default"
     >
       <p
         className={cn(
@@ -418,7 +418,7 @@ function Stocktake({
                     const list = unitsFor(i.unit)
                     setUnits((m) => ({ ...m, [i.id]: list[(list.indexOf(u) + 1) % list.length] }))
                   }}
-                  className="clay-chip h-9 w-14 rounded-lg text-xs font-semibold"
+                  className="border border-border bg-card h-9 w-14 rounded-lg text-xs font-semibold"
                 >
                   {UNIT_LABEL[u]}
                 </button>
