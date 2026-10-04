@@ -612,3 +612,26 @@ body {
     scroll-behavior: smooth;
   }
 }
+
+/* Bars that fill in from the start edge (RTL: the right) on first paint. */
+@keyframes bar-grow {
+  from { transform: scaleX(0); }
+}
+.animate-bar {
+  transform-origin: right;
+  animation: bar-grow 0.8s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+[dir="ltr"] .animate-bar { transform-origin: left; }
+@media (prefers-reduced-motion: reduce) {
+  .animate-bar { animation: none; }
+}
+@keyframes bar-grow-y {
+  from { transform: scaleY(0); }
+}
+.animate-bar-y {
+  transform-origin: bottom;
+  animation: bar-grow-y 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-bar-y { animation: none; }
+}

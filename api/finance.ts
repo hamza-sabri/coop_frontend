@@ -30,6 +30,8 @@ export type PnlLines = {
   net_revenue: string
   cogs: string
   waste: string
+  remakes?: string
+  count_shortfall?: string
   gross_profit: string
   opex?: string
   net_profit?: string

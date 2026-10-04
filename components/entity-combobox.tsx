@@ -151,7 +151,7 @@ export function EntityCombobox({
           </Button>
         }
       />
-      <PopoverContent className="w-(--anchor-width) p-0" align="start">
+      <PopoverContent className="w-72 min-w-(--anchor-width) max-w-[calc(100vw-2rem)] p-0" align="start">
         <Command shouldFilter={false}>
           <CommandInput
             value={search}

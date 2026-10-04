@@ -75,12 +75,12 @@ export function TaxonomyCombobox({
               className,
             )}
           >
-            <span className="truncate">{value || placeholder}</span>
+            <span className="truncate" title={value || undefined}>{value || placeholder}</span>
             <ChevronsUpDown className="size-4 shrink-0 opacity-50" />
           </Button>
         }
       />
-      <PopoverContent className="w-(--anchor-width) p-0" align="start">
+      <PopoverContent className="w-72 min-w-(--anchor-width) max-w-[calc(100vw-2rem)] p-0" align="start">
         <Command shouldFilter={false}>
           <CommandInput
             value={search}
@@ -119,7 +119,7 @@ export function TaxonomyCombobox({
                       value === opt.name ? "opacity-100" : "opacity-0",
                     )}
                   />
-                  <span className="min-w-0 flex-1 truncate">{opt.name}</span>
+                  <span className="min-w-0 flex-1 whitespace-normal break-words leading-snug">{opt.name}</span>
                   {opt.count > 0 && (
                     <span className="shrink-0 text-xs text-muted-foreground">
                       {formatNumber(opt.count)}

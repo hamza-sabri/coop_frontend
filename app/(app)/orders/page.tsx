@@ -144,6 +144,13 @@ export default function SalesPage() {
   const [empOpts, setEmpOpts] = useState<Map<number, string>>(new Map())
   const scope = useRef<HTMLDivElement>(null)
 
+  // ?search= deep link — the stock statement links each movement to its
+  // receipt, and that link has to land on the invoice.
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search).get("search")
+    if (q) setSearchRaw(q)
+  }, [])
+
   useEffect(() => {
     setPage(1)
   }, [

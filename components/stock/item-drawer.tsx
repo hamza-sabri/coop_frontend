@@ -4,19 +4,22 @@
  * to reorder) and الحركة (every purchase, waste and count, newest first). */
 import { useState } from "react"
 import { useQuery } from "@tanstack/react-query"
-import { History, Loader2, Package, PackagePlus, Save, Trash2 } from "lucide-react"
+import { Loader2, Package, PackagePlus, Save, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 
 import {
+  createInvCategory,
   deleteItem,
+  listInvCategories,
   formatQty,
-  itemMoves,
   saveItem,
   UNIT_LABEL,
   type BuyUnit,
   type InventoryItem,
 } from "@/api/inventory"
 import { ConfirmDelete } from "@/components/confirm-delete"
+import { PickOrCreate } from "@/components/pick-or-create"
+import { ItemLedger } from "@/components/stock/item-ledger"
 import { SegmentedTabs } from "@/components/segmented-tabs"
 import { perUnitLabel } from "@/components/stock/forms"
 import { Button } from "@/components/ui/button"
@@ -30,12 +33,6 @@ import { uuid } from "@/lib/offline/queue"
 import { cn } from "@/lib/utils"
 
 const BUY_UNITS: BuyUnit[] = ["piece", "kg", "g", "l", "ml"]
-const KIND_TONE: Record<string, string> = {
-  purchase: "bg-emerald-500/12 text-emerald-700 dark:text-emerald-300",
-  waste: "bg-rose-500/12 text-rose-700 dark:text-rose-300",
-  count: "bg-sky-500/12 text-sky-700 dark:text-sky-300",
-  adjust: "bg-muted text-muted-foreground",
-}
 
 /** Reorder level is typed in the unit a person counts in: kilos, litres. */
 const big = (u: string) => u === "g" || u === "ml"
@@ -95,10 +92,11 @@ export function ItemDrawer({
     }
   }
 
-  const moves = useQuery({
-    queryKey: ["inventory", "moves", item?.id],
-    queryFn: () => itemMoves(item!.id).then((r) => r.data),
-    enabled: open && !isNew && tab === "moves",
+  const cats = useQuery({
+    queryKey: ["inventory", "categories"],
+    queryFn: () => listInvCategories().then((r) => r.data),
+    enabled: open,
+    staleTime: 60_000,
   })
 
   const baseOf = (u: BuyUnit) => (u === "kg" || u === "g" ? "g" : u === "l" || u === "ml" ? "ml" : "piece")
@@ -201,7 +199,22 @@ export function ItemDrawer({
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <Label>التصنيف</Label>
-                  <Input value={f.category} onChange={(e) => setF({ ...f, category: e.target.value })} placeholder="ألبان، تغليف…" />
+                  <PickOrCreate
+                    value={f.category}
+                    options={(cats.data ?? []).map((c) => ({ name: c.name, hint: c.items ? String(c.items) : undefined }))}
+                    loading={cats.isLoading}
+                    onChange={(v) => setF({ ...f, category: v })}
+                    onCreate={
+                      isOwner
+                        ? async (name) => {
+                            await createInvCategory(name)
+                            await cats.refetch()
+                          }
+                        : undefined
+                    }
+                    placeholder="اختر التصنيف"
+                    createLabel="تصنيف جديد"
+                  />
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <Label>المورّد</Label>
@@ -269,51 +282,9 @@ export function ItemDrawer({
                 <Textarea rows={2} value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} />
               </div>
             </div>
-          ) : (
-            <div className="pb-6">
-              {moves.isLoading ? (
-                <Loader2 className="mx-auto my-8 size-5 animate-spin text-muted-foreground" />
-              ) : (moves.data ?? []).length === 0 ? (
-                <p className="py-8 text-center text-sm text-muted-foreground">لا حركات بعد.</p>
-              ) : (
-                <ul className="divide-y divide-border/60">
-                  {(moves.data ?? []).map((m) => {
-                    const q = toNumber(m.quantity)
-                    return (
-                      <li key={m.id} className="flex items-center gap-3 py-2.5">
-                        <span className={cn("rounded-lg px-2.5 py-1 text-[11px] font-semibold", KIND_TONE[m.kind])}>
-                          {m.kind_label}
-                        </span>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-semibold tabular-nums" dir="ltr" style={{ textAlign: "right" }}>
-                            {q > 0 ? "+" : "−"}
-                            {formatQty(Math.abs(q), item!.unit)}
-                          </p>
-                          <p className="truncate text-[11px] text-muted-foreground">
-                            {formatDate(m.created_at)}
-                            {m.reason ? ` · ${m.reason}` : ""}
-                            {m.created_by_name ? ` · ${m.created_by_name}` : ""}
-                          </p>
-                        </div>
-                        <div className="text-end">
-                          <p className="text-xs tabular-nums text-muted-foreground">
-                            الرصيد {formatQty(m.stock_after, item!.unit)}
-                          </p>
-                          {isOwner && m.total_cost && toNumber(m.total_cost) > 0 && m.kind !== "count" ? (
-                            <p className="text-xs font-semibold tabular-nums">{formatMoney(m.total_cost)}</p>
-                          ) : null}
-                        </div>
-                      </li>
-                    )
-                  })}
-                </ul>
-              )}
-              <p className="mt-3 flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                <History className="size-3.5" />
-                آخر ٢٠٠ حركة
-              </p>
-            </div>
-          )}
+          ) : item ? (
+            <ItemLedger item={item} owner={isOwner} />
+          ) : null}
         </div>
 
         {tab === "info" ? (

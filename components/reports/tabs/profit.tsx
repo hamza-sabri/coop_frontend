@@ -45,6 +45,21 @@ export function ProfitTab({ q }: { q: PnlQuery }) {
     { label: "صافي الإيراد", amount: net, kind: "total", hint: "ما دخل الصندوق فعلاً" },
     { label: "تكلفة المشروبات المباعة", amount: -toNumber(L.cogs), kind: "less" },
     { label: "هدر المخزون", amount: -toNumber(L.waste), kind: "less", hideIfZero: true },
+    { label: "إعادة تحضير", amount: -toNumber(L.remakes), kind: "less", hideIfZero: true, hint: "مشروب ثانٍ حُضّر بعد مرتجع" },
+    toNumber(L.count_shortfall) >= 0
+      ? {
+          label: "عجز الجرد",
+          amount: -toNumber(L.count_shortfall),
+          kind: "less",
+          hideIfZero: true,
+          hint: "ما نقص في الجرد من مكونات الوصفات",
+        }
+      : {
+          label: "+ زيادة في الجرد",
+          amount: -toNumber(L.count_shortfall),
+          kind: "line",
+          hint: "وُجد أكثر مما سجّلته المبيعات",
+        },
     { label: "إجمالي الربح", amount: toNumber(L.gross_profit), kind: "total" },
   ]
   if (isShift) {

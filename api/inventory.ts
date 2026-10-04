@@ -31,7 +31,11 @@ export type InventoryItem = {
   supplier: string
   notes: string
   is_active: boolean
-  state: ("out" | "low" | "expired" | "expiring")[]
+  state: ("negative" | "out" | "low" | "expired" | "expiring")[]
+  /** Base units used per day over the last 14 days; null = not used lately. */
+  daily_use: string | null
+  /** Days the shelf lasts at that rate; null = unknown. */
+  days_left: number | null
   client_uuid?: string | null
   created_at: string
   updated_at: string
@@ -40,7 +44,7 @@ export type InventoryItem = {
 export type StockMove = {
   id: number
   item: number
-  kind: "purchase" | "waste" | "count" | "adjust"
+  kind: "purchase" | "waste" | "count" | "adjust" | "sale" | "remake"
   kind_label: string
   quantity: string
   stock_after: string
@@ -64,6 +68,23 @@ export type InventorySummary = {
 }
 
 type Page<T> = { results: T[]; count: number } | T[]
+
+export type InventoryInsights = {
+  range: { start: string; end: string; elapsed_end: string; days: number }
+  stock_value: string
+  items: number
+  flow: { purchases: string; used: string; remakes: string; waste: string; shortfall: string; surplus: string }
+  daily: { date: string; purchases: string; used: string; waste: string }[]
+  by_category: { name: string; value: string; items: number }[]
+  top_used: { id: number; name: string; unit: BaseUnit; quantity: string; cost: string }[]
+  top_waste: { id: number; name: string; unit: BaseUnit; quantity: string; cost: string; reasons?: { reason: string; n: number }[] }[]
+  running_out: { id: number; name: string; unit: BaseUnit; stock: string; per_day: string; days_left: number }[]
+}
+
+export const inventoryInsights = (q: { period: string; date: string }) =>
+  customFetch<Env<InventoryInsights>>(
+    `/api/v1/inventory-items/insights/?${new URLSearchParams({ period: q.period, date: q.date })}`,
+  )
 export const listItems = async (params: { search?: string; category?: string } = {}) => {
   const u = new URLSearchParams({ page_size: "500" })
   if (params.search) u.set("search", params.search)
@@ -112,11 +133,75 @@ export function toBase(qty: number, unit: BuyUnit): number {
 }
 
 /** 2500 g → "2.5 كيلو", 300 ml → "300 مل", 120 piece → "120 قطعة". */
-export function formatQty(baseQty: number | string, base: BaseUnit): string {
+export function formatQty(baseQty: number | string, base: BaseUnit, exact = false): string {
   const n = Number(baseQty) || 0
+  // `exact`: every gram and millilitre shown (13.814 l), for statements that
+  // must add up on paper. Otherwise rounded for a glance.
   const fmt = (x: number) =>
-    x.toLocaleString("en-US", { maximumFractionDigits: x < 10 ? 2 : 1 })
+    x.toLocaleString("en-US", { maximumFractionDigits: exact ? 3 : x < 10 ? 2 : 1 })
   if (base === "g" && Math.abs(n) >= 1000) return `${fmt(n / 1000)} كيلو`
   if (base === "ml" && Math.abs(n) >= 1000) return `${fmt(n / 1000)} لتر`
   return `${fmt(n)} ${UNIT_LABEL[base]}`
+}
+
+// ── categories (the dropdown) ──────────────────────────────────────────
+export type InventoryCategory = { id: number; name: string; position: number; items: number }
+export const listInvCategories = () =>
+  customFetch<Env<InventoryCategory[]>>(`/api/v1/inventory-categories/`)
+export const createInvCategory = (name: string) =>
+  customFetch<Env<InventoryCategory>>(`/api/v1/inventory-categories/`, json("POST", { name }))
+
+// ── the item's statement ───────────────────────────────────────────────
+export type Ledger = {
+  item: { id: number; name: string; unit: BaseUnit }
+  range: { start: string; end: string }
+  opening: string
+  rows: { kind: StockMove["kind"]; label: string; quantity: string; moves: number; cost?: string }[]
+  closing: string
+  stock_now: string
+  consistent: boolean
+  used_by: { product_id: number | null; name: string; quantity: string; receipts: number }[]
+  used_in: { product_id: number; name: string; quantity: string }[]
+  moves: (StockMove & { sale: number | null; receipt_code: string; product_name: string })[]
+}
+export const itemLedger = (id: number, q: { period: string; date?: string }) =>
+  customFetch<Env<Ledger>>(`/api/v1/inventory-items/${id}/ledger/?period=${q.period}${q.date ? `&date=${q.date}` : ""}`)
+
+// ── recipes ────────────────────────────────────────────────────────────
+export type RecipeLine = {
+  id?: number
+  item: number
+  item_name: string
+  base_unit: BaseUnit
+  /** In the base unit. */
+  quantity: string
+  display_unit: BuyUnit
+  unit_cost: string
+  line_cost: string
+}
+export type Recipe = {
+  product: number
+  base: RecipeLine[]
+  base_cost: string | null
+  variants: { id: number; label: string; own: boolean; lines: RecipeLine[]; cost: string | null }[]
+}
+export const getRecipe = (productId: number) =>
+  customFetch<Env<Recipe>>(`/api/v1/products/${productId}/recipe/`)
+export const saveRecipe = (
+  productId: number,
+  variant: number | null,
+  lines: { item: number; quantity: string; unit: BuyUnit }[],
+) => customFetch<Env<Recipe>>(`/api/v1/products/${productId}/recipe/`, json("PUT", { variant, lines }))
+
+/** Several versions in one request — all saved, or none. */
+export const saveRecipes = (
+  productId: number,
+  versions: { variant: number | null; lines: { item: number; quantity: string; unit: BuyUnit }[] }[],
+) => customFetch<Env<Recipe>>(`/api/v1/products/${productId}/recipe/`, json("PUT", { versions }))
+
+/** A base-unit quantity shown in the unit it was typed in: 250 ml as "0.25" l. */
+export function fromBase(baseQty: number | string, unit: BuyUnit): string {
+  const n = Number(baseQty) || 0
+  const v = unit === "kg" || unit === "l" ? n / 1000 : n
+  return String(Number(v.toFixed(3)))
 }

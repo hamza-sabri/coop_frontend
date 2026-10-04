@@ -38,3 +38,21 @@ describe("money screens are flat", () => {
     expect(read(f)).not.toMatch(/clay-(card|chip|well|btn)|SegmentedControl/)
   })
 })
+
+describe("recipes", () => {
+  it("ingredients live in the drink form — the drink's and each option's — and the stock drawer has a statement", () => {
+    const form = read("components/forms/drink-form.tsx")
+    expect(form).toContain("<Ingredients")
+    // one save for the drink, its options and every version's ingredients
+    expect(form).toContain("saveRecipes(productId")
+    // validated before anything is written
+    expect(form.indexOf("draftProblem(baseLines")).toBeLessThan(form.indexOf("await upsert("))
+    expect(read("components/stock/item-drawer.tsx")).toContain("<ItemLedger")
+  })
+  it("the statement shows quantities exactly, not rounded", () => {
+    expect(read("components/stock/item-ledger.tsx")).toContain("formatQty(data.closing, unit, true)")
+  })
+  it("the inventory category is a dropdown, not free text", () => {
+    expect(read("components/stock/item-drawer.tsx")).toContain("<PickOrCreate")
+  })
+})
