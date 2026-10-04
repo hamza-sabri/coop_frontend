@@ -78,6 +78,9 @@ export type Cart = {
   receiptCode?: string
   customerId: number | null
   customerName: string
+  /** A customer created at this till while offline: no server id yet, only
+   *  the client id they will be created with. Sent as customer_client_uuid. */
+  customerClientUuid?: string
   payment: "cash" | "debt"
   /** Return mode (إرجاع): stock goes back and the amount is refunded. */
   isReturn?: boolean

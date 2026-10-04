@@ -2,6 +2,7 @@
 
 import type { SalePayload } from "@/api/sales"
 import {
+  STORE_OUTBOX,
   STORE_PENDING_SALES,
   idbCount,
   idbDelete,
@@ -46,6 +47,10 @@ export function uuid(): string {
     .slice(2)}`
 }
 
+export function announceQueueChange() {
+  announce()
+}
+
 function announce() {
   if (typeof window !== "undefined") {
     window.dispatchEvent(new CustomEvent(CHANGE_EVENT))
@@ -81,10 +86,18 @@ export async function updateQueuedSale(sale: QueuedSale): Promise<void> {
   announce()
 }
 
+/** Everything still waiting to reach the server: sales AND outbox writes. */
 export async function pendingCount(): Promise<number> {
+  let n = 0
   try {
-    return await idbCount(STORE_PENDING_SALES)
+    n += await idbCount(STORE_PENDING_SALES)
   } catch {
-    return 0
+    /* no IndexedDB */
   }
+  try {
+    n += await idbCount(STORE_OUTBOX)
+  } catch {
+    /* older database, not upgraded yet */
+  }
+  return n
 }

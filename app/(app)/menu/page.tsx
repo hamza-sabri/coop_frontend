@@ -76,7 +76,6 @@ const SORT_OPTIONS = [
   { value: "name", label: "الاسم (أ–ي)" },
   { value: "-price", label: "الأعلى سعراً" },
   { value: "price", label: "الأقل سعراً" },
-  { value: "-stock", label: "الأكثر مخزوناً" },
   { value: "expiry_date", label: "الأقرب انتهاءً" },
   { value: "-created_at", label: "الأحدث" },
 ]
@@ -130,7 +129,9 @@ function MedCard({
   // DRF serialises DecimalField as a string, so this arrived as
   // `string | number` and every `stock <= 5` was relying on JS
   // coercion. Coerce once, here.
-  const stock = Number(med.stock ?? 0)
+  const cost = Number((med as { cost?: string | number | null }).cost ?? 0)
+  const price = Number(med.price ?? 0)
+  const margin = price > 0 ? ((price - cost) / price) * 100 : 0
   const variants =
     (med as unknown as { variants?: { pack_size?: string | null }[] }).variants ?? []
   const variantCount = variants.length
@@ -263,17 +264,19 @@ function MedCard({
           <span className="font-heading text-lg font-bold text-primary">
             {formatMoney(med.price)}
           </span>
-          <span
-            className={`pill backdrop-blur-sm ${
-              stock <= 0
-                ? "pill-danger"
-                : stock <= 5
-                  ? "pill-warning"
-                  : "pill-neutral"
-            }`}
-          >
-            مخزون {formatNumber(stock)}
-          </span>
+          {/* Margin, not stock: a café does not count lattes (selling never
+              moves the number, it read 999), but the owner does want to see
+              which drinks earn. Cost is owner-only — absent for employees. */}
+          {cost > 0 && price > 0 ? (
+            <span
+              className={`pill backdrop-blur-sm ${
+                margin >= 60 ? "pill-success" : margin >= 40 ? "pill-warning" : "pill-danger"
+              }`}
+              title={`التكلفة ${formatMoney(cost)}`}
+            >
+              هامش {margin.toFixed(0)}%
+            </span>
+          ) : null}
         </div>
         {med.expiry_date && (
           <p

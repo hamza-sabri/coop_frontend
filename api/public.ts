@@ -16,3 +16,17 @@ export async function publicStats(): Promise<PublicStats> {
   if (!res.ok) throw new Error(`stats ${res.status}`)
   return (await res.json()) as PublicStats
 }
+
+/**
+ * Can customers order right now? Its own endpoint, uncached, so switching
+ * ordering off takes effect on the next page load rather than after the
+ * menu's five-minute cache expires.
+ */
+export async function publicOrdering(): Promise<{ open: boolean }> {
+  const res = await fetch(`${API_BASE}/api/v1/public/ordering/`, {
+    headers: { Accept: "application/json" },
+    cache: "no-store",
+  })
+  if (!res.ok) throw new Error(`ordering ${res.status}`)
+  return (await res.json()) as { open: boolean }
+}

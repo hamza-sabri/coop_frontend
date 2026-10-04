@@ -8,6 +8,8 @@ import {
   ShoppingBag,
   ConciergeBell,
   ChartPie,
+  Package,
+  Wallet,
   type LucideIcon,
 } from "lucide-react"
 
@@ -22,8 +24,18 @@ export type NavItem = {
    * `user.modules` from /auth/me/ — see lib/modules.ts. Omit = always shown.
    */
   module?: string | string[]
-  /** Locked for employee accounts (owner/superuser only). */
+  /** Owner/superuser only. Employees do not see it in the navigation at
+   *  all, and reaching it by URL shows the owner-only notice. Money lives
+   *  behind this: reports, expenses. */
   ownerOnly?: boolean
+  /**
+   * Absent, not locked, when the module is missing. A locked item is an
+   * upsell — "ask the owner to enable this" — which is right for a feature
+   * the shop has not bought and wrong for one the shop has switched OFF:
+   * there is nobody to ask. The page renders its own off-state if reached
+   * by URL.
+   */
+  hideWhenLocked?: boolean
   /**
    * A live count to show on this item. "liveOrders" = orders from the app that
    * nobody has accepted yet. Deliberately a KEY rather than a number: nav-config
@@ -63,10 +75,26 @@ export const NAV_ITEMS: NavItem[] = [
     href: "/live",
     label: "الطلبات",
     icon: ConciergeBell,
-    module: "pos",
+    // Not "pos": the board exists only while customers can order. With the
+    // server's ONLINE_ORDERS_ENABLED off, this module is absent from
+    // /auth/me/ and the item disappears from both the rail and the bottom bar.
+    module: "online_orders",
+    hideWhenLocked: true,
     badge: "liveOrders",
   },
   { href: "/orders", label: "الفواتير", icon: ShoppingBag, module: "pos", desktopOnly: true },
+  /* Raw materials — cups, milk, beans. Not the menu: selling a drink never
+     moves these. On the phone too, because counting the fridge happens with
+     a phone in hand. */
+  { href: "/stock", label: "المخزون", icon: Package, module: "inventory" },
+  {
+    href: "/expenses",
+    label: "المصاريف",
+    icon: Wallet,
+    module: "pnl",
+    ownerOnly: true,
+    desktopOnly: true,
+  },
   // There WAS an «اليوم» closing-time screen here. Removed: it answered the
   // same questions التقارير answers, in a second visual language, and the
   // owner had to learn which of two pages held today's number.
@@ -76,6 +104,7 @@ export const NAV_ITEMS: NavItem[] = [
     icon: ChartPie,
     desktopOnly: true,
     module: "reports",
+    ownerOnly: true,
   },
   /* Import is out of the navigation for كوب. It exists to bulk-load a
      catalogue of thousands from a supplier file; a café types its menu once

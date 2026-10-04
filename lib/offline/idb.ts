@@ -5,6 +5,9 @@
  * everything the POS needs to survive an internet/power cut in Qalqilya:
  *
  *  - `pending_sales`  queued checkouts waiting to sync (keyed by client UUID)
+ *  - `outbox`         other till writes made offline (customers, returns),
+ *                     replayed in order: customers before the sales that
+ *                     name them, returns after
  *  - `kv`             cached blobs (the product catalogue + customers list) so
  *                     search & barcode scans keep working offline and across
  *                     reloads.
@@ -14,8 +17,12 @@
  */
 
 const DB_NAME = "pharma_offline_v1"
-const DB_VERSION = 1
+// v2 added `outbox`: the till's other offline writes (customers made at the
+// counter, returns). Sales keep their own store — they predate it and their
+// rows carry receipt data the outbox does not need.
+const DB_VERSION = 2
 export const STORE_PENDING_SALES = "pending_sales"
+export const STORE_OUTBOX = "outbox"
 export const STORE_KV = "kv"
 
 let dbPromise: Promise<IDBDatabase> | null = null
@@ -34,6 +41,9 @@ function openDb(): Promise<IDBDatabase> {
       }
       if (!db.objectStoreNames.contains(STORE_KV)) {
         db.createObjectStore(STORE_KV)
+      }
+      if (!db.objectStoreNames.contains(STORE_OUTBOX)) {
+        db.createObjectStore(STORE_OUTBOX, { keyPath: "id" })
       }
     }
     req.onsuccess = () => resolve(req.result)

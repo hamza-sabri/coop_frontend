@@ -11,6 +11,10 @@ import { StaffSection } from "@/components/settings/staff-section"
 import { PlanLockedSection } from "@/components/settings/plan-locked-section"
 import { PrintSection } from "@/components/settings/print-section"
 import { TillSound } from "@/components/settings/till-sound"
+import { ScannerSection } from "@/components/settings/scanner-section"
+import { PointsSection } from "@/components/settings/points-section"
+import { ShiftsSection } from "@/components/settings/shifts-section"
+import { SegmentedTabs, type SegmentedTab } from "@/components/segmented-tabs"
 import { useModules, hasModule, useIsOwner } from "@/lib/modules"
 import {
   SYNC_MODES,
@@ -34,12 +38,32 @@ import { cn } from "@/lib/utils"
 const STAFF_ENABLED = false
 const SYNC_CONTROLS_ENABLED = false
 
+/** One tab per reason to open this page, in the order they are opened — the
+ *  al-rahmah layout. The staff tab arrives with the employees page (week two);
+ *  until then it is absent, not a locked teaser. */
+const TABS: SegmentedTab[] = [
+  { id: "device", label: "هذا الجهاز" },
+  { id: "print", label: "الطباعة" },
+  { id: "sync", label: "المزامنة" },
+  { id: "points", label: "النقاط", ownerOnly: true },
+  { id: "shifts", label: "الورديات", ownerOnly: true },
+  { id: "brand", label: "الهوية", ownerOnly: true },
+]
+
 export default function SettingsPage() {
   const qc = useQueryClient()
   const { modules } = useModules()
   const isOwner = useIsOwner()
   // null = unknown/legacy backend → don't lock anyone out (mirrors OfflineGate).
   const offlineOn = modules === null || hasModule(modules, "offline")
+
+  const [tab, setTab] = useState("device")
+  // Deep link: /settings?tab=print. Read once after mount rather than through
+  // useSearchParams, which would force a Suspense boundary on the whole page.
+  useEffect(() => {
+    const t = new URLSearchParams(window.location.search).get("tab")
+    if (t && TABS.some((x) => x.id === t)) setTab(t)
+  }, [])
 
   const [mode, setMode] = useState<SyncMode>("auto")
   const [pending, setPending] = useState(0)
@@ -76,6 +100,16 @@ export default function SettingsPage() {
     <div className="mx-auto w-full max-w-2xl">
       <PageHeader title="الإعدادات" description="المظهر والمزامنة" />
 
+      <SegmentedTabs
+        tabs={TABS.filter((t) => !t.ownerOnly || isOwner)}
+        active={tab}
+        onChange={setTab}
+      />
+
+      {/* «هذا الجهاز» — settings that belong to the MACHINE, not the account:
+          the counter's tablet and the owner's phone answer them differently. */}
+      {tab === "device" && (
+      <>
       {/* Appearance */}
       <section className="mb-5 rounded-2xl border bg-card p-5">
         <h2 className="mb-1 font-heading text-base font-bold">المظهر</h2>
@@ -95,24 +129,23 @@ export default function SettingsPage() {
         <TillSound />
       </section>
 
-      {/* Branding + staff / user management — owners only */}
-      {isOwner && <BrandingSection />}
-      {isOwner &&
-        (STAFF_ENABLED ? (
-          <StaffSection />
-        ) : (
-          <PlanLockedSection
-            title="الموظفون"
-            description="أضِف حسابات الموظفين وتحكّم بصلاحياتهم"
-          />
-        ))}
+      <ScannerSection />
+      </>
+      )}
+
+      {/* Owner-only, double-checked: filtered out of the tab list AND
+          re-checked here. The server refuses either way. */}
+      {tab === "points" && isOwner && <PointsSection />}
+      {tab === "shifts" && isOwner && <ShiftsSection />}
+      {tab === "brand" && isOwner && <BrandingSection />}
+      {tab === "brand" && isOwner && STAFF_ENABLED && <StaffSection />}
 
       {/* Printing. Also in the POS's printer dialog, but that is only reachable
           from the till — the owner sets the shop up from here. */}
-      <PrintSection />
+      {tab === "print" && <PrintSection />}
 
       {/* Sync */}
-      {SYNC_CONTROLS_ENABLED ? (
+      {tab === "sync" && (SYNC_CONTROLS_ENABLED ? (
         <section className="rounded-2xl border bg-card p-5">
           <div className="mb-1 flex items-center justify-between gap-2">
             <h2 className="font-heading text-base font-bold">المزامنة</h2>
@@ -185,7 +218,7 @@ export default function SettingsPage() {
           title="المزامنة"
           description="تحكّم بمتى تُرفع فواتيرك وتُنزَّل التحديثات — مفيد على الاتصال الضعيف"
         />
-      )}
+      ))}
     </div>
   )
 }

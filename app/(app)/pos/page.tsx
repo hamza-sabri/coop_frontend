@@ -59,6 +59,8 @@ import { ManualLineRow } from "@/components/pos/manual-line-row"
 import { useCustomersCatalog } from "@/hooks/use-customers-catalog"
 import { invalidateSaleData } from "@/lib/sale-queries"
 import { POINTS_PER_ILS, pointsForBill, pointsValue } from "@/lib/points"
+import { pointsFor } from "@/lib/points-bands"
+import { fetchEarnRules } from "@/api/finance"
 import { useSaleEditLink } from "@/hooks/use-sale-edit-link"
 import { useDebounced } from "@/hooks/use-debounced"
 import {
@@ -79,6 +81,7 @@ import { cn } from "@/lib/utils"
 
 import { StickyToolbar } from "@/components/sticky-toolbar"
 import { PageHeader } from "@/components/page-header"
+import { useScannerEnabled } from "@/lib/scanner-pref"
 import { LoadMore } from "@/components/load-more"
 import { EntityCombobox, type ComboOption } from "@/components/entity-combobox"
 import { ConfirmDelete } from "@/components/confirm-delete"
@@ -443,6 +446,10 @@ function buildPayload(pos: Pos): CheckoutInput | null {
     // sale back to cash actually detaches the customer.
     customer:
       active.customerId ?? (editingSaleId != null ? null : undefined),
+    customer_client_uuid:
+      active.customerId == null && active.customerClientUuid
+        ? active.customerClientUuid
+        : undefined,
     payment_method: paymentMethod,
     // Sent even when blank on a correction, so clearing a note actually clears it.
     note: active.note?.trim() || (editingSaleId != null ? "" : undefined),
@@ -685,7 +692,21 @@ function SaleControls({ pos }: { pos: Pos }) {
           {/* The faces are a shortcut to picking someone, so once someone IS
               picked they are just a row of noise above the answer. Clearing
               the field with its × brings them back. */}
-          {active.customerId == null && (
+          {active.customerId == null && active.customerClientUuid ? (
+            <div className="flex items-center gap-2 rounded-xl border border-dashed border-primary/40 bg-primary/5 px-3 py-2 text-sm">
+              <span className="min-w-0 flex-1 truncate font-semibold">{active.customerName}</span>
+              <span className="shrink-0 text-[11px] text-muted-foreground">جديد · بانتظار المزامنة</span>
+              <button
+                type="button"
+                aria-label="إزالة الزبون"
+                onClick={() => patchActive({ customerClientUuid: undefined, customerName: "" })}
+                className="grid size-6 place-items-center rounded-md text-muted-foreground hover:bg-muted"
+              >
+                ×
+              </button>
+            </div>
+          ) : null}
+          {active.customerId == null && !active.customerClientUuid && (
             <CustomerChips
               value={active.customerId}
               onPick={(c) =>
@@ -696,7 +717,7 @@ function SaleControls({ pos }: { pos: Pos }) {
               }
             />
           )}
-          <div className="flex items-center gap-2">
+          <div className={cn("flex items-center gap-2", active.customerClientUuid && active.customerId == null && "hidden")}>
             <div className="min-w-0 flex-1">
               <EntityCombobox
                 value={active.customerId}
@@ -705,6 +726,7 @@ function SaleControls({ pos }: { pos: Pos }) {
                   patchActive({
                     customerId: opt?.id ?? null,
                     customerName: opt?.label ?? "",
+                    customerClientUuid: undefined,
                   })
                 }
                 fetcher={customerFetcher}
@@ -745,8 +767,12 @@ function SaleControls({ pos }: { pos: Pos }) {
       <CustomerForm
         open={custFormOpen}
         onOpenChange={setCustFormOpen}
+        offline
         onSaved={(c) =>
-          patchActive({ customerId: c.id, customerName: c.name })
+          patchActive({ customerId: c.id, customerName: c.name, customerClientUuid: undefined })
+        }
+        onSavedLocal={(c) =>
+          patchActive({ customerId: null, customerName: c.name, customerClientUuid: c.clientUuid })
         }
       />
     </div>
@@ -825,6 +851,13 @@ function TotalRow({
   onSubmitSale?: () => void
 }) {
   const active = pos.active
+  const rules = useQuery({
+    queryKey: ["points-rules"],
+    queryFn: () => fetchEarnRules().then((r) => r.data),
+    staleTime: 10 * 60_000,
+  })
+  const bands = rules.data?.rules ?? []
+  const defaultPct = Number(rules.data?.default_rate_percent ?? 2)
   if (!active) return null
   const total = cartTotal(active)
   // Same rule as buildPayload: an untouched field is a MIRROR of the total,
@@ -847,10 +880,22 @@ function TotalRow({
       : 0
   const beansWorth = pointsValue(beans)
   const due = Math.max(0, billed - beansWorth)
+  // What this receipt will EARN, by the shop's bands — the server computes
+  // the real award with the same rule; this is the promise said out loud.
+  const hasCustomer = active.customerId != null || Boolean(active.customerClientUuid)
+  const earns = hasCustomer && !active.isReturn ? pointsFor(bands, due, defaultPct) : 0
 
   return (
     <div className="flex flex-col gap-2">
       <PointsRow pos={pos} />
+      {earns > 0 ? (
+        <p className="flex items-center justify-between rounded-xl bg-primary/5 px-3 py-1.5 text-xs">
+          <span className="text-muted-foreground">يكسب الزبون من هذه الفاتورة</span>
+          <span className="font-semibold text-primary tabular-nums">
+            +{earns} نقطة · {formatMoney(pointsValue(earns))}
+          </span>
+        </p>
+      ) : null}
       <div className="flex flex-col gap-1 rounded-2xl bg-muted/60 px-4 py-2.5">
         <div className="flex items-baseline justify-between">
           <span className="text-sm text-muted-foreground">
@@ -1369,10 +1414,6 @@ function ProductTile({
   med: Product
   onAdd: (m: Product) => void
 }) {
-  // DRF serialises DecimalField as a string, so this arrived as
-  // `string | number` and every `stock <= 5` was relying on JS
-  // coercion. Coerce once, here.
-  const stock = Number(med.stock ?? 0)
   const variantCount =
     (med as unknown as { variants?: unknown[] }).variants?.length ?? 0
   const img = (med as unknown as { image?: string }).image
@@ -1402,13 +1443,8 @@ function ProductTile({
           </span>
         )}
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-card/95 via-card/25 via-40% to-transparent" />
-        <span
-          className={`pill absolute end-2 top-2 px-2 py-0.5 text-[10px] backdrop-blur-sm ${
-            stock <= 0 ? "pill-danger" : stock <= 5 ? "pill-warning" : "pill-neutral"
-          }`}
-        >
-          {formatNumber(stock)}
-        </span>
+        {/* No stock count on the tile: a café does not count lattes, and
+            selling never moves this number — it read 999 on every drink. */}
         {variantCount > 0 && (
           <span className="absolute start-2 top-2 inline-flex items-center gap-1 rounded-full bg-card/90 px-2 py-0.5 text-[10px] font-semibold text-foreground ring-1 ring-border backdrop-blur-sm">
             <Layers className="size-3" />
@@ -1644,6 +1680,7 @@ function PosPageInner() {
     },
   })
   const [cartOpen, setCartOpen] = useState(false)
+  const scannerOn = useScannerEnabled()
   const [sheetScan, setSheetScan] = useState(false)
   const [bump, setBump] = useState(0)
   const scope = useRef<HTMLDivElement>(null)
@@ -2024,8 +2061,9 @@ function PosPageInner() {
               <button
                 type="button"
                 onClick={() => {
-                  // Open the cart with the barcode scanner already running.
-                  setSheetScan(true)
+                  // The camera starts with the cart only on a device that has
+                  // switched scanning on (lib/scanner-pref.ts). Off by default.
+                  setSheetScan(scannerOn)
                   setCartOpen(true)
                 }}
                 aria-label="السلة"
@@ -2037,8 +2075,9 @@ function PosPageInner() {
               <button
                 type="button"
                 onClick={() => {
-                  // Open the cart with the barcode scanner already running.
-                  setSheetScan(true)
+                  // The camera starts with the cart only on a device that has
+                  // switched scanning on (lib/scanner-pref.ts). Off by default.
+                  setSheetScan(scannerOn)
                   setCartOpen(true)
                 }}
                 className={cn(
@@ -2082,7 +2121,7 @@ function PosPageInner() {
                 qtySeed={qtySeed}
                 pos={pos}
                 totalOnTop
-                onScanCode={handleScan}
+                onScanCode={scannerOn ? handleScan : undefined}
                 defaultScanning={sheetScan}
                 onDone={() => setCartOpen(false)}
                 onScanBurst={(code) => void handleWedgeEnter(code)}

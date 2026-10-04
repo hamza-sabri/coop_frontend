@@ -5,7 +5,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useQueryClient } from "@tanstack/react-query"
 import { useTheme } from "next-themes"
-import { BarChart3, GraduationCap, LogOut, Moon, QrCode, ReceiptText, Settings, Sun, Users } from "lucide-react"
+import { BarChart3, GraduationCap, LogOut, Moon, QrCode, ReceiptText, Settings, Sun, Users, Wallet } from "lucide-react"
 import { toast } from "sonner"
 
 import { logout } from "@/lib/auth"
@@ -126,10 +126,19 @@ export function TopBar() {
               <Users className="size-4" />
               الزبائن
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => router.push("/debts")}>
+            {/* The pages that are not on the phone's bottom bar. الديون was
+                here — a café is paid at the counter, and the page is out of
+                the navigation everywhere else. */}
+            <DropdownMenuItem onClick={() => router.push("/orders")}>
               <ReceiptText className="size-4" />
-              الديون
+              الفواتير
             </DropdownMenuItem>
+            {isOwner && (
+              <DropdownMenuItem onClick={() => router.push("/expenses")}>
+                <Wallet className="size-4" />
+                المصاريف
+              </DropdownMenuItem>
+            )}
             {isOwner && (
               <DropdownMenuItem onClick={() => router.push("/reports")}>
                 <BarChart3 className="size-4" />

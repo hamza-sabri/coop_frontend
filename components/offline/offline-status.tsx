@@ -33,7 +33,7 @@ export function OfflineStatus() {
     icon = <CloudOff className="size-4" />
     text =
       pending > 0
-        ? `غير متصل — ${formatNumber(pending)} فاتورة محفوظة`
+        ? `غير متصل — ${formatNumber(pending)} عملية محفوظة على الجهاز`
         : "غير متصل — البيع يعمل والفواتير تُحفظ"
   } else if (syncing) {
     tone = "info"
@@ -42,7 +42,7 @@ export function OfflineStatus() {
   } else if (pending > 0) {
     tone = "warn"
     icon = <UploadCloud className="size-4" />
-    text = `${formatNumber(pending)} فاتورة بانتظار المزامنة`
+    text = `${formatNumber(pending)} عملية بانتظار المزامنة`
   }
 
   const toneCls =

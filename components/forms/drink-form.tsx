@@ -40,6 +40,7 @@ import {
   updateVariant,
   type Variant,
 } from "@/api/variants"
+import { useIsOwner } from "@/lib/modules"
 import { cn } from "@/lib/utils"
 import type { Product } from "@/api/generated/model"
 
@@ -60,6 +61,8 @@ type Option = {
   pieces: string
   stock: string
   active: boolean
+  /** What this option costs to make. Blank = same as the drink's cost. */
+  cost: string
 }
 
 const KINDS: { k: Kind; label: string }[] = [
@@ -102,6 +105,27 @@ function Field({
       {children}
       {hint ? <p className="text-[11px] text-muted-foreground">{hint}</p> : null}
     </div>
+  )
+}
+
+/** Margin on one price, as the owner reads it: "هامش 66% · ربح 11.90 ₪". */
+function MarginPill({ price, cost }: { price: number; cost: number }) {
+  if (!(price > 0) || !(cost > 0)) return null
+  const profit = price - cost
+  const pct = (profit / price) * 100
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums",
+        pct >= 60
+          ? "bg-emerald-500/12 text-emerald-700 dark:text-emerald-300"
+          : pct >= 40
+            ? "bg-amber-500/12 text-amber-700 dark:text-amber-300"
+            : "bg-rose-500/12 text-rose-700 dark:text-rose-300",
+      )}
+    >
+      هامش {pct.toFixed(0)}% · ربح {profit.toFixed(2)} ₪
+    </span>
   )
 }
 
@@ -201,15 +225,20 @@ function DrinkPhoto({
 function OptionRow({
   o,
   base,
+  baseCost,
+  showCost,
   onChange,
   onRemove,
 }: {
   o: Option
   base: number
+  baseCost: number
+  showCost: boolean
   onChange: (patch: Partial<Option>) => void
   onRemove: () => void
 }) {
   const resolved = resolvePrice(o, base)
+  const cost = o.cost.trim() !== "" ? num(o.cost) : baseCost
   return (
     <div className="flex flex-wrap items-end gap-2 rounded-2xl border bg-card/60 p-2.5">
       <div className="min-w-[8rem] flex-1">
@@ -259,6 +288,21 @@ function OptionRow({
         />
       </div>
 
+      {showCost && (
+        <div className="flex items-stretch overflow-hidden rounded-xl border" title="تكلفة هذا الخيار — فارغ = نفس تكلفة المشروب">
+          <span className="grid place-items-center bg-muted px-2.5 text-[11px] font-semibold">
+            تكلفة
+          </span>
+          <Input
+            inputMode="decimal"
+            value={o.cost}
+            onChange={(e) => onChange({ cost: e.target.value })}
+            placeholder={baseCost > 0 ? baseCost.toFixed(2) : "0"}
+            className="h-10 w-20 rounded-none border-0 text-center"
+          />
+        </div>
+      )}
+
       {o.kind === "pack" && (
         <div className="flex items-stretch overflow-hidden rounded-xl border">
           <span className="grid place-items-center bg-muted px-2.5 text-[11px] font-semibold">
@@ -295,9 +339,10 @@ function OptionRow({
         <Trash2 className="size-4" />
       </button>
 
-      {o.mode === "delta" && (
-        <p className="w-full text-[11px] text-muted-foreground">
-          يصير السعر {resolved.toFixed(2)} ₪
+      {(o.mode === "delta" || (showCost && cost > 0 && resolved > 0)) && (
+        <p className="flex w-full flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+          {o.mode === "delta" ? <span>يصير السعر {resolved.toFixed(2)} ₪</span> : null}
+          {showCost ? <MarginPill price={resolved} cost={cost} /> : null}
         </p>
       )}
     </div>
@@ -317,6 +362,8 @@ export function DrinkForm({
 }) {
   const qc = useQueryClient()
   const editing = Boolean(product)
+  const isOwner = useIsOwner()
+  const [cost, setCost] = useState("")
 
   const [name, setName] = useState("")
   const [category, setCategory] = useState("")
@@ -349,6 +396,10 @@ export function DrinkForm({
             pieces: v.pack_size ? String(Number(v.pack_size)) : "",
             stock: String(Number(v.stock ?? 0)),
             active: v.is_active !== false,
+            cost:
+              (v as { cost?: string | null }).cost != null && Number((v as { cost?: string }).cost) > 0
+                ? String(Number((v as { cost?: string }).cost))
+                : "",
           }
         }),
       )
@@ -366,6 +417,11 @@ export function DrinkForm({
       setName(product.name ?? "")
       setCategory(product.category ?? "")
       setPrice(product.price ?? "")
+      setCost(
+        (product as { cost?: string | null }).cost != null && Number((product as { cost?: string }).cost) > 0
+          ? String(Number((product as { cost?: string }).cost))
+          : "",
+      )
       setNotes(product.notes ?? "")
       setAvailable((product as unknown as { is_active?: boolean }).is_active !== false)
       setImageUrl(product.image ?? "")
@@ -375,6 +431,7 @@ export function DrinkForm({
       setName("")
       setCategory("")
       setPrice("")
+      setCost("")
       setNotes("")
       setAvailable(true)
       setImageUrl("")
@@ -401,6 +458,7 @@ export function DrinkForm({
         pieces: "",
         stock: "",
         active: true,
+        cost: "",
       },
     ])
   }
@@ -427,6 +485,9 @@ export function DrinkForm({
           name: name.trim(),
           category: category.trim(),
           price: price.trim() || "0",
+          // Only the owner sees or sends cost; the server ignores it from
+          // anyone else regardless.
+          ...(isOwner ? { cost: cost.trim() ? num(cost).toFixed(2) : "0" } : {}),
           notes: notes.trim(),
           is_active: available,
           image: imageFile ? undefined : imageUrl.trim(),
@@ -455,6 +516,7 @@ export function DrinkForm({
             price: resolvePrice(o, base).toFixed(2),
             stock: o.stock === "" ? "0" : String(num(o.stock)),
             is_active: o.active,
+            ...(isOwner ? { cost: o.cost.trim() ? num(o.cost).toFixed(2) : "0" } : {}),
             pack_size:
               o.kind === "pack" && num(o.pieces) > 0
                 ? String(num(o.pieces))
@@ -484,7 +546,7 @@ export function DrinkForm({
 
   return (
     <FormModal
-      wide
+      size="lg"
       open={open}
       onOpenChange={onOpenChange}
       title={editing ? "تعديل مشروب" : "إضافة مشروب"}
@@ -544,7 +606,7 @@ export function DrinkForm({
             />
           </Field>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className={cn("grid gap-3", isOwner ? "grid-cols-3" : "grid-cols-2")}>
             <Field label="السعر (₪)" hint="السعر الأساسي — الأحجام تعدّله">
               <Input
                 inputMode="decimal"
@@ -553,6 +615,16 @@ export function DrinkForm({
                 placeholder="0.00"
               />
             </Field>
+            {isOwner ? (
+              <Field label="التكلفة (₪)" hint="كم يكلّفك الكوب: بن، حليب، كوب، غطاء…">
+                <Input
+                  inputMode="decimal"
+                  value={cost}
+                  onChange={(e) => setCost(e.target.value)}
+                  placeholder="0.00"
+                />
+              </Field>
+            ) : null}
             <Field label="التصنيف">
               <TaxonomyCombobox
                 kind="categories"
@@ -562,6 +634,12 @@ export function DrinkForm({
               />
             </Field>
           </div>
+
+          {isOwner && num(cost) > 0 && base > 0 ? (
+            <div className="-mt-1">
+              <MarginPill price={base} cost={num(cost)} />
+            </div>
+          ) : null}
 
           <Field label="الوصف" hint="يظهر تحت اسم المشروب في التطبيق">
             <Textarea
@@ -604,6 +682,8 @@ export function DrinkForm({
                 key={o.key}
                 o={o}
                 base={base}
+                baseCost={num(cost)}
+                showCost={isOwner}
                 onChange={(p) => patch(o.key, p)}
                 onRemove={() => removeOption(o.key)}
               />

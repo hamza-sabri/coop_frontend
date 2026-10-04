@@ -174,7 +174,13 @@ function LoginForm() {
             </p>
           </div>
 
+          {/* method="post": if the button is pressed before React has
+              hydrated, the browser submits the form natively. As a GET that
+              put ?username=…&password=… in the address bar, the history and
+              the server's access log. As a POST the password stays in the
+              body and the page simply reloads. */}
           <form
+            method="post"
             onSubmit={handleSubmit(onSubmit)}
             className="flex flex-col gap-4"
             noValidate

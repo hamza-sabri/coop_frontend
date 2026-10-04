@@ -33,6 +33,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query"
 
 import { ordersLive, type LiveOrders, type Order } from "@/api/orders"
 import { isMuted, playNewOrder, unlockAudio } from "@/lib/beep"
+import { hasModule, useModules } from "@/lib/modules"
 
 export const LIVE_ORDERS_KEY = ["orders", "live"] as const
 
@@ -88,9 +89,18 @@ export function OrdersLiveProvider({ children }: { children: React.ReactNode }) 
 
   useEffect(() => setDesktopAlerts(permission()), [])
 
+  // With online ordering switched off there is nothing to poll for: no
+  // request every ten seconds from every admin page, and no sound.
+  // Wait for /auth/me/: while it loads `modules` is null, which hasModule
+  // reads as "allow" so a legacy backend never locks anyone out — right for
+  // a nav item, wrong for a poller that would fire before the answer lands.
+  const { modules, isLoading: modulesLoading } = useModules()
+  const ordersOn = !modulesLoading && hasModule(modules, "online_orders")
+
   const { data, isLoading } = useQuery({
     queryKey: LIVE_ORDERS_KEY,
     queryFn: ordersLive,
+    enabled: ordersOn,
     refetchInterval: POLL_MS,
     // Keep polling when the tab is NOT the one being looked at. This is the
     // whole point: react-query pauses interval refetches in a background tab

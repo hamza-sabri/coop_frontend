@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation"
 import { Lock } from "lucide-react"
 import { isActive, type NavItem } from "@/components/nav-config"
 import { GlobalScanButton } from "@/components/scan/global-scan-button"
+import { useScannerEnabled } from "@/lib/scanner-pref"
 import { useNavItemsWithLock } from "@/lib/modules"
 import { NavBadge } from "@/components/orders/nav-badge"
 import { useLockedFeature } from "@/components/locked-feature"
@@ -71,15 +72,20 @@ export function BottomNav() {
     )
   }
 
+  // Off by default — see lib/scanner-pref.ts.
+  const scannerOn = useScannerEnabled()
+
   return (
     <nav className="fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-30 md:hidden">
       <div className="ink-panel flex items-center gap-1 rounded-[24px] px-2 py-1.5 shadow-2xl">
         {first.map(({ item, locked }) => (
           <Item key={item.href} item={item} locked={locked} />
         ))}
-        <div className="shrink-0 px-1">
-          <GlobalScanButton variant="nav" />
-        </div>
+        {scannerOn && (
+          <div className="shrink-0 px-1">
+            <GlobalScanButton variant="nav" />
+          </div>
+        )}
         {last.map(({ item, locked }) => (
           <Item key={item.href} item={item} locked={locked} />
         ))}

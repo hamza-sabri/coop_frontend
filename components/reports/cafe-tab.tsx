@@ -47,6 +47,7 @@ import {
 import { cafeReport, type CafeDrink, type CafeReport } from "@/api/reports"
 import { formatMoney, formatNumber, toNumber } from "@/lib/format"
 import { Skeleton } from "@/components/ui/skeleton"
+import { hasModule, useModules } from "@/lib/modules"
 import { cn } from "@/lib/utils"
 
 /* ── pieces ─────────────────────────────────────────────────────────────── */
@@ -145,6 +146,9 @@ const money = (d: CafeDrink) => Math.abs(toNumber(d.revenue))
 
 export function CafeTab({ days }: { days: number }) {
   const [showAllDead, setShowAllDead] = useState(false)
+  // App-vs-counter only means something while customers can order.
+  const { modules } = useModules()
+  const ordersOn = hasModule(modules, "online_orders")
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ["reports", "cafe", days],
@@ -228,7 +232,7 @@ export function CafeTab({ days }: { days: number }) {
 
       {/* ── revenue over time + where it came from ───────────────────── */}
       <div className="grid gap-4 lg:grid-cols-3">
-        <div className="clay-card rep-chart p-5 lg:col-span-2">
+        <div className={cn("clay-card rep-chart p-5", ordersOn ? "lg:col-span-2" : "lg:col-span-3")}>
           <h3 className="font-heading mb-2 text-base font-bold">الإيراد اليومي</h3>
           <div className="h-52" dir="ltr">
             <ResponsiveContainer width="100%" height="100%">
@@ -258,6 +262,7 @@ export function CafeTab({ days }: { days: number }) {
             makes a reader estimate angles to learn a percentage that can
             simply be written down. Both segments are labelled, so the colours
             are decoration rather than the key. */}
+        {ordersOn ? (
         <div className="clay-card rep-val flex flex-col p-5">
           <h3 className="font-heading text-base font-bold">التطبيق مقابل الكاونتر</h3>
           <p className="mb-4 text-xs text-muted-foreground">من أين يأتي الإيراد</p>
@@ -317,6 +322,7 @@ export function CafeTab({ days }: { days: number }) {
             </div>
           </div>
         </div>
+        ) : null}
       </div>
 
       {/* ── when ─────────────────────────────────────────────────────── */}
@@ -548,6 +554,8 @@ export function CafeTab({ days }: { days: number }) {
         />
 
         <div className="clay-card p-5">
+          {ordersOn ? (
+          <>
           <div className="mb-3 flex items-center gap-2">
             <Smartphone className="size-4 text-primary" />
             <h3 className="font-heading text-base font-bold">طلبات التطبيق</h3>
@@ -583,6 +591,16 @@ export function CafeTab({ days }: { days: number }) {
               <p className="text-[11px] text-muted-foreground">ملغى</p>
             </div>
           </div>
+          </>
+          ) : (
+            <div className="mb-3 flex items-center gap-2">
+              <Users className="size-4 text-primary" />
+              <h3 className="font-heading text-base font-bold">الفواتير المرتبطة بزبون</h3>
+              <span className="ms-auto font-heading text-2xl font-bold text-primary">
+                {formatNumber(h.identified_share)}%
+              </span>
+            </div>
+          )}
           <p className="mt-3 text-xs text-muted-foreground">
             نسبة تعرّف الزبون على الفاتورة {formatNumber(h.identified_share)}٪ — كل
             فاتورة بلا زبون هي نقاط لم تُمنح وزيارة لا نعرف صاحبها.

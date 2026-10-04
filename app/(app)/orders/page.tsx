@@ -159,8 +159,11 @@ export default function SalesPage() {
     filters.employee,
   ])
 
+  // Period takings are the owner's: the server refuses them to employees, and
+  // the cards are simply not drawn for them. The invoice list itself stays.
   const { data: stats, isLoading: statsLoading } = useQuery({
     refetchInterval: LIVE_MS,
+    enabled: isOwner,
     queryKey: ["sales-stats"],
     queryFn: async () => (await salesStats()).data,
     staleTime: 60_000,
@@ -320,14 +323,14 @@ export default function SalesPage() {
       {/* Period totals. ONE row: the six fixed windows the server buckets, plus
           the hand-picked range that used to be a whole panel of its own above
           them — chips and a single wide card repeating three of these six. */}
-      {statsLoading && (
+      {isOwner && statsLoading && (
         <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-7">
           {Array.from({ length: 7 }).map((_, i) => (
             <Skeleton key={i} className="h-20 rounded-3xl" />
           ))}
         </div>
       )}
-      {stats && (
+      {isOwner && stats && (
         <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-7">
           {periodCards.map(([label, bucket]) => (
             <Card key={label} className="sale-stat clay-card border-0 gap-0 p-3.5">
@@ -347,7 +350,7 @@ export default function SalesPage() {
       )}
 
       {/* Reports module — live preview or the locked upsell teaser. */}
-      <ReportsTeaser />
+      {isOwner ? <ReportsTeaser /> : null}
 
       {/* Category split + payment split (last 30 days).
           Collapsed: the owner does not read these, and they pushed the numbers

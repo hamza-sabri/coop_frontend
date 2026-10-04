@@ -57,6 +57,10 @@ const PRECACHE_ROUTES = [
   "/inventory",
   "/inventory/stats",
   "/purchases",
+  // Raw materials and expenses. Reads work offline from the cache; their
+  // writes are online-only until week two.
+  "/stock",
+  "/expenses",
   "/reports",
   "/settings",
   "/customers",

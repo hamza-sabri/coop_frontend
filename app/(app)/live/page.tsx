@@ -46,6 +46,7 @@ import { loadPrintSettings } from "@/lib/print/settings"
 import type { ReceiptData } from "@/lib/print/receipt"
 import { invalidateSaleData } from "@/lib/sale-queries"
 import { cn } from "@/lib/utils"
+import { hasModule, useModules } from "@/lib/modules"
 
 /** The board, left to right. The last two are today's finished work: they sit
  *  ON the board rather than on a history page because "did #12 go out?" is a
@@ -86,6 +87,21 @@ function canDrop(o: Order | null, to: OrderStatus): boolean {
 }
 
 export default function LiveOrdersPage() {
+  const { modules, isLoading } = useModules()
+  if (!isLoading && !hasModule(modules, "online_orders")) {
+    return (
+      <div className="mx-auto flex max-w-md flex-col items-center gap-2 py-24 text-center">
+        <p className="font-heading text-lg font-bold">الطلب أونلاين متوقف حالياً</p>
+        <p className="text-sm text-muted-foreground">
+          لا يستقبل التطبيق طلبات الآن، فلا شيء يصل لهذه الصفحة. البيع من نقطة البيع يعمل كالمعتاد.
+        </p>
+      </div>
+    )
+  }
+  return <LiveBoard />
+}
+
+function LiveBoard() {
   const { orders, recent, open, isLoading, refresh, enableDesktopAlerts, desktopAlerts } =
     useLiveOrders()
   // One list for the whole board: the four live columns and the two finished

@@ -1,13 +1,29 @@
 "use client"
 
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet"
 
-/** A centered, scrollable modal with a branded header + sticky footer. */
+/**
+ * The app's form shell: a side drawer with a branded header and a pinned
+ * footer. Ported from al-rahmah, where the same swap was made for the same
+ * reason.
+ *
+ * It was a centred modal, and every form in the product went through it, so
+ * "edit a drink" blacked out the menu you found the drink in. That is wrong
+ * for the work these forms do — correcting a price you are comparing against
+ * its neighbours. The thing you are working FROM has to stay on screen.
+ *
+ * The rule the app now follows: an OBJECT opens in a drawer (a drink, a
+ * customer, an invoice); a DECISION stays a small dialog (confirm a delete,
+ * pick a printer). Drawers stack; dialogs interrupt.
+ *
+ * Enters from the left: the app is RTL and the navigation rail is on the
+ * right, so a panel arriving over it would cover the way out.
+ */
 export function FormModal({
   open,
   onOpenChange,
@@ -15,7 +31,7 @@ export function FormModal({
   icon,
   children,
   footer,
-  wide,
+  size = "md",
 }: {
   open: boolean
   onOpenChange: (o: boolean) => void
@@ -23,15 +39,15 @@ export function FormModal({
   icon?: React.ReactNode
   children: React.ReactNode
   footer: React.ReactNode
-  /** Two columns instead of one. For forms that would otherwise need an
-   *  accordion to fit — the accordion being the thing worth avoiding. */
-  wide?: boolean
+  /** `lg` for a two-column form or one carrying a table; `xl` for a table
+   *  that needs room to read. */
+  size?: "md" | "lg" | "xl"
 }) {
-  /* Enter saves, from any field in the dialog.
+  /* Enter saves, from any field in the drawer.
      These forms hang their save off `onClick={handleSubmit(...)}` rather than
      a real submit button, so the browser's own "Enter submits the form" never
      applied and every save needed a trip to the mouse. Rather than rewrite
-     each form, the modal presses its own primary button — which is the same
+     each form, the shell presses its own primary button — which is the same
      thing the cashier would have done, and keeps one rule in one place.
 
      Excluded: a textarea (Enter is a newline there), Enter with a modifier,
@@ -53,34 +69,35 @@ export function FormModal({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        showCloseButton={false}
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent
+        side="left"
+        size={size}
+        className="gap-0 p-0"
+        aria-describedby={undefined}
         onKeyDown={onKeyDown}
-        className={
-          "flex max-h-[92dvh] w-full flex-col gap-0 overflow-hidden rounded-3xl p-0 " +
-          (wide ? "sm:max-w-3xl" : "sm:max-w-xl")
-        }
       >
-        <DialogHeader className="bg-brand-soft relative overflow-hidden border-b border-border/70 px-6 py-4.5 text-start">
+        <SheetHeader className="bg-brand-soft relative shrink-0 overflow-hidden border-b border-border/70 px-6 py-4.5 pe-14 text-start">
           <div
             aria-hidden="true"
             className="bg-brand-gradient pointer-events-none absolute -end-10 -top-12 size-28 rounded-full opacity-15"
           />
-          <DialogTitle className="flex items-center gap-2.5">
+          <SheetTitle className="flex items-center gap-2.5">
             {icon && (
               <span className="icon-chip bg-brand-gradient size-10">{icon}</span>
             )}
             <span className="font-heading text-lg">{title}</span>
-          </DialogTitle>
-        </DialogHeader>
+          </SheetTitle>
+        </SheetHeader>
+        {/* min-h-0: without it a long form pushes the footer off the bottom of
+            the panel and the save button becomes unreachable. */}
         <div className="min-h-0 flex-1 space-y-4.5 overflow-y-auto px-6 py-5">
           {children}
         </div>
-        <div className="flex flex-row gap-2.5 border-t border-border/70 bg-muted/30 px-6 py-4">
+        <div className="flex shrink-0 flex-row gap-2.5 border-t border-border/70 bg-muted/30 px-6 py-4">
           {footer}
         </div>
-      </DialogContent>
-    </Dialog>
+      </SheetContent>
+    </Sheet>
   )
 }

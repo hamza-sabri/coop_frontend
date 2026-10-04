@@ -31,6 +31,9 @@ export function ModuleGuard({ children }: { children: React.ReactNode }) {
   const item = NAV_ITEMS.find(
     (i) => pathname === i.href || pathname.startsWith(i.href + "/"),
   )
+  // A switched-OFF feature explains itself (see NavItem.hideWhenLocked): the
+  // generic notice says "ask the owner to enable it", and there is no one to ask.
+  if (item?.hideWhenLocked) return <>{children}</>
   if (!hasModule(modules, required) || (item?.ownerOnly && !isOwner)) {
     return <LockedFeatureNotice module={required} />
   }

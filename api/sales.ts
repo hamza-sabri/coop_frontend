@@ -20,6 +20,10 @@ export type SaleItem = {
   original_unit_price?: string | null
   quantity: number
   line_total?: string
+  /** Owner only — absent for employees. Frozen at the moment of sale. */
+  unit_cost?: string | null
+  /** Units of this line already handed back. */
+  returned_quantity?: string
 }
 
 export function saleItemName(it: {
@@ -61,6 +65,9 @@ export type Sale = {
    */
   beans_spent?: number
   beans_value?: string
+  beans_earned?: number
+  returns?: SaleReturn[]
+  refunded_total?: string
   debt: number | null
   note: string
   /** The 12-digit number printed as a barcode on this sale's receipt. */
@@ -74,6 +81,52 @@ export type Sale = {
 }
 
 /** One past version of a sale, kept whole. Backend: SaleRevision. */
+export type ReturnReason =
+  | "wrong_order"
+  | "taste"
+  | "late"
+  | "spilled"
+  | "changed_mind"
+  | "other"
+
+export const RETURN_REASONS: { value: ReturnReason; label: string }[] = [
+  { value: "wrong_order", label: "خطأ في الطلب" },
+  { value: "taste", label: "الطعم" },
+  { value: "late", label: "تأخّر" },
+  { value: "spilled", label: "انسكب أو تلف" },
+  { value: "changed_mind", label: "غيّر رأيه" },
+  { value: "other", label: "أخرى" },
+]
+
+export type SaleReturn = {
+  id: number
+  sale_item: number | null
+  item_name: string
+  quantity: string
+  refund_amount: string
+  points_reversed: number
+  reason: ReturnReason
+  reason_label: string
+  note: string
+  created_at: string
+}
+
+export type ReturnPayload = {
+  sale_item: number
+  quantity?: string
+  refund: "full" | "none"
+  reason: ReturnReason
+  note?: string
+  client_uuid?: string
+}
+
+export const salesReturn = (id: number, body: ReturnPayload) =>
+  customFetch<{ data: Sale; status: number }>(`/api/v1/sales/${id}/returns/`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  })
+
 export type SaleRevision = {
   id: number
   /** 1 is the sale as it was originally rung. */
@@ -103,6 +156,9 @@ export type SaleRevision = {
 
 export type SalePayload = {
   customer?: number | null
+  /** A customer created at the till while offline: the id the till minted.
+   *  The server resolves it after the customer itself has synced. */
+  customer_client_uuid?: string
   payment_method: "cash" | "debt"
   is_return?: boolean
   items: Array<{

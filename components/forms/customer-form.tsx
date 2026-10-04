@@ -14,6 +14,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { ImageField } from "@/components/image-field"
 import { ENDPOINTS, upsert } from "@/lib/mutate"
+import { sendOrQueue } from "@/lib/offline/outbox"
 import { cn } from "@/lib/utils"
 import type { Customer, GenderEnum } from "@/api/generated/model"
 
@@ -32,11 +33,17 @@ export function CustomerForm({
   onOpenChange,
   customer,
   onSaved,
+  offline = false,
+  onSavedLocal,
 }: {
   open: boolean
   onOpenChange: (o: boolean) => void
   customer?: Customer | null
   onSaved?: (c: Customer) => void
+  /** The till: a NEW customer may be created with the internet down. They
+   *  are kept on this device and sent before the sales that name them. */
+  offline?: boolean
+  onSavedLocal?: (c: { clientUuid: string; name: string; phone: string }) => void
 }) {
   const qc = useQueryClient()
   const editing = Boolean(customer)
@@ -75,6 +82,29 @@ export function CustomerForm({
   }, [open, customer, reset])
 
   async function onSubmit(v: FormValues) {
+    if (offline && !customer && !avatarFile) {
+      try {
+        const res = await sendOrQueue<Customer>(
+          "customer",
+          ENDPOINTS.customers,
+          { name: v.name.trim(), phone: v.phone.trim(), gender, status, notes: v.notes },
+          `زبون: ${v.name.trim()}`,
+        )
+        qc.invalidateQueries({ queryKey: ["customers"] })
+        qc.invalidateQueries({ queryKey: ["customers-quick"] })
+        if (res.status === "sent") {
+          toast.success("تمت إضافة الزبون")
+          onSaved?.(res.data)
+        } else {
+          toast.success("حُفظ الزبون على الجهاز — يُرفع عند عودة الاتصال")
+          onSavedLocal?.({ clientUuid: res.op.id, name: v.name.trim(), phone: v.phone.trim() })
+        }
+        onOpenChange(false)
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "تعذر الحفظ")
+      }
+      return
+    }
     try {
       const res = await upsert(
         ENDPOINTS.customers,

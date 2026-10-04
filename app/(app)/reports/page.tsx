@@ -14,11 +14,16 @@
  * `components/reports/sales-tab.tsx` and `scan-tab.tsx` are all untouched, so
  * a vertical that needs them gets them back by restoring the switcher.
  */
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { CalendarRange, Check, ChevronDown } from "lucide-react"
 
 import { CafeTab } from "@/components/reports/cafe-tab"
+import { HoursTab } from "@/components/finance/hours-tab"
+import { PnlTab } from "@/components/finance/pnl-tab"
+import { SegmentedTabs, type SegmentedTab } from "@/components/segmented-tabs"
+import { hasModule, useModules, useOwnerState } from "@/lib/modules"
 import { PageHeader } from "@/components/page-header"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
 
@@ -72,18 +77,62 @@ function PeriodDropdown({
   )
 }
 
+const TABS: SegmentedTab[] = [
+  { id: "pnl", label: "الأرباح" },
+  { id: "sales", label: "المبيعات" },
+  { id: "hours", label: "الساعات" },
+]
+
 export default function ReportsPage() {
   const [days, setDays] = useState<(typeof DAY_OPTIONS)[number]>(30)
+  const ownerState = useOwnerState()
+  const isOwner = ownerState === "owner"
+  const { modules } = useModules()
+  const pnlOn = hasModule(modules, "pnl")
+  const tabs = TABS.filter((t) => t.id !== "pnl" || pnlOn)
+  const [tab, setTab] = useState<string>("pnl")
+
+  // ?tab= deep link (read after mount — no Suspense boundary needed).
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search).get("tab")
+    if (q && TABS.some((t) => t.id === q)) setTab(q)
+  }, [])
+  const active = tabs.some((t) => t.id === tab) ? tab : tabs[0].id
+
+  function pick(id: string) {
+    setTab(id)
+    const u = new URL(window.location.href)
+    u.searchParams.set("tab", id)
+    window.history.replaceState(null, "", u)
+  }
+
+  if (ownerState === "loading") {
+    return <div className="mx-auto w-full max-w-6xl pt-6"><Skeleton className="h-64 rounded-[26px]" /></div>
+  }
+  if (!isOwner) {
+    return (
+      <div className="mx-auto w-full max-w-xl pt-10">
+        <PageHeader title="التقارير" />
+        <p className="clay-card p-8 text-center text-sm text-muted-foreground">
+          التقارير والأرقام المالية للمالك فقط.
+        </p>
+      </div>
+    )
+  }
 
   return (
     <div className="mx-auto w-full max-w-7xl">
       {/* The period picker had a row to itself under the heading. It is an
-          action, so it goes where the actions go. */}
+          action, so it goes where the actions go — and only the sales tab
+          uses it; the others carry their own day/week/month bar. */}
       <PageHeader
         title="التقارير"
-        action={<PeriodDropdown days={days} onChange={setDays} />}
+        action={
+          active === "sales" ? <PeriodDropdown days={days} onChange={setDays} /> : undefined
+        }
       />
-      <CafeTab days={days} />
+      <SegmentedTabs tabs={tabs} active={active} onChange={pick} />
+      {active === "pnl" ? <PnlTab /> : active === "hours" ? <HoursTab /> : <CafeTab days={days} />}
     </div>
   )
 }

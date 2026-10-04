@@ -39,16 +39,24 @@ export function useOfflineSync() {
     busy.current = true
     setSyncing(true)
     let synced = 0
+    let outboxSynced = 0
     try {
       const res = await flushPendingSales(() => {
         synced += 1
       })
+      outboxSynced = Math.max(0, res.synced - synced)
       setPending(res.remaining)
     } finally {
       busy.current = false
       setSyncing(false)
     }
     if (synced > 0) {
+      for (const key of AFFECTED_KEYS) qc.invalidateQueries({ queryKey: key })
+    }
+    if (outboxSynced > 0) {
+      // A customer made at the counter, or a return, reached the server.
+      qc.invalidateQueries({ queryKey: ["customers"] })
+      qc.invalidateQueries({ queryKey: ["customers-quick"] })
       for (const key of AFFECTED_KEYS) qc.invalidateQueries({ queryKey: key })
     }
   }, [qc])

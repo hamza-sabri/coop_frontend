@@ -5,8 +5,10 @@
    at all or grow a second, thinner copy of the same dialog — one that would
    drift from this one the first time either changed. One dialog, two callers.
 */
-import { Banknote, CalendarDays, Coins, Pencil, Printer, Trash2, UserCog, User as UserIcon } from "lucide-react"
-import { saleItemName, type Sale } from "@/api/sales"
+import { useState } from "react"
+import { useQueryClient } from "@tanstack/react-query"
+import { Banknote, CalendarDays, Coins, Pencil, Printer, Trash2, Undo2, UserCog, User as UserIcon } from "lucide-react"
+import { saleItemName, type Sale, type SaleItem } from "@/api/sales"
 import { useMe, displayName } from "@/hooks/use-me"
 import { formatDate, formatMoney, formatNumber, toNumber } from "@/lib/format"
 import { pointsValue } from "@/lib/points"
@@ -17,11 +19,13 @@ import Link from "next/link"
 import { cn } from "@/lib/utils"
 import { isLocalSale, saleNumberLabel } from "@/lib/offline/local-sale"
 import { SaleRevisions } from "@/components/sales/sale-revisions"
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
+import { ReturnDialog, remainingQty } from "@/components/sales/return-dialog"
+import { SALE_AFFECTED_KEYS } from "@/lib/sale-queries"
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 
 export function SaleDetail({
-  sale,
+  sale: given,
   open,
   onOpenChange,
   onVoid,
@@ -32,6 +36,13 @@ export function SaleDetail({
   onVoid: (s: Sale) => void
 }) {
   const { user } = useMe()
+  const qc = useQueryClient()
+  // A return answers with the updated sale; show it without waiting for the
+  // list behind the drawer to refetch.
+  const [fresh, setFresh] = useState<Sale | null>(null)
+  const sale = fresh && given && fresh.id === given.id ? fresh : given
+  const [returning, setReturning] = useState<SaleItem | null>(null)
+  const canReturn = Boolean(sale && !sale.is_return && !isLocalSale(sale.id))
   const cashierName = displayName(user)
   const me = user as { pharmacy_name?: string; pharmacy_logo?: string } | undefined
   const pharmacyName = me?.pharmacy_name?.trim() || "المتجر"
@@ -88,10 +99,16 @@ export function SaleDetail({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
+    /* A drawer, not a dialog: the invoice is an object, and the list it was
+       opened from stays on screen beside it — the al-rahmah rule. Enters from
+       the left, away from the nav rail. */
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent
+        side="left"
+        size="md"
         showCloseButton={false}
-        className="flex max-h-[92dvh] w-full flex-col gap-0 overflow-hidden rounded-3xl p-0 sm:max-w-xl"
+        aria-describedby={undefined}
+        className="flex w-full flex-col gap-0 overflow-hidden p-0"
       >
         {sale && (
           <>
@@ -120,9 +137,9 @@ export function SaleDetail({
                     )}
                   </span>
                   <div className="min-w-0">
-                    <DialogTitle className="truncate font-heading text-lg font-bold text-white">
+                    <SheetTitle className="truncate font-heading text-lg font-bold text-white">
                       {sale.customer_name || "زبون نقدي"}
-                    </DialogTitle>
+                    </SheetTitle>
                     {/* A queued sale has no server number yet — showing
                         "بيع رقم -1" would read as a data bug. */}
                     <p className="text-xs text-white/55">
@@ -215,6 +232,7 @@ export function SaleDetail({
                       <TableHead className="text-center">الكمية</TableHead>
                       <TableHead className="text-end">السعر</TableHead>
                       <TableHead className="text-end">المجموع</TableHead>
+                      {canReturn ? <TableHead className="w-10" /> : null}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -222,9 +240,14 @@ export function SaleDetail({
                       <TableRow key={it.id ?? i}>
                         <TableCell className="max-w-[180px] truncate whitespace-normal font-medium">
                           {saleItemName(it)}
+                          {toNumber(it.returned_quantity) > 0 ? (
+                            <span className="ms-1.5 rounded-full bg-rose-500/12 px-1.5 py-0.5 text-[10px] font-semibold text-rose-700 dark:text-rose-300">
+                              أُرجع {Number(it.returned_quantity)}
+                            </span>
+                          ) : null}
                         </TableCell>
                         <TableCell className="text-center tabular-nums">
-                          {it.quantity}
+                          {Number(it.quantity)}
                         </TableCell>
                         <TableCell className="text-end tabular-nums">
                           {formatMoney(it.unit_price)}
@@ -232,11 +255,58 @@ export function SaleDetail({
                         <TableCell className="text-end font-medium tabular-nums">
                           {formatMoney(it.line_total)}
                         </TableCell>
+                        {canReturn ? (
+                          <TableCell className="p-1 text-center">
+                            {remainingQty(it) > 0 ? (
+                              <button
+                                type="button"
+                                onClick={() => setReturning(it)}
+                                aria-label={`إرجاع ${saleItemName(it)}`}
+                                title="إرجاع"
+                                className="grid size-8 place-items-center rounded-lg text-muted-foreground transition hover:bg-rose-500/10 hover:text-rose-600"
+                              >
+                                <Undo2 className="size-4" />
+                              </button>
+                            ) : null}
+                          </TableCell>
+                        ) : null}
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
               </div>
+
+              {(sale.returns ?? []).length > 0 && (
+                <div className="space-y-1.5 rounded-2xl border border-rose-500/20 bg-rose-500/5 px-4 py-3 text-sm">
+                  <p className="flex items-center gap-1.5 text-xs font-semibold text-rose-700 dark:text-rose-300">
+                    <Undo2 className="size-3.5" />
+                    مرتجعات
+                  </p>
+                  {(sale.returns ?? []).map((r) => (
+                    <div key={r.id} className="flex items-center justify-between gap-2">
+                      <span className="min-w-0 truncate">
+                        {r.item_name} ×{Number(r.quantity)}
+                        <span className="ms-1.5 text-xs text-muted-foreground">
+                          {r.reason_label}
+                          {r.note ? ` — ${r.note}` : ""}
+                          {r.points_reversed > 0 ? ` · −${formatNumber(r.points_reversed)} نقطة` : ""}
+                        </span>
+                      </span>
+                      <span className="shrink-0 tabular-nums">
+                        {toNumber(r.refund_amount) > 0 ? `− ${formatMoney(r.refund_amount)}` : "إعادة تحضير"}
+                      </span>
+                    </div>
+                  ))}
+                  {toNumber(sale.refunded_total) > 0 ? (
+                    <div className="flex items-center justify-between border-t border-rose-500/20 pt-1.5 font-semibold">
+                      <span>صافي الفاتورة بعد المرتجع</span>
+                      <span className="tabular-nums">
+                        {formatMoney(toNumber(sale.discounted_total) - toNumber(sale.refunded_total))}
+                      </span>
+                    </div>
+                  ) : null}
+                </div>
+              )}
 
               {hasBreakdown && (
                 <div className="space-y-1.5 rounded-2xl bg-muted/60 px-4 py-3 text-sm">
@@ -326,12 +396,24 @@ export function SaleDetail({
                 className="inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium text-destructive transition hover:bg-destructive/10 disabled:pointer-events-none disabled:opacity-40"
               >
                 <Trash2 className="size-4" />
-                إلغاء البيع (استرجاع المخزون)
+                إلغاء البيع
               </button>
             </div>
           </>
         )}
-      </DialogContent>
-    </Dialog>
+      </SheetContent>
+      {sale ? (
+        <ReturnDialog
+          sale={sale}
+          line={returning}
+          onClose={() => setReturning(null)}
+          onDone={(updated) => {
+            if (updated) setFresh(updated)
+            for (const key of SALE_AFFECTED_KEYS) qc.invalidateQueries({ queryKey: key })
+            qc.invalidateQueries({ queryKey: ["reports"] })
+          }}
+        />
+      ) : null}
+    </Sheet>
   )
 }

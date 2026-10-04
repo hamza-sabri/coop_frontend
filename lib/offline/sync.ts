@@ -1,6 +1,7 @@
 "use client"
 
 import { salesCreate, type Sale } from "@/api/sales"
+import { flushOutbox } from "@/lib/offline/outbox"
 import {
   listQueuedSales,
   pendingCount,
@@ -39,6 +40,13 @@ export async function flushPendingSales(
   let synced = 0
   let failed = 0
   try {
+    // Customers first: a sale rung offline may name one by its client id,
+    // and the server can only resolve that once the customer exists.
+    const c = await flushOutbox(["customer"])
+    synced += c.synced
+    failed += c.failed
+    if (c.stopped) return { synced, failed, remaining: await pendingCount() }
+
     const rows = await listQueuedSales()
     for (const row of rows) {
       // A row this fresh is likely a write-ahead entry whose direct POST is
@@ -64,9 +72,13 @@ export async function flushPendingSales(
           continue
         }
         // Network error, server 5xx, or expired auth → stop and retry later.
-        break
+        return { synced, failed, remaining: await pendingCount() }
       }
     }
+    // Returns last: they point at sales that may only just have synced.
+    const r = await flushOutbox(["return"])
+    synced += r.synced
+    failed += r.failed
   } finally {
     inFlight = false
   }

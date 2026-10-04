@@ -27,6 +27,8 @@ export const MODULE_LABELS: Record<string, string> = {
   purchases: "المشتريات وطلبات الشراء",
   offline: "العمل بدون إنترنت",
   offline_purchases: "المشتريات بدون إنترنت",
+  online_orders: "الطلب أونلاين",
+  pnl: "الأرباح والمصاريف",
 }
 
 export const ALL_MODULE_KEYS = Object.keys(MODULE_LABELS)
@@ -60,9 +62,23 @@ export function useModules(): { modules: ReadonlySet<string> | null; isLoading: 
  * the API enforces the real rule server-side either way.
  */
 export function useIsOwner(): boolean {
-  const { user } = useMe()
+  return useOwnerState() === "owner"
+}
+
+/**
+ * The same question, with "not known yet" as its own answer.
+ *
+ * Treating "still loading" as owner fired every owner-only request for an
+ * employee during the first half-second (the P&L, the period totals, the QR)
+ * and each came back 403. Owner-only queries and pages wait for "owner";
+ * pages show a skeleton for "loading" rather than flashing the
+ * "owner only" notice at the owner.
+ */
+export function useOwnerState(): "owner" | "employee" | "loading" {
+  const { user, isLoading } = useMe()
+  if (!user) return isLoading ? "loading" : "owner"
   const role = (user as { role?: string } | undefined)?.role
-  return role !== "employee"
+  return role === "employee" ? "employee" : "owner"
 }
 
 function itemLocked(
@@ -90,7 +106,12 @@ export function useNavItemsWithLock(): { item: NavItem; locked: boolean }[] {
   return NAV_ITEMS.map((item) => ({
     item,
     locked: itemLocked(item, modules, isOwner),
-  }))
+  })).filter(
+    ({ item, locked }) =>
+      !(locked && item.hideWhenLocked) &&
+      // Money is not an upsell to an employee: it is simply not theirs.
+      !(item.ownerOnly && !isOwner),
+  )
 }
 
 /** Where to land someone who can't open the page they asked for. */
