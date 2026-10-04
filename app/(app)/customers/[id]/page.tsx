@@ -47,6 +47,11 @@ type Order = Sale & {
   receipt_code?: string | null
 }
 
+type Tab = "overview" | "receipts" | "points"
+
+/** Sections arrive one after another rather than all at once. */
+const STAGGER = "animate-in fade-in slide-in-from-bottom-2 fill-mode-both duration-500"
+
 const WEEKDAYS = ["السبت", "الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة"]
 
 /* ── wording ─────────────────────────────────────────────────────────── */
@@ -58,14 +63,6 @@ function ago(days: number | null): string {
   if (days === 2) return "منذ يومين"
   if (days <= 10) return `منذ ${days} أيام`
   return `منذ ${days} يوماً`
-}
-
-function every(d: number | null): string | null {
-  if (d == null) return null
-  if (d <= 1.2) return "يومياً تقريباً"
-  if (d < 2.5) return "كل يومين تقريباً"
-  if (d <= 10) return `كل ${Math.round(d)} أيام تقريباً`
-  return `كل ${Math.round(d)} يوماً تقريباً`
 }
 
 function hourLabel(h: number): string {
@@ -92,6 +89,7 @@ export default function CustomerDetailPage() {
   const [editOpen, setEditOpen] = useState(false)
   const [page, setPage] = useState(1)
   const [detail, setDetail] = useState<Order | null>(null)
+  const [tab, setTab] = useState<Tab>("overview")
 
   const c = useQuery({
     queryKey: ["customers", "detail", id],
@@ -129,50 +127,80 @@ export default function CustomerDetailPage() {
 
       <Hero customer={customer} profile={p} female={female} isOwner={isOwner} onEdit={() => setEditOpen(true)} />
 
-      <div className="grid gap-3 lg:grid-cols-5">
-        <Panel className="lg:col-span-2" title={female ? "طلبها المعتاد" : "طلبه المعتاد"} hint={p ? `من ${formatNumber(toNumber(p.cups))} كوب` : undefined}>
-          {p ? <Usual profile={p} /> : <Skeleton className="h-40 rounded-xl" />}
-        </Panel>
-        <Panel
-          className="lg:col-span-3"
-          title="آخر ١٢ أسبوعاً"
-          hint={p ? `${formatNumber(p.visits_30d)} زيارة في آخر ٣٠ يوماً` : undefined}
-        >
-          {p ? <Weeks profile={p} isOwner={isOwner} /> : <Skeleton className="h-48 rounded-xl" />}
-        </Panel>
+      <div className={cn(STAGGER, "[animation-delay:90ms]")}>
+        <div className="flex gap-1 rounded-xl border border-border/80 bg-card p-1" role="tablist">
+          {(
+            [
+              ["overview", "نظرة"],
+              ["receipts", `الفواتير${p ? ` · ${formatNumber(p.visits)}` : ""}`],
+              ["points", "النقاط"],
+            ] as [Tab, string][]
+          ).map(([t, label]) => (
+            <button
+              key={t}
+              type="button"
+              role="tab"
+              aria-selected={tab === t}
+              onClick={() => setTab(t)}
+              className={cn(
+                "flex-1 rounded-lg px-3 py-2 text-sm font-semibold transition-colors",
+                tab === t ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      <div className="grid gap-3 lg:grid-cols-5">
-        <Panel className="lg:col-span-3" title={female ? "متى تأتي" : "متى يأتي"} hint={p ? whenHint(p) : undefined}>
-          {p ? <When profile={p} /> : <Skeleton className="h-28 rounded-xl" />}
+      {tab === "overview" ? (
+        <div key="overview" className="grid gap-3 lg:grid-cols-5">
+          <Panel
+            className={cn(STAGGER, "sm:p-4 lg:col-span-2 [animation-delay:160ms]")}
+            title={female ? "طلبها المعتاد" : "طلبه المعتاد"}
+            hint={p ? `من ${formatNumber(toNumber(p.cups))} كوب` : undefined}
+          >
+            {p ? <Usual profile={p} /> : <Skeleton className="h-40 rounded-xl" />}
+          </Panel>
+          <Panel
+            className={cn(STAGGER, "sm:p-4 lg:col-span-3 [animation-delay:240ms]")}
+            title={female ? "زياراتها" : "زياراته"}
+            hint={p ? `${formatNumber(p.visits_30d)} زيارة في آخر ٣٠ يوماً · آخر ١٢ أسبوعاً` : undefined}
+          >
+            {p ? <Rhythm profile={p} isOwner={isOwner} /> : <Skeleton className="h-48 rounded-xl" />}
+          </Panel>
+          <div className={cn(STAGGER, "lg:col-span-5 [animation-delay:320ms]")}>
+            <CustomerAppOrders customerId={id} />
+          </div>
+        </div>
+      ) : tab === "receipts" ? (
+        <Panel key="receipts" className={cn(STAGGER, "sm:p-4")} flush>
+          {ordersLoading && orders.length === 0 ? (
+            <div className="space-y-2 p-4">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <Skeleton key={i} className="h-12 rounded-xl" />
+              ))}
+            </div>
+          ) : orders.length === 0 ? (
+            <p className="p-6 text-center text-sm text-muted-foreground">لا فواتير بعد — أول طلب سيظهر هنا.</p>
+          ) : (
+            <ul className="divide-y divide-border/60">
+              {orders.map((o, i) => (
+                <OrderRow key={o.id} order={o} index={i} onOpen={() => setDetail(o)} />
+              ))}
+            </ul>
+          )}
+          {orders.length > 0 ? (
+            <div className="px-4 pb-3">
+              <LoadMore hasNext={page < pageCount} isFetchingNext={ordersLoading} onLoad={() => setPage((x) => x + 1)} />
+            </div>
+          ) : null}
         </Panel>
-        <div className="lg:col-span-2">{Number.isFinite(id) ? <PointsCard customerId={id} /> : null}</div>
-      </div>
-
-      <CustomerAppOrders customerId={id} />
-
-      <Panel title="الفواتير" hint={p ? `${formatNumber(p.visits)} فاتورة منذ ${formatDate(p.first_visit)}` : undefined} flush>
-        {ordersLoading && orders.length === 0 ? (
-          <div className="space-y-2 p-4">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <Skeleton key={i} className="h-12 rounded-xl" />
-            ))}
-          </div>
-        ) : orders.length === 0 ? (
-          <p className="px-5 pb-6 pt-2 text-sm text-muted-foreground">لا فواتير بعد — أول طلب سيظهر هنا.</p>
-        ) : (
-          <ul className="divide-y divide-border/60">
-            {orders.map((o) => (
-              <OrderRow key={o.id} order={o} onOpen={() => setDetail(o)} />
-            ))}
-          </ul>
-        )}
-        {orders.length > 0 ? (
-          <div className="px-4 pb-3">
-            <LoadMore hasNext={page < pageCount} isFetchingNext={ordersLoading} onLoad={() => setPage((x) => x + 1)} />
-          </div>
-        ) : null}
-      </Panel>
+      ) : (
+        <div key="points" className={STAGGER}>
+          {Number.isFinite(id) ? <PointsCard customerId={id} /> : null}
+        </div>
+      )}
 
       <SaleDetail
         sale={detail as Parameters<typeof SaleDetail>[0]["sale"]}
@@ -217,43 +245,58 @@ function Hero({
   const points = (customer as { points?: number } | undefined)?.points
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-border/80 bg-card animate-in fade-in duration-300">
-      <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:p-5">
-        <div className="flex min-w-0 flex-1 items-center gap-4">
-          <Avatar className="size-20 shrink-0 ring-4 ring-muted sm:size-24">
-            <AvatarImage src={customer?.avatar || undefined} alt="" className="object-cover" />
-            <AvatarFallback className="bg-primary/10 font-heading text-2xl text-primary">
-              {customer?.name?.charAt(0) ?? ""}
-            </AvatarFallback>
-          </Avatar>
-          <div className="min-w-0">
+    <section className={cn(STAGGER, "overflow-hidden rounded-2xl border border-border/80 bg-card")}>
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-3 p-4">
+        <Avatar className="size-16 shrink-0 ring-2 ring-border/60 ring-offset-2 ring-offset-card">
+          <AvatarImage src={customer?.avatar || undefined} alt="" className="object-cover" />
+          <AvatarFallback className="bg-primary/10 font-heading text-xl text-primary">{customer?.name?.charAt(0) ?? ""}</AvatarFallback>
+        </Avatar>
+        <div className="min-w-0 flex-1 sm:flex-none">
+          <div className="flex flex-wrap items-center gap-2">
             {customer ? (
-              <h2 className="truncate font-heading text-2xl font-bold leading-tight">{customer.name}</h2>
+              <h2 className="truncate font-heading text-xl font-bold leading-tight">{customer.name}</h2>
             ) : (
-              <Skeleton className="h-7 w-44" />
+              <Skeleton className="h-6 w-40" />
             )}
-            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-              {status ? (
-                <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold", status.cls)}>
-                  <span className={cn("size-1.5 rounded-full", status.dot)} />
-                  {female ? status.f : status.m}
-                  {p?.status === "fading" ? ` ${ago(p.days_since_last)}` : ""}
-                </span>
-              ) : null}
-              {customer?.signed_up ? (
-                <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs text-muted-foreground">على التطبيق</span>
-              ) : null}
-            </div>
-            <p className="mt-1.5 text-xs text-muted-foreground">
-              {female ? "زبونة" : "زبون"} منذ {formatDate(p?.joined ?? customer?.created_at)}
-            </p>
+            {status ? (
+              <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-semibold", status.cls)}>
+                <span className={cn("size-1.5 rounded-full", status.dot)} />
+                {female ? status.f : status.m}
+                {p?.status === "fading" ? ` ${ago(p.days_since_last)}` : ""}
+              </span>
+            ) : null}
           </div>
+          <p className="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
+            {customer?.phone ? <span dir="ltr" className="tabular-nums">{customer.phone}</span> : null}
+            {customer?.phone ? <span aria-hidden className="hidden sm:inline">·</span> : null}
+            <span>{female ? "زبونة" : "زبون"} منذ {formatDate(p?.joined ?? customer?.created_at)}</span>
+            {customer?.signed_up ? (
+              <>
+                <span aria-hidden>·</span>
+                <span>على التطبيق</span>
+              </>
+            ) : null}
+          </p>
         </div>
+
+        {/* the numbers, inline — four facts, no boxes */}
+        <dl className="order-last grid w-full grid-cols-4 gap-2 border-t border-border/60 pt-3 sm:order-none sm:ms-auto sm:flex sm:w-auto sm:gap-6 sm:border-0 sm:pt-0">
+          <Fact label="زيارة" sub={p ? ago(p.days_since_last) : undefined}>{p ? <CountUp value={p.visits} /> : "—"}</Fact>
+          {isOwner ? (
+            <Fact label="صرف" sub={p?.avg_ticket ? `${formatMoney(p.avg_ticket)}/فاتورة` : undefined}>
+              {p?.spent != null ? <CountUp value={toNumber(p.spent)} decimals={0} suffix=" ₪" /> : "—"}
+            </Fact>
+          ) : (
+            <Fact label="كوب">{p ? <CountUp value={toNumber(p.cups)} /> : "—"}</Fact>
+          )}
+          <Fact label="يزورنا">{p ? short(p.every_days, p.visits) : "—"}</Fact>
+          <Fact label="نقطة" sub={points != null ? formatMoney(points / 10) : undefined}>{points != null ? <CountUp value={points} /> : "—"}</Fact>
+        </dl>
+
         <div className="flex shrink-0 gap-1.5">
           {phone ? (
-            <Button variant="outline" size="sm" className="gap-1.5" nativeButton={false} render={<a href={`tel:${phone}`} />}>
+            <Button variant="outline" size="icon-sm" aria-label="اتصال" title="اتصال" nativeButton={false} render={<a href={`tel:${phone}`} />}>
               <Phone className="size-4" />
-              <span dir="ltr">{customer?.phone}</span>
             </Button>
           ) : null}
           {wa ? (
@@ -267,30 +310,8 @@ function Hero({
         </div>
       </div>
 
-      {/* the numbers, as one line of facts rather than four boxes */}
-      <dl className="grid grid-cols-2 border-t border-border/70 sm:grid-cols-4 [&>div]:border-border/70 [&>div:nth-child(odd)]:border-e sm:[&>div]:border-e sm:[&>div:last-child]:border-e-0 [&>div:nth-child(-n+2)]:border-b sm:[&>div:nth-child(-n+2)]:border-b-0">
-        <Fact label="الزيارات" sub={p ? `آخرها ${ago(p.days_since_last)}` : undefined}>
-          {p ? <CountUp value={p.visits} /> : "—"}
-        </Fact>
-        {isOwner ? (
-          <>
-            <Fact label="صرف عندنا" sub={p?.avg_ticket ? `${formatMoney(p.avg_ticket)} للفاتورة` : undefined}>
-              {p?.spent != null ? <CountUp value={toNumber(p.spent)} decimals={2} suffix=" ₪" /> : "—"}
-            </Fact>
-          </>
-        ) : (
-          <Fact label="الأكواب" sub="منذ أول زيارة">{p ? <CountUp value={toNumber(p.cups)} /> : "—"}</Fact>
-        )}
-        <Fact label="يزورنا" sub={p?.first_visit ? `أول زيارة ${formatDate(p.first_visit)}` : undefined}>
-          <span className="text-base">{p ? (every(p.every_days) ?? (p.visits ? "مرة واحدة" : "—")) : "—"}</span>
-        </Fact>
-        <Fact label="النقاط" sub="رصيد قابل للاستخدام">
-          {points != null ? <CountUp value={points} /> : "—"}
-        </Fact>
-      </dl>
-
       {customer?.notes?.trim() ? (
-        <div className="flex items-start gap-2 border-t border-border/70 bg-amber-500/5 px-5 py-3">
+        <div className="flex items-start gap-2 border-t border-border/60 bg-amber-500/5 px-4 py-2.5">
           <StickyNote className="mt-0.5 size-4 shrink-0 text-amber-600" />
           <p className="whitespace-pre-wrap text-sm leading-relaxed">{customer.notes}</p>
         </div>
@@ -299,12 +320,22 @@ function Hero({
   )
 }
 
+function short(every: number | null, visits: number): string {
+  if (every == null) return visits ? "مرة" : "—"
+  const d = Math.round(every)
+  if (d <= 1) return "يومياً"
+  if (d === 2) return "كل يومين"
+  return `كل ${d} ${d <= 10 ? "أيام" : "يوماً"}`
+}
+
 function Fact({ label, sub, children }: { label: string; sub?: string; children: React.ReactNode }) {
   return (
-    <div className="px-4 py-3 sm:px-5">
-      <dt className="text-[11px] text-muted-foreground">{label}</dt>
-      <dd className="mt-0.5 font-heading text-xl font-bold tabular-nums leading-tight">{children}</dd>
-      {sub ? <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{sub}</p> : null}
+    <div className="min-w-0 text-center sm:text-start">
+      <dd className="font-heading text-lg font-bold tabular-nums leading-tight">{children}</dd>
+      <dt className="text-[11px] text-muted-foreground">
+        {label}
+        {sub ? <span className="hidden sm:inline"> · {sub}</span> : null}
+      </dt>
     </div>
   )
 }
@@ -341,7 +372,7 @@ function Usual({ profile: p }: { profile: CustomerProfile }) {
 
 /* ── their rhythm ────────────────────────────────────────────────────── */
 
-function Weeks({ profile: p, isOwner }: { profile: CustomerProfile; isOwner: boolean }) {
+function WeekBars({ profile: p, isOwner }: { profile: CustomerProfile; isOwner: boolean }) {
   const data = p.weekly.map((w) => ({
     label: `${Number(w.week.slice(8))}/${Number(w.week.slice(5, 7))}`,
     week: w.week,
@@ -350,7 +381,7 @@ function Weeks({ profile: p, isOwner }: { profile: CustomerProfile; isOwner: boo
   }))
   if (!data.some((d) => d.visits)) return <p className="py-10 text-center text-sm text-muted-foreground">لا زيارات في آخر ١٢ أسبوعاً</p>
   return (
-    <div className="h-48" dir="ltr">
+    <div className="h-36" dir="ltr">
       <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 320, height: 180 }}>
         <BarChart data={data} margin={{ left: 0, right: 4, top: 6 }}>
           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
@@ -390,68 +421,41 @@ function whenHint(p: CustomerProfile): string | undefined {
   return `غالباً بين ${hourLabel(from)} و${hourLabel(to)} · أكثر يوم ${WEEKDAYS[day]}`
 }
 
-function When({ profile: p }: { profile: CustomerProfile }) {
-  // Only the hours the café actually sees anyone in, from the first to the
-  // last visit hour (business order: 04:00 first).
-  const firstI = p.hours.findIndex((h) => h.visits > 0)
-  const lastI = p.hours.length - 1 - [...p.hours].reverse().findIndex((h) => h.visits > 0)
-  if (firstI < 0) return <p className="py-6 text-center text-sm text-muted-foreground">لا زيارات بعد</p>
-  const pad = Math.max(0, 8 - (lastI - firstI + 1))
-  const lo = Math.max(0, firstI - Math.floor(pad / 2))
-  const hi = Math.min(p.hours.length - 1, lastI + Math.ceil(pad / 2))
-  const hours = p.hours.slice(lo, hi + 1)
-  const maxH = Math.max(...hours.map((h) => h.visits), 1)
+/** The last 12 weeks, then one line on when in the day and week they come. */
+function Rhythm({ profile: p, isOwner }: { profile: CustomerProfile; isOwner: boolean }) {
   const maxD = Math.max(...p.weekdays, 1)
-
+  const hint = whenHint(p)
   return (
-    <div className="space-y-5">
-      <div>
-        <div className="flex h-24 items-end gap-1" dir="ltr">
-          {hours.map((h, i) => (
-            <div key={h.hour} className="flex h-full flex-1 flex-col justify-end" title={`${hourLabel(h.hour)}: ${formatNumber(h.visits)} زيارة`}>
-              <div
-                className={cn(
-                  "animate-bar-y w-full rounded-t-md",
-                  h.visits === maxH ? "bg-primary" : "bg-primary/30",
-                )}
-                style={{ height: `${Math.max(h.visits ? 6 : 2, (h.visits / maxH) * 100)}%`, animationDelay: `${i * 30}ms` }}
-              />
-            </div>
-          ))}
+    <div className="space-y-3">
+      <WeekBars profile={p} isOwner={isOwner} />
+      {hint ? (
+        <div className="flex flex-col gap-2 border-t border-border/60 pt-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-xs text-muted-foreground">{hint}</p>
+          <div className="flex gap-1" aria-label="الزيارات حسب اليوم">
+            {WEEKDAYS.map((d, i) => {
+              const v = p.weekdays[i]
+              return (
+                <div key={d} className="text-center" title={`${d}: ${formatNumber(v)} زيارة`}>
+                  <div
+                    className="h-5 w-7 rounded-md"
+                    style={{ background: `color-mix(in oklch, var(--chart-1) ${Math.round(8 + (v / maxD) * 80)}%, transparent)` }}
+                  />
+                  <p className={cn("mt-0.5 text-[9px]", v === maxD ? "font-bold text-foreground" : "text-muted-foreground")}>
+                    {d.replace("ال", "").slice(0, 3)}
+                  </p>
+                </div>
+              )
+            })}
+          </div>
         </div>
-        <div className="mt-1.5 flex gap-1 text-[10px] text-muted-foreground" dir="ltr">
-          {hours.map((h, i) => (
-            <span key={h.hour} className="flex-1 text-center tabular-nums">
-              {i % 2 === 0 ? hourLabel(h.hour) : ""}
-            </span>
-          ))}
-        </div>
-      </div>
-      <div className="grid grid-cols-7 gap-1">
-        {WEEKDAYS.map((d, i) => {
-          const v = p.weekdays[i]
-          const t = v / maxD
-          return (
-            <div key={d} className="text-center">
-              <div
-                className="mx-auto h-8 rounded-lg transition-colors"
-                style={{ background: `color-mix(in oklch, var(--primary) ${Math.round(8 + t * 72)}%, transparent)` }}
-                title={`${d}: ${formatNumber(v)} زيارة`}
-              />
-              <p className={cn("mt-1 text-[10px]", v === maxD ? "font-bold text-foreground" : "text-muted-foreground")}>
-                {d.replace("ال", "")}
-              </p>
-            </div>
-          )
-        })}
-      </div>
+      ) : null}
     </div>
   )
 }
 
 /* ── receipts ────────────────────────────────────────────────────────── */
 
-function OrderRow({ order, onOpen }: { order: Order; onOpen: () => void }) {
+function OrderRow({ order, index, onOpen }: { order: Order; index: number; onOpen: () => void }) {
   const when = order.created_at ? new Date(order.created_at) : null
   const names = (order.items ?? [])
     .map((it) => {
@@ -463,8 +467,8 @@ function OrderRow({ order, onOpen }: { order: Order; onOpen: () => void }) {
   const earned = order.beans_earned ?? 0
   const spent = order.beans_spent ?? 0
   return (
-    <li>
-      <button type="button" onClick={onOpen} className="flex w-full items-center gap-3 px-4 py-3 text-start transition hover:bg-muted/40 sm:px-5">
+    <li className="animate-in fade-in slide-in-from-bottom-1 fill-mode-both duration-300" style={{ animationDelay: `${Math.min(index, 12) * 30}ms` }}>
+      <button type="button" onClick={onOpen} className="flex w-full items-center gap-3 px-4 py-2.5 text-start transition hover:bg-muted/40">
         <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-muted text-muted-foreground">
           <Receipt className="size-4" />
         </span>

@@ -635,3 +635,13 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .animate-bar-y { animation: none; }
 }
+/* A ring gauge that sweeps to its value. Set --ring-c to the circumference. */
+@keyframes ring-fill {
+  from { stroke-dashoffset: var(--ring-c); }
+}
+.animate-ring {
+  animation: ring-fill 1s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-ring { animation: none; }
+}
