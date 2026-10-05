@@ -5,15 +5,14 @@
  *
  * A barista does not type and does not scan; they tap. Two taps to a latte is
  * the whole point, so the categories are big round targets in a single row
- * rather than a dropdown. The `+` at the end creates one on the spot, because
- * a café's categories are a fact about its trade and no template can guess
- * them — the same reason quick-cards ship empty.
+ * rather than a dropdown. New categories are made on the menu page
+ * (NewCategoryDialog), not here — the till is for selling.
  */
 import { useState } from "react"
 import { toast } from "sonner"
 import {
   Beer, Cake, Candy, Coffee, Cookie, Croissant, CupSoda, Donut, Dumbbell,
-  IceCreamCone, LayoutGrid, Leaf, Milk, Pizza, Plus, Salad, Sandwich, Soup,
+  IceCreamCone, LayoutGrid, Leaf, Milk, Pizza, Salad, Sandwich, Soup,
   Utensils, type LucideIcon,
 } from "lucide-react"
 
@@ -98,20 +97,61 @@ export function CategoryCircles({
   value: string | null
   onChange: (name: string | null) => void
 }) {
-  const qc = useQueryClient()
   const { data } = useCategoriesList({ page_size: 100 })
   const cats = ((data as { data?: { results?: Cat[] } } | undefined)?.data?.results ??
     []) as Cat[]
 
-  const [open, setOpen] = useState(false)
+  // No "+" here: the till is for selling. Categories are made on المنيو.
+  return (
+    <div
+      className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1 pt-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      data-tour="pos-categories"
+    >
+      <Circle
+        label="الكل"
+        icon={LayoutGrid}
+        active={value === null}
+        onClick={() => onChange(null)}
+      />
+      {cats.map((c) => (
+        <Circle
+          key={c.id}
+          label={c.name}
+          icon={CATEGORY_ICONS[c.icon ?? ""] ?? Coffee}
+          active={value === c.name}
+          count={c.count}
+          onClick={() => onChange(value === c.name ? null : c.name)}
+        />
+      ))}
+    </div>
+  )
+}
+
+/** A new category with its icon — opened from the menu page. */
+export function NewCategoryDialog({
+  open,
+  onOpenChange,
+  onCreated,
+}: {
+  open: boolean
+  onOpenChange: (o: boolean) => void
+  onCreated?: (name: string) => void
+}) {
+  const qc = useQueryClient()
+  const { data } = useCategoriesList({ page_size: 100 })
+  const cats = ((data as { data?: { results?: Cat[] } } | undefined)?.data?.results ??
+    []) as Cat[]
   const [name, setName] = useState("")
   const [icon, setIcon] = useState("coffee")
+  const setOpen = onOpenChange
 
   const create = useCategoriesCreate({
     mutation: {
       onSuccess: (_r, vars) => {
+        const n = (vars.data as { name: string }).name
         void qc.invalidateQueries({ queryKey: getCategoriesListQueryKey() })
-        toast.success(`أضيف تصنيف «${(vars.data as { name: string }).name}»`)
+        toast.success(`أضيف تصنيف «${n}»`)
+        onCreated?.(n)
         setOpen(false)
         setName("")
       },
@@ -132,36 +172,12 @@ export function CategoryCircles({
   }
 
   return (
-    <>
-      <div
-        className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1 pt-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-        data-tour="pos-categories"
-      >
-        <Circle
-          label="الكل"
-          icon={LayoutGrid}
-          active={value === null}
-          onClick={() => onChange(null)}
-        />
-        {cats.map((c) => (
-          <Circle
-            key={c.id}
-            label={c.name}
-            icon={CATEGORY_ICONS[c.icon ?? ""] ?? Coffee}
-            active={value === c.name}
-            count={c.count}
-            onClick={() => onChange(value === c.name ? null : c.name)}
-          />
-        ))}
-        <Circle label="تصنيف جديد" icon={Plus} dashed onClick={() => setOpen(true)} />
-      </div>
-
-      <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>تصنيف جديد</DialogTitle>
             <DialogDescription>
-              بيظهر كدائرة بنقطة البيع، وبتقدر تحطّ فيه أصناف من صفحة المخزون.
+              يظهر كدائرة في شاشة البيع. اختره لأي صنف من نافذة تعديل الصنف.
             </DialogDescription>
           </DialogHeader>
 
@@ -214,7 +230,6 @@ export function CategoryCircles({
             </Button>
           </DialogFooter>
         </DialogContent>
-      </Dialog>
-    </>
+    </Dialog>
   )
 }

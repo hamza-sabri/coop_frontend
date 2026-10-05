@@ -1969,7 +1969,7 @@ function PosPageInner() {
   return (
     <div
       ref={shellRef}
-      className="mx-auto w-full max-w-7xl lg:flex lg:h-[var(--pos-fit)] lg:flex-col lg:overflow-hidden"
+      className="mx-auto w-full max-w-7xl lg:grid lg:h-[var(--pos-fit)] lg:grid-cols-[minmax(0,1fr)_460px] lg:grid-rows-[auto_minmax(0,1fr)] lg:gap-x-5 lg:overflow-hidden"
       style={{ ["--pos-fit" as string]: fitH ? `${fitH}px` : "calc(100dvh - 7rem)" }}
     >
       {scanAlertOverlay}
@@ -1998,8 +1998,10 @@ function PosPageInner() {
           {/* The categories run the full width — the whole menu at a glance,
               still scrollable — and the cart starts level with the first row
               of drinks rather than with the category strip. */}
-          <div className="shrink-0">
-          <StickyToolbar className="lg:static">
+          {/* Desktop: the categories sit over the drinks only, level with the
+              top of the cart — never under it, so none of them hide. */}
+          <div className="min-w-0 lg:col-start-1 lg:row-start-1">
+          <StickyToolbar className="lg:static lg:mx-0 lg:mb-2 lg:px-0 lg:pt-0">
             {/* An ambiguous scan can still leave a filter behind — it
                 narrows the grid rather than adding to the cart. Shown as a
                 chip so it can never become invisible state. */}
@@ -2018,10 +2020,10 @@ function PosPageInner() {
             <CategoryCircles value={catId} onChange={setCatId} />
           </StickyToolbar>
           </div>
-          <div className="grid gap-5 lg:min-h-0 lg:flex-1 lg:grid-cols-[1fr_460px]">
+          <div className="grid gap-5 lg:contents">
             {/* Products — the only thing that scrolls on a desktop. */}
             <div
-              className="min-w-0 lg:-me-3 lg:h-full lg:overflow-y-auto lg:overscroll-contain lg:pe-3 lg:pb-4 lg:[scrollbar-gutter:stable]"
+              className="min-w-0 lg:col-start-1 lg:row-start-2 lg:-me-3 lg:h-full lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain lg:pe-3 lg:pb-4 lg:[scrollbar-gutter:stable]"
               data-tour="pos-search"
             >
               {/* Kept inside the products column so it never slides over the cart. */}
@@ -2075,7 +2077,7 @@ function PosPageInner() {
             </div>
 
             {/* Cart — desktop side panel */}
-            <div className="relative z-30 hidden min-h-0 lg:block lg:h-full" data-tour="pos-cart">
+            <div className="relative z-30 hidden min-h-0 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:block lg:h-full" data-tour="pos-cart">
               <Card
                 className={cn(
                   // Fills the column, which fills the screen: the checkout

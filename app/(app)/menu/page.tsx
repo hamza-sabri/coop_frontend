@@ -25,6 +25,7 @@ import { ConfirmDelete } from "@/components/confirm-delete"
 import { FilterChips, SearchBox } from "@/components/data-table"
 import { Fab } from "@/components/fab"
 import { DrinkForm } from "@/components/forms/drink-form"
+import { NewCategoryDialog } from "@/components/pos/category-circles"
 import { Enter, PageShell } from "@/components/page-shell"
 import { SortMenu } from "@/components/sort-menu"
 import { ErrorState } from "@/components/states"
@@ -58,6 +59,7 @@ export default function MenuPage() {
   const isOwner = useIsOwner()
   const [q, setQ] = useState("")
   const [cat, setCat] = useState("all")
+  const [newCat, setNewCat] = useState(false)
   const [sort, setSort] = useState("category")
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<Product | null>(null)
@@ -145,14 +147,25 @@ export default function MenuPage() {
           <div className="shrink-0 lg:order-last lg:ms-auto">
             <SortMenu value={sort} options={sortOptions} onChange={setSort} />
           </div>
-          {cats.length > 1 ? (
-            <FilterChips
-              className="col-span-2"
-              active={cat}
-              onPick={setCat}
-              chips={[{ id: "all", label: "الكل", count: items.length }, ...cats.map(([c, n]) => ({ id: c, label: c, count: n }))]}
-            />
-          ) : null}
+          <div className="col-span-2 flex min-w-0 items-center gap-1">
+            {cats.length > 1 ? (
+              <FilterChips
+                className="min-w-0"
+                active={cat}
+                onPick={setCat}
+                chips={[{ id: "all", label: "الكل", count: items.length }, ...cats.map(([c, n]) => ({ id: c, label: c, count: n }))]}
+              />
+            ) : null}
+            {/* Categories are made here (with their icon for the till), not on the till itself. */}
+            <button
+              type="button"
+              onClick={() => setNewCat(true)}
+              className="flex shrink-0 items-center gap-1 rounded-xl border border-dashed border-primary/40 px-3 py-1.5 text-xs font-semibold text-primary transition hover:bg-primary/5"
+            >
+              <Plus className="size-3.5" />
+              تصنيف
+            </button>
+          </div>
         </div>
       </Enter>
 
@@ -203,6 +216,7 @@ export default function MenuPage() {
 
       <Fab onClick={openAdd} label="إضافة صنف" />
       <DrinkForm open={formOpen} onOpenChange={setFormOpen} product={editing} />
+      <NewCategoryDialog open={newCat} onOpenChange={setNewCat} />
       <ConfirmDelete
         open={Boolean(toDelete)}
         onOpenChange={(o) => !o && setToDelete(null)}
