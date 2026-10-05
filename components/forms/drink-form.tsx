@@ -896,12 +896,12 @@ export function DrinkForm({
       ) : null}
 
       {tab === "report" && showReport && product?.id != null ? (
-        <div className="space-y-3 animate-in fade-in duration-200">
+        <div key="report" className="stagger space-y-3">
           <PeriodBar value={period} onChange={setPeriod} today={today} />
           <ItemReport productId={product.id} q={{ period: period.period, date: period.anchor }} />
         </div>
       ) : tab === "ingredients" && isOwner ? (
-        <div className="space-y-3 animate-in fade-in duration-200">
+        <div key="ingredients" className="stagger space-y-3">
           <p className="rounded-xl bg-muted/50 px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
             ما يأخذه كوب واحد من المخزون. كل بيعة تخصم هذه الكميات، والإلغاء يعيدها. لا تغيّر التكلفة — التكلفة تكتبها أنت في الأساسية.
           </p>
@@ -945,7 +945,7 @@ export function DrinkForm({
           )}
         </div>
       ) : (
-      <div className="space-y-3 animate-in fade-in duration-200">
+      <div key="info" className="stagger space-y-3">
       <div className="grid gap-5 sm:grid-cols-[190px_1fr]">
         {/* the picture, and whether it is on the menu at all */}
         <div className="flex flex-col gap-3">

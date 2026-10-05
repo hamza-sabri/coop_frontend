@@ -190,7 +190,7 @@ export function SaleDetail({
               </div>
             </div>
 
-            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-6">
+            <div className="stagger min-h-0 flex-1 space-y-4 overflow-y-auto p-6">
               <div className="grid grid-cols-2 gap-2.5">
                 <div className="flex items-center gap-2.5 rounded-2xl bg-muted/60 px-4 py-3">
                   <span className="grid size-8 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">

@@ -50,7 +50,7 @@ export function ItemReport({ productId, q }: { productId: number; q: PnlQuery })
   const periodName = q.period === "custom" ? "" : periodLabel(q.period, q.date ?? P.start)
 
   return (
-    <div className="space-y-3">
+    <div className="stagger space-y-3">
       <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
         <Clock className="size-3.5" />
         آخر طلب: <b className="text-foreground">{ago(data.last_sold_at)}</b>

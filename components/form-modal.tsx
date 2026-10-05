@@ -91,7 +91,7 @@ export function FormModal({
         </SheetHeader>
         {/* min-h-0: without it a long form pushes the footer off the bottom of
             the panel and the save button becomes unreachable. */}
-        <div className="min-h-0 flex-1 space-y-4.5 overflow-y-auto px-6 py-5">
+        <div className="stagger min-h-0 flex-1 space-y-4.5 overflow-y-auto px-6 py-5">
           {children}
         </div>
         <div className="flex shrink-0 flex-row gap-2.5 border-t border-border/70 bg-muted/30 px-6 py-4">

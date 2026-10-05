@@ -47,7 +47,7 @@ export function ItemLedger({ item, owner }: { item: InventoryItem; owner: boolea
   const unit = item.unit
 
   return (
-    <div className="space-y-3 pb-6">
+    <div className="stagger space-y-3 pb-6">
       <PeriodBar value={p} onChange={setP} today={today} />
       {isLoading && !data ? (
         <Skeleton className="h-64 rounded-2xl" />

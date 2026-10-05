@@ -173,7 +173,7 @@ export function ItemDrawer({
           ) : null}
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-6 pt-5">
+        <div className="stagger min-h-0 flex-1 overflow-y-auto px-6 pt-5">
           {!isNew ? (
             <SegmentedTabs
               tabs={[
@@ -187,7 +187,8 @@ export function ItemDrawer({
 
           {tab === "info" ? (
             <div
-              className="space-y-4 pb-6"
+              key="info"
+              className="stagger space-y-4 pb-6"
               onKeyDown={(e) => {
                 if (e.key === "Enter" && (e.target as HTMLElement).tagName === "INPUT") {
                   e.preventDefault()
@@ -293,7 +294,7 @@ export function ItemDrawer({
               </div>
             </div>
           ) : item ? (
-            <ItemLedger item={item} owner={isOwner} />
+            <ItemLedger key="moves" item={item} owner={isOwner} />
           ) : null}
         </div>
 

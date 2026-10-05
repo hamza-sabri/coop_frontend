@@ -634,7 +634,7 @@ function ExpenseForm({
       }
     >
       {choosing ? (
-        <div className="space-y-3 animate-in fade-in duration-200">
+        <div key="choose" className="stagger space-y-3">
           {cats.isLoading ? (
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               {Array.from({ length: 8 }).map((_, i) => (
@@ -693,7 +693,7 @@ function ExpenseForm({
           </div>
         </div>
       ) : cat ? (
-        <div className="space-y-4 animate-in fade-in slide-in-from-bottom-1 duration-200">
+        <div key={`form-${cat.id}`} className="stagger space-y-4">
           {isSalary ? (
             <Field label="لمن الراتب؟">
               {people.length === 0 ? (
