@@ -11,14 +11,14 @@
  * each item's statement. */
 import { useState } from "react"
 import { useQuery } from "@tanstack/react-query"
-import { AreaTrend, Bars } from "@/components/charts"
+import { AreaTrend, Bars, dayAxis, daySpoken } from "@/components/charts"
 import { PackagePlus } from "lucide-react"
 
 import { formatQty, inventoryInsights, type InventoryItem } from "@/api/inventory"
 import { CountUp } from "@/components/count-up"
 import { RangeChips, rollingRange, type RollingDays } from "@/components/range-chips"
 import { BarList, Empty, Failed, Panel, TabSkeleton } from "@/components/reports/kit"
-import { formatDate, formatMoney, formatNumber, toNumber } from "@/lib/format"
+import { formatMoney, formatNumber, toNumber } from "@/lib/format"
 import { businessToday } from "@/lib/period"
 import { cn } from "@/lib/utils"
 
@@ -137,7 +137,7 @@ function Body({
           {days.length > 1 ? (
             <AreaTrend
               height={240}
-              data={days.map((d) => ({ label: `${d.day}/${Number(d.date.slice(5, 7))}`, title: formatDate(d.date), value: d.used }))}
+              data={days.map((d) => ({ label: dayAxis(d.date, days.length > 8), title: daySpoken(d.date), value: d.used }))}
               format={(v) => `استُهلك ${formatMoney(v)}`}
             />
           ) : (

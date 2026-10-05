@@ -156,3 +156,23 @@ export function hourSpoken(h: number): string {
   if (h < 17) return `${x} بعد الظهر`
   return `${x} مساءً`
 }
+
+const WEEKDAYS = ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"]
+const MONTHS = ["يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"]
+
+/** "2026-10-01" → its weekday, as people say it ("الخميس"). Read at noon so
+ *  no timezone can push it to the day before. */
+export function weekdayOf(iso: string): string {
+  return WEEKDAYS[new Date(`${iso.slice(0, 10)}T12:00:00`).getDay()]
+}
+
+/** Under a daily chart: the day's name; with more than a week of bars the
+ *  date too, so two Thursdays are never the same label ("الخميس 1"). */
+export function dayAxis(iso: string, many: boolean): string {
+  return many ? `${weekdayOf(iso)} ${Number(iso.slice(8, 10))}` : weekdayOf(iso)
+}
+
+/** The tooltip title: "الخميس 1 أكتوبر". */
+export function daySpoken(iso: string): string {
+  return `${weekdayOf(iso)} ${Number(iso.slice(8, 10))} ${MONTHS[Number(iso.slice(5, 7)) - 1]}`
+}

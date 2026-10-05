@@ -1261,7 +1261,7 @@ function CartLineRow({
   onSubmitSale?: () => void
 }) {
   return (
-    <div className="animate-in fade-in zoom-in-95 slide-in-from-top-1 flex items-center gap-2 rounded-2xl bg-muted/50 px-3 py-2 duration-300">
+    <div className="cart-line flex items-center gap-2 rounded-2xl px-3 py-2">
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium">{line.name}</p>
         {line.variantLabel ? (

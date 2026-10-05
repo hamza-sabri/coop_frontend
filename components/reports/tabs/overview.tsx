@@ -3,12 +3,12 @@
 /* نظرة عامة — four numbers, one chart, the drinks that carried the period.
  * Everything else has its own tab. */
 import { useQuery } from "@tanstack/react-query"
-import { AreaTrend, Bars } from "@/components/charts"
+import { AreaTrend, Bars, dayAxis, daySpoken } from "@/components/charts"
 import { AlertTriangle } from "lucide-react"
 
 import { fetchItems, fetchPnl, type PnlQuery } from "@/api/finance"
 import { BarList, Failed, Panel, Stat, TabSkeleton, Versus } from "@/components/reports/kit"
-import { formatDate, formatMoney, formatNumber, toNumber } from "@/lib/format"
+import { formatMoney, formatNumber, toNumber } from "@/lib/format"
 
 export function OverviewTab({ q, onOpenItem, goTo }: { q: PnlQuery; onOpenItem: (id: number) => void; goTo: (tab: string) => void }) {
   const pnl = useQuery({
@@ -29,9 +29,8 @@ export function OverviewTab({ q, onOpenItem, goTo }: { q: PnlQuery; onOpenItem: 
   const prev = d.previous
   const net = toNumber(L.net_revenue)
   const profit = toNumber(L.net_profit)
-  const days = (d.series ?? [])
-    .filter((r) => r.date <= d.range.elapsed_end)
-    .map((r) => ({ label: `${Number(r.date.slice(8))}/${Number(r.date.slice(5, 7))}`, title: formatDate(r.date), revenue: toNumber(r.net_revenue) }))
+  const series = (d.series ?? []).filter((r) => r.date <= d.range.elapsed_end)
+  const days = series.map((r) => ({ label: dayAxis(r.date, series.length > 8), title: daySpoken(r.date), revenue: toNumber(r.net_revenue) }))
   const top = (items.data?.items ?? []).filter((i) => toNumber(i.qty) > 0)
   const uncosted = toNumber(d.coverage.uncosted_revenue)
 

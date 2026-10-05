@@ -7,7 +7,7 @@ import { useQuery } from "@tanstack/react-query"
 import { Clock } from "lucide-react"
 
 import { fetchItem, type PnlQuery } from "@/api/finance"
-import { Bars, hourShort, hourSpoken } from "@/components/charts"
+import { Bars, dayAxis, daySpoken, hourShort, hourSpoken } from "@/components/charts"
 import { BarList, Empty, Failed, Panel, Stat } from "@/components/reports/kit"
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -42,7 +42,8 @@ export function ItemReport({ productId, q }: { productId: number; q: PnlQuery })
   }
   if (!data) return <Failed />
   const P = data.period
-  const days = data.days.map((d) => ({ day: Number(d.date.slice(8)), qty: toNumber(d.qty) }))
+  const many = data.days.length > 8
+  const days = data.days.map((d) => ({ date: d.date, qty: toNumber(d.qty) }))
   // Opening to close, across midnight — 13 … 23, 00, 01 — not 0 to 23.
   const hours = [...data.by_hour]
     .sort((a, b) => ((a.hour - 4 + 24) % 24) - ((b.hour - 4 + 24) % 24))
@@ -95,7 +96,7 @@ export function ItemReport({ productId, q }: { productId: number; q: PnlQuery })
         <Panel title="الأكواب يومياً">
           <Bars
             height={160}
-            data={days.map((d) => ({ label: String(d.day), value: Number(d.qty), title: `يوم ${d.day}` }))}
+            data={days.map((d) => ({ label: dayAxis(d.date, many), value: Number(d.qty), title: daySpoken(d.date) }))}
             format={(v) => `${n0(v)} كوب`}
           />
         </Panel>
