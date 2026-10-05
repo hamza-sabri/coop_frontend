@@ -128,12 +128,9 @@ export function PointsSection() {
               return (
                 <li
                   key={i}
-                  className="grid grid-cols-[1fr_auto] items-center gap-x-3 gap-y-2 rounded-xl bg-muted/40 p-2.5 text-sm animate-in fade-in slide-in-from-bottom-1 fill-mode-both sm:grid-cols-[auto_1fr_auto_auto]"
+                  className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl bg-muted/40 p-2.5 ps-3.5 text-sm animate-in fade-in slide-in-from-bottom-1 fill-mode-both"
                   style={{ animationDelay: `${i * 40}ms` }}
                 >
-                  <span className="grid size-7 place-items-center rounded-lg bg-card text-xs font-bold text-muted-foreground max-sm:hidden">
-                    {formatNumber(i + 1)}
-                  </span>
                   <div className="flex items-center gap-2">
                     <span className="text-muted-foreground">من</span>
                     <span className="w-16 rounded-lg bg-card px-2 py-1.5 text-center font-semibold tabular-nums">
@@ -154,7 +151,7 @@ export function PointsSection() {
                     )}
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-muted-foreground">تكسب</span>
+                    <span className="text-muted-foreground">← تكسب</span>
                     <Input
                       inputMode="decimal"
                       dir="ltr"
@@ -172,7 +169,7 @@ export function PointsSection() {
                       setDirty(true)
                       setBands((x) => x.filter((_, j) => j !== i))
                     }}
-                    className="grid size-8 place-items-center justify-self-end rounded-lg text-rose-600 transition hover:bg-rose-500/10"
+                    className="ms-auto grid size-8 place-items-center rounded-lg text-rose-600 transition hover:bg-rose-500/10"
                   >
                     <Trash2 className="size-3.5" />
                   </button>

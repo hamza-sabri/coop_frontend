@@ -1969,7 +1969,7 @@ function PosPageInner() {
   return (
     <div
       ref={shellRef}
-      className="mx-auto w-full max-w-7xl lg:grid lg:h-[var(--pos-fit)] lg:grid-cols-[minmax(0,1fr)_460px] lg:grid-rows-[auto_minmax(0,1fr)] lg:gap-x-5 lg:overflow-hidden"
+      className="w-full lg:grid lg:h-[var(--pos-fit)] lg:grid-cols-[minmax(0,1fr)_440px] lg:grid-rows-[auto_minmax(0,1fr)] lg:gap-x-5 2xl:grid-cols-[minmax(0,1fr)_480px]"
       style={{ ["--pos-fit" as string]: fitH ? `${fitH}px` : "calc(100dvh - 7rem)" }}
     >
       {scanAlertOverlay}
@@ -2057,7 +2057,7 @@ function PosPageInner() {
                 <>
                   <div
                     ref={scope}
-                    className="grid grid-cols-2 gap-3 pb-24 sm:grid-cols-3 lg:pb-0"
+                    className="grid grid-cols-2 gap-3 pb-24 sm:grid-cols-3 lg:grid-cols-[repeat(auto-fill,minmax(200px,1fr))] lg:pb-0"
                   >
                     {items.map((m) => (
                       <ProductTile
@@ -2082,7 +2082,7 @@ function PosPageInner() {
                 className={cn(
                   // Fills the column, which fills the screen: the checkout
                   // button is always in the same place.
-                  "flex h-full min-h-0 flex-col gap-0 overflow-hidden p-4",
+                  "flex h-full min-h-0 flex-col gap-0 overflow-hidden border border-border/80 p-4 shadow-[0_10px_30px_-18px_rgb(30_35_80/0.35)]",
                   bumping && "cart-bump",
                   pos.active?.isReturn && "return-glow",
                 )}

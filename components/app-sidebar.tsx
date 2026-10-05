@@ -4,17 +4,16 @@ import { useEffect, useState } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { useQueryClient } from "@tanstack/react-query"
-import { Download, Loader2, Lock, LogOut, PanelLeft, Settings } from "lucide-react"
+import { Lock, LogOut, PanelLeft, Settings } from "lucide-react"
 import { toast } from "sonner"
 
 import { logout } from "@/lib/auth"
 import { isActive } from "@/components/nav-config"
 import { NavBadge } from "@/components/orders/nav-badge"
-import { useIsOwner, useNavItemsWithLock } from "@/lib/modules"
+import { useNavItemsWithLock } from "@/lib/modules"
 import { useLockedFeature } from "@/components/locked-feature"
 import { BrandLockup, BrandMark } from "@/components/brand"
 import { ConfirmDelete } from "@/components/confirm-delete"
-import { downloadDataExport } from "@/lib/export-data"
 import {
   Tooltip,
   TooltipContent,
@@ -40,7 +39,6 @@ export function AppSidebar() {
   const qc = useQueryClient()
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [loggingOut, setLoggingOut] = useState(false)
-  const [exporting, setExporting] = useState(false)
   // Expanded is the server-rendered default, so there is no hydration
   // mismatch; the stored preference (or a narrow screen) is applied straight
   // after mount. Navigation no longer touches it — closing the rail is the
@@ -71,7 +69,6 @@ export function AppSidebar() {
     })
   }
 
-  const isOwner = useIsOwner()
   // Every feature is shown; ones this account can't use are locked.
   const navItems = useNavItemsWithLock()
   const { openLocked } = useLockedFeature()
@@ -195,42 +192,9 @@ export function AppSidebar() {
           })}
         </nav>
 
-        {/* Footer utilities — Export, Settings, logout. Scan + theme moved to
-            the bottom nav / Settings respectively. Export is a full dump of the
-            store's own data, so it's owner-only (enforced server-side too). */}
+        {/* Footer utilities — Settings, logout. (The full data export left the
+            sidebar at the owner's request; lib/export-data still has it.) */}
         <div className={cn("pb-3.5 pt-2", collapsed ? "px-2" : "px-3.5")}>
-          {isOwner && (
-            <button
-              type="button"
-              disabled={exporting}
-              onClick={async () => {
-                // No dialog: one file, two sheets, straight to the downloads
-                // folder. The chooser only ever asked a question with no
-                // wrong answer.
-                setExporting(true)
-                try {
-                  await downloadDataExport()
-                } catch (e) {
-                  toast.error(
-                    e instanceof Error ? e.message : "تعذر التصدير.",
-                  )
-                } finally {
-                  setExporting(false)
-                }
-              }}
-              title={collapsed ? "تصدير البيانات" : undefined}
-              className={cn(rowCls(), exporting && "opacity-60")}
-            >
-              {exporting ? (
-                <Loader2 className="size-5 shrink-0 animate-spin" />
-              ) : (
-                <Download className="size-5 shrink-0" />
-              )}
-              {!collapsed && (
-                <span>{exporting ? "جارٍ التصدير…" : "تصدير البيانات"}</span>
-              )}
-            </button>
-          )}
           <Link href="/settings" title={collapsed ? "الإعدادات" : undefined} className={rowCls()}>
             <Settings className="size-5 shrink-0" />
             {!collapsed && <span>الإعدادات</span>}
