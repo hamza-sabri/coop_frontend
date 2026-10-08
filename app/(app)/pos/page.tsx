@@ -110,12 +110,14 @@ type Pos = ReturnType<typeof usePosCarts>
 /** Snapshot of the cart at checkout — feeds the printed receipt and, when
  *  offline, renders the queued sale without waiting for the server. */
 type SaleSnapshot = {
-  items: { name: string; quantity: number; unitPrice: string }[]
+  items: { name: string; quantity: number; unitPrice: string; note?: string }[]
   total: number
   discountedTotal: number
   isReturn: boolean
   paymentMethod: "cash" | "debt"
   customerName?: string
+  /** The note on the whole order — printed in its own box. */
+  note?: string
   /**
    * Points put towards this sale, already clamped the way the server will
    * clamp them, and what they are worth.
@@ -195,11 +197,14 @@ function receiptFromSale(sale: Sale, cashierName: string): ReceiptData {
     saleId: sale.id,
     receiptCode: sale.receipt_code,
     items: sale.items.map((it) => ({
-      name: saleItemName(it),
+      // The note prints on its own line under the drink, not inside the name.
+      name: saleItemName({ ...it, note: undefined }),
+      note: (it as { note?: string }).note?.trim() || undefined,
       quantity: it.quantity,
       unitPrice: it.unit_price,
       lineTotal: it.line_total,
     })),
+    note: sale.note?.trim() || undefined,
     total: toNumber(sale.total),
     discountedTotal: toNumber(sale.discounted_total),
     beansSpent: Number(sale.beans_spent) || 0,
@@ -230,9 +235,11 @@ function receiptFromQueued(
     receiptCode,
     items: snap.items.map((i) => ({
       name: i.name,
+      note: i.note,
       quantity: i.quantity,
       unitPrice: i.unitPrice,
     })),
+    note: snap.note,
     total: snap.total,
     discountedTotal: snap.discountedTotal,
     beansSpent: snap.beansSpent ?? 0,
@@ -497,13 +504,10 @@ function buildPayload(pos: Pos): CheckoutInput | null {
   const snapshot: SaleSnapshot = {
     receiptCode: body.receipt_code || active.editingReceipt || "",
     items: active.lines.map((l) => ({
-      /* The variant and the note ride ON the name, because that is the one
-         string every receipt renderer already prints. A note that stops at the
-         database never reaches the person making the drink. */
-      name: [
-        l.variantLabel ? `${l.name} — ${l.variantLabel}` : l.name,
-        l.note?.trim() ? `(${l.note.trim()})` : "",
-      ].filter(Boolean).join(" "),
+      /* The note prints on its own line under the drink, so it reaches the
+         person making it. */
+      name: l.variantLabel ? `${l.name} — ${l.variantLabel}` : l.name,
+      note: l.note?.trim() || undefined,
       quantity: l.quantity,
       unitPrice: l.unitPrice,
     })),
@@ -514,6 +518,7 @@ function buildPayload(pos: Pos): CheckoutInput | null {
     isReturn: Boolean(active.isReturn),
     paymentMethod,
     customerName: active.customerName || undefined,
+    note: active.note?.trim() || undefined,
   }
   return { body, snapshot, editingSaleId }
 }

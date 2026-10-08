@@ -80,6 +80,7 @@ export function SaleRevisions({
       paymentMethod: snap.payment_method,
       isReturn: Boolean(snap.is_return),
       customerName: snap.customer_name || undefined,
+      note: snap.note?.trim() || undefined,
       cashierName: rev.edited_by || displayName(user),
       // When the sale was RUNG, not when it was corrected — the version's own
       // header already says who changed it and when.

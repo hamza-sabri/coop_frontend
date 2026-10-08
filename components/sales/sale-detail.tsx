@@ -72,9 +72,8 @@ export function SaleDetail({
       items: s.items.map((it) => ({
         // Same as the till prints it: the note rides on the name so it reaches
         // whoever makes the drink.
-        name: [saleItemName(it), (it as { note?: string }).note?.trim() ? `(${(it as { note?: string }).note!.trim()})` : ""]
-          .filter(Boolean)
-          .join(" "),
+        name: saleItemName({ ...it, note: undefined }),
+        note: (it as { note?: string }).note?.trim() || undefined,
         quantity: it.quantity,
         unitPrice: it.unit_price,
         lineTotal: it.line_total,
@@ -90,6 +89,7 @@ export function SaleDetail({
       isReturn: Boolean(s.is_return),
       customerName: s.customer_name,
       cashierName: s.created_by_name || cashierName,
+      note: s.note?.trim() || undefined,
       createdAt: s.created_at,
     }
     // Agent → browser → file, same as a checkout.

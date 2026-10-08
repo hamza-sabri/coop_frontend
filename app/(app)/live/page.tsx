@@ -155,7 +155,8 @@ function LiveBoard() {
     const data: ReceiptData = {
       saleId: `#${o.id}`,
       items: (o.items ?? []).map((it) => ({
-        name: it.note?.trim() ? `${it.name} (${it.note.trim()})` : it.name,
+        name: it.name,
+        note: it.note?.trim() || undefined,
         quantity: Number(it.quantity),
         unitPrice: it.unit_price,
         lineTotal: it.line_total,
@@ -167,6 +168,7 @@ function LiveBoard() {
       paymentMethod: "cash",
       customerName: o.customer_name || "زبون التطبيق",
       cashierName,
+      note: o.note?.trim() || undefined,
       createdAt: o.created_at,
     }
     void deliverAndToast(

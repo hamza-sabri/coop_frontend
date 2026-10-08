@@ -119,6 +119,17 @@ export function renderReceiptCanvas(
   const nameW = W - pad - (qtyX + gutter)
   measure.font = `600 ${bodyFont}`
   const wrapped = data.items.map((it) => wrap(measure, it.name, nameW))
+  // A drink's own note ("بدون سكر") goes on its own line(s) under the drink.
+  const noteFont = `600 ${S(19)}px ${FONT}`
+  measure.font = noteFont
+  const itemNotes = data.items.map((it) =>
+    it.note?.trim() ? wrap(measure, `« ${it.note.trim()} »`, inner - S(16)) : [],
+  )
+  // The order's own note ("تيك أواي") goes in a box drawn with stars.
+  const boxFont = `700 ${S(21)}px ${FONT}`
+  const starFont = `700 ${S(22)}px ${FONT}`
+  measure.font = boxFont
+  const boxLines = data.note?.trim() ? wrap(measure, data.note.trim(), inner - S(80)) : []
 
   // Built here rather than at draw time so the height below can COUNT them.
   // These two lists used to be measured with fixed guesses ("four meta rows"),
@@ -143,6 +154,8 @@ export function renderReceiptCanvas(
   h += meta.length * S(28) + S(26)
   h += S(34) // table head
   for (const lines of wrapped) h += lines.length * S(26) + S(24)
+  for (const lines of itemNotes) h += lines.length ? lines.length * S(26) + S(10) : 0
+  if (boxLines.length) h += S(10) + S(32) + boxLines.length * S(32) + S(32) + S(6)
   h += S(20) + S(32) // rule + total
   const discount = data.total - data.discountedTotal
   const beans = Number(data.beansSpent) || 0
@@ -242,8 +255,45 @@ export function renderReceiptCanvas(
     ctx.fillText(String(it.quantity), qtyX, top)
     ctx.textAlign = "left"
     ctx.fillText(formatMoney(line), pad, top)
+    // The drink's note, right under it, across the full width.
+    if (itemNotes[i].length) {
+      ctx.font = noteFont
+      ctx.textAlign = "right"
+      for (const l of itemNotes[i]) {
+        y += S(26)
+        ctx.fillText(l, W - pad - S(8), y)
+      }
+      y += S(10)
+    }
     y += S(24)
   })
+
+  // ── the order's note, in a box of stars ─────────────────────────────
+  if (boxLines.length) {
+    y += S(10)
+    ctx.font = starFont
+    const step = S(22)
+    const count = Math.max(2, Math.floor(inner / step) + 1)
+    const gap = inner / (count - 1)
+    const starRow = (rowY: number) => {
+      ctx.textAlign = "center"
+      for (let k = 0; k < count; k++) ctx.fillText("*", pad + k * gap, rowY)
+    }
+    starRow(y + S(22))
+    y += S(32)
+    for (const l of boxLines) {
+      ctx.font = starFont
+      ctx.textAlign = "center"
+      ctx.fillText("*", pad, y + S(22))
+      ctx.fillText("*", W - pad, y + S(22))
+      ctx.font = boxFont
+      ctx.fillText(l, W / 2, y + S(22))
+      y += S(32)
+    }
+    ctx.font = starFont
+    starRow(y + S(22))
+    y += S(32) + S(6)
+  }
 
   dashed(ctx, y, W, pad)
   y += S(28)
