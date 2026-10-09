@@ -252,7 +252,7 @@ export function renderReceiptCanvas(
     ctx.fillText(formatMoney(unit), W - pad, y)
     ctx.font = `${S(19)}px ${FONT}`
     ctx.textAlign = "center"
-    ctx.fillText(String(it.quantity), qtyX, top)
+    ctx.fillText(String(Number(it.quantity)), qtyX, top) // "1.000" → "1"
     ctx.textAlign = "left"
     ctx.fillText(formatMoney(line), pad, top)
     // The drink's note, right under it, across the full width.
