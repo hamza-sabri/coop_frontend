@@ -59,6 +59,9 @@ export const staffCreate = (payload: StaffPayload) =>
 export const staffUpdate = (id: number, payload: StaffPayload) =>
   call<StaffUser>(`/api/v1/staff/${id}/`, jsonInit("PATCH", payload))
 
+export const staffDelete = (id: number) =>
+  call<null>(`/api/v1/staff/${id}/`, { method: "DELETE" })
+
 export const staffResetPassword = (id: number, password: string) =>
   call<{ status: string }>(
     `/api/v1/staff/${id}/reset-password/`,

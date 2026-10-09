@@ -18,10 +18,11 @@ import { useMemo, useState } from "react"
 import Link from "next/link"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { ArrowLeft, MoreVertical, Pencil, Plus, UserPlus } from "lucide-react"
+import { ArrowLeft, MoreVertical, Pencil, Plus, Trash2, UserPlus } from "lucide-react"
 
-import { staffBoard, staffUpdate, type StaffBoardRow } from "@/api/staff"
+import { staffBoard, staffDelete, staffUpdate, type StaffBoardRow } from "@/api/staff"
 import { Bars } from "@/components/charts"
+import { ConfirmDelete } from "@/components/confirm-delete"
 import { DataTable, type Column } from "@/components/data-table"
 import { Fab } from "@/components/fab"
 import { ErrorState } from "@/components/states"
@@ -59,6 +60,17 @@ export default function StaffPage() {
   const { user: me } = useMe()
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<StaffBoardRow | null>(null)
+  const [toDelete, setToDelete] = useState<StaffBoardRow | null>(null)
+  const remove = useMutation({
+    mutationFn: (u: StaffBoardRow) => staffDelete(u.id),
+    onSuccess: (_r, u) => {
+      toast.success(`حُذف حساب ${nameOf(u)}`)
+      setToDelete(null)
+      qc.invalidateQueries({ queryKey: ["staff"] })
+    },
+    // The server refuses for anyone with invoices and says why — show it as is.
+    onError: (e) => toast.error(e instanceof Error && e.message ? e.message : "تعذّر الحذف"),
+  })
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["staff", "board"],
@@ -205,6 +217,12 @@ export default function StaffPage() {
                 <Pencil className="size-4" />
                 تعديل وكلمة المرور
               </DropdownMenuItem>
+              {u.id !== me?.id ? (
+                <DropdownMenuItem onClick={() => setToDelete(u)} className="text-destructive focus:text-destructive">
+                  <Trash2 className="size-4" />
+                  حذف الحساب
+                </DropdownMenuItem>
+              ) : null}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -319,6 +337,18 @@ export default function StaffPage() {
       </Enter>
 
       <Fab onClick={openAdd} label="إضافة موظف" />
+      <ConfirmDelete
+        open={Boolean(toDelete)}
+        onOpenChange={(o) => !o && setToDelete(null)}
+        onConfirm={() => toDelete && remove.mutate(toDelete)}
+        loading={remove.isPending}
+        title={toDelete ? `حذف حساب ${nameOf(toDelete)}؟` : "حذف الحساب"}
+        description={
+          toDelete?.month_sales || toDelete?.last_sale
+            ? "له فواتير مسجّلة — لا يمكن حذفه، فقط إيقافه، لتبقى الفواتير باسمه."
+            : "يُحذف الحساب نهائياً ولا يستطيع الدخول بعدها."
+        }
+      />
       <StaffForm open={formOpen} onOpenChange={setFormOpen} user={editing} isMe={editing?.id === me?.id} />
     </PageShell>
   )

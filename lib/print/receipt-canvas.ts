@@ -125,11 +125,10 @@ export function renderReceiptCanvas(
   const itemNotes = data.items.map((it) =>
     it.note?.trim() ? wrap(measure, `« ${it.note.trim()} »`, inner - S(16)) : [],
   )
-  // The order's own note ("تيك أواي") goes in a box drawn with stars.
+  // The order's own note ("تيك أواي") goes in a plain box.
   const boxFont = `700 ${S(21)}px ${FONT}`
-  const starFont = `700 ${S(22)}px ${FONT}`
   measure.font = boxFont
-  const boxLines = data.note?.trim() ? wrap(measure, data.note.trim(), inner - S(80)) : []
+  const boxLines = data.note?.trim() ? wrap(measure, data.note.trim(), inner - S(48)) : []
 
   // Built here rather than at draw time so the height below can COUNT them.
   // These two lists used to be measured with fixed guesses ("four meta rows"),
@@ -145,7 +144,7 @@ export function renderReceiptCanvas(
   if (data.customerName) meta.push(["الزبون", data.customerName])
   if (data.cashierName) meta.push(["الكاشير", data.cashierName])
 
-  let h = S(24)
+  let h = S(64) // breathing room above the name — the cutter leaves the top edge ragged
   h += S(46) // store name
   if (opts.phone) h += S(26)
   if (opts.address) h += S(26)
@@ -155,7 +154,7 @@ export function renderReceiptCanvas(
   h += S(34) // table head
   for (const lines of wrapped) h += lines.length * S(26) + S(24)
   for (const lines of itemNotes) h += lines.length ? lines.length * S(26) + S(10) : 0
-  if (boxLines.length) h += S(10) + S(32) + boxLines.length * S(32) + S(32) + S(6)
+  if (boxLines.length) h += S(14) + S(18) + boxLines.length * S(32) + S(10) + S(16)
   h += S(20) + S(32) // rule + total
   const discount = data.total - data.discountedTotal
   const beans = Number(data.beansSpent) || 0
@@ -183,7 +182,7 @@ export function renderReceiptCanvas(
   // per-cell alignment below is set explicitly, so this only affects shaping.
   ctx.direction = "rtl"
 
-  let y = S(24)
+  let y = S(64)
 
   // ── header ──────────────────────────────────────────────────────────
   ctx.textAlign = "center"
@@ -268,31 +267,22 @@ export function renderReceiptCanvas(
     y += S(24)
   })
 
-  // ── the order's note, in a box of stars ─────────────────────────────
+  // ── the order's note, in a plain box ─────────────────────────────
   if (boxLines.length) {
-    y += S(10)
-    ctx.font = starFont
-    const step = S(22)
-    const count = Math.max(2, Math.floor(inner / step) + 1)
-    const gap = inner / (count - 1)
-    const starRow = (rowY: number) => {
-      ctx.textAlign = "center"
-      for (let k = 0; k < count; k++) ctx.fillText("*", pad + k * gap, rowY)
-    }
-    starRow(y + S(22))
-    y += S(32)
+    y += S(14)
+    const top = y
+    const boxH = S(18) + boxLines.length * S(32) + S(10)
+    ctx.strokeStyle = "#000"
+    ctx.lineWidth = Math.max(2, S(3))
+    ctx.strokeRect(pad + 1, top, inner - 2, boxH)
+    ctx.font = boxFont
+    ctx.textAlign = "center"
+    y += S(18)
     for (const l of boxLines) {
-      ctx.font = starFont
-      ctx.textAlign = "center"
-      ctx.fillText("*", pad, y + S(22))
-      ctx.fillText("*", W - pad, y + S(22))
-      ctx.font = boxFont
       ctx.fillText(l, W / 2, y + S(22))
       y += S(32)
     }
-    ctx.font = starFont
-    starRow(y + S(22))
-    y += S(32) + S(6)
+    y = top + boxH + S(16)
   }
 
   dashed(ctx, y, W, pad)

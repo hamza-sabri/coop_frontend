@@ -16,7 +16,8 @@ import { useMe } from "@/hooks/use-me"
  */
 
 export const MODULE_LABELS: Record<string, string> = {
-  inventory: "المخزون والأدوية",
+  inventory: "المنيو",
+  stock: "المخزون",
   pos: "نقطة البيع",
   customers: "الزبائن",
   debts: "الديون والدفاتر",

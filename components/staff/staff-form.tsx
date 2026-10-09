@@ -24,7 +24,8 @@ import { cn } from "@/lib/utils"
 /** The pages an employee can be given, in the café's words. */
 const PAGES: { key: string; label: string; hint: string }[] = [
   { key: "pos", label: "البيع والفواتير", hint: "شاشة البيع وسجل الفواتير" },
-  { key: "inventory", label: "المنيو والمخزون", hint: "الأصناف، تسجيل الهدر والجرد" },
+  { key: "inventory", label: "المنيو", hint: "تعديل الأصناف والأسعار والصور" },
+  { key: "stock", label: "المخزون", hint: "الكميات، تسجيل الهدر والجرد" },
   { key: "customers", label: "الزبائن", hint: "ملفات الزبائن ونقاطهم" },
   { key: "online_orders", label: "طلبات التطبيق", hint: "الطلبات القادمة من تطبيق الزبائن" },
 ]

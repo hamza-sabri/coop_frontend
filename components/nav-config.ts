@@ -56,7 +56,9 @@ export const NAV_ITEMS: NavItem[] = [
     label: "الزبائن",
     icon: Users,
     // Customer profiles serve POS credit sales and the debt ledger too.
-    module: ["customers", "debts", "pos"],
+    // Its own switch: a cashier can still pick a customer at the till
+    // without being able to open the customers page.
+    module: "customers",
     // Moved OFF the mobile bottom bar → the profile dropdown + a button on the
     // debts page. Still in the desktop rail.
     desktopOnly: true,
@@ -87,7 +89,7 @@ export const NAV_ITEMS: NavItem[] = [
   /* Raw materials — cups, milk, beans. Not the menu: selling a drink never
      moves these. On the phone too, because counting the fridge happens with
      a phone in hand. */
-  { href: "/stock", label: "المخزون", icon: Package, module: "inventory" },
+  { href: "/stock", label: "المخزون", icon: Package, module: "stock" },
   {
     href: "/expenses",
     label: "المصاريف",

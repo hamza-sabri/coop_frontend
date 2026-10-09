@@ -155,7 +155,7 @@ function baseStyles(paperMm: number): string {
     body {
       width: ${content}mm;
       margin: 0 auto;
-      padding: 3mm 0 4mm;
+      padding: 8mm 0 4mm;
       font-family: "IBM Plex Sans Arabic", "Segoe UI", Tahoma, sans-serif;
       color: #000;
       direction: rtl;
@@ -183,13 +183,8 @@ function baseStyles(paperMm: number): string {
     .c-amt { text-align: left; white-space: nowrap; font-variant-numeric: tabular-nums; }
     .it-name { font-weight: 600; }
     .it-note { font-weight: 600; font-size: 12px; padding: 0 4px 4px 0; }
-    /* The order's note, framed in stars: rows of * above and below, a * at
-       each end of every line. */
-    .starbox { margin: 6px 0 2px; font-weight: 700; }
-    .starbox .stars { overflow: hidden; white-space: nowrap; letter-spacing: 3px; line-height: 1; height: 14px; text-align: center; }
-    .starbox .line { display: flex; align-items: flex-start; gap: 6px; font-size: 13px; }
-    .starbox .line span:first-child, .starbox .line span:last-child { flex: none; }
-    .starbox .line .txt { flex: 1; text-align: center; }
+    /* The order's note, in a plain black box. */
+    .notebox { margin: 8px 0 4px; padding: 6px 8px; border: 2px solid #000; font-weight: 700; font-size: 13px; text-align: center; }
     .totals { margin-top: 4px; font-size: 12px; }
     .totals .row { display: flex; justify-content: space-between; padding: 1px 0; }
     .totals .grand { font-weight: 800; font-size: 15px; border-top: 1px solid #000; margin-top: 3px; padding-top: 4px; }
@@ -207,7 +202,7 @@ function receiptBodyHtml(data: ReceiptData, name: string, s: PrintSettings, logo
       return `
       <tr>
         <td class="it-name">${esc(it.name)}<div class="muted">${esc(formatMoney(it.unitPrice))}</div></td>
-        <td class="c-qty">${it.quantity}</td>
+        <td class="c-qty">${Number(it.quantity)}</td>
         <td class="c-amt">${esc(formatMoney(line))}</td>
       </tr>${
         it.note?.trim()
@@ -272,11 +267,7 @@ function receiptBodyHtml(data: ReceiptData, name: string, s: PrintSettings, logo
     </table>
     ${
       data.note?.trim()
-        ? `<div class="starbox">
-        <div class="stars">${"*".repeat(60)}</div>
-        <div class="line"><span>*</span><span class="txt">${esc(data.note.trim())}</span><span>*</span></div>
-        <div class="stars">${"*".repeat(60)}</div>
-      </div>`
+        ? `<div class="notebox">${esc(data.note.trim())}</div>`
         : ""
     }
     <div class="rule"></div>
