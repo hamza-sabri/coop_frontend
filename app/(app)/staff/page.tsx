@@ -24,6 +24,7 @@ import { staffBoard, staffUpdate, type StaffBoardRow } from "@/api/staff"
 import { Bars } from "@/components/charts"
 import { DataTable, type Column } from "@/components/data-table"
 import { Fab } from "@/components/fab"
+import { ErrorState } from "@/components/states"
 import { Enter, PageShell } from "@/components/page-shell"
 import { Panel } from "@/components/reports/kit"
 import { StaffForm } from "@/components/staff/staff-form"
@@ -59,7 +60,7 @@ export default function StaffPage() {
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<StaffBoardRow | null>(null)
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["staff", "board"],
     queryFn: staffBoard,
     enabled: ownerState === "owner",
@@ -233,7 +234,8 @@ export default function StaffPage() {
         </Button>
       }
     >
-      <Enter i={0}>
+      {isError && !data ? <ErrorState onRetry={() => refetch()} /> : null}
+      <Enter i={0} className={isError && !data ? "hidden" : undefined}>
         <div className="grid gap-4 lg:grid-cols-3">
           <Panel className="lg:col-span-2" title="من باع أكثر هذا الشهر" hint="قيمة ما سجّله كل شخص على الكاشير منذ أول الشهر">
             {isLoading && !data ? (
@@ -273,7 +275,7 @@ export default function StaffPage() {
         </div>
       </Enter>
 
-      <Enter i={1}>
+      <Enter i={1} className={isError && !data ? "hidden" : undefined}>
         <DataTable<StaffBoardRow>
           rows={rows}
           rowKey={(u) => u.id}

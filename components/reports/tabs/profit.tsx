@@ -91,8 +91,10 @@ export function ProfitTab({ q }: { q: PnlQuery }) {
           tint: "bg-sky-500/12 text-sky-700 dark:text-sky-300",
         },
   ]
-  const spent = costs.reduce((a, c) => a + c.amount, 0)
   const gain = lost < 0 ? -lost : 0 // the count found more than the books said
+  // What came off, net of any stock a count found extra — so that
+  // دخل الصندوق − ما صرفته is EXACTLY the profit, to the agora.
+  const spent = costs.reduce((a, c) => a + c.amount, 0) - gain
   const opex = (data.opex ?? []).filter((o) => toNumber(o.amount) > 0)
   const days = `${formatNumber(data.range.days)} ${data.range.days === 1 ? "يوم" : "أيام"}${data.range.elapsed_end < data.range.end ? " حتى اليوم" : ""}`
 

@@ -86,7 +86,7 @@ export function ItemsTab({ q, onOpenItem }: { q: PnlQuery; onOpenItem: (id: numb
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat label="مشروبات بيعت" value={formatNumber(Math.round(toNumber(data.totals.qty)))} />
-        <Stat label="ربح المشروبات" value={formatMoney(data.totals.profit)} sub="ما بعته ناقص كلفة المشروبات" />
+        <Stat label="ربح المشروبات بسعر المنيو" value={formatMoney(data.totals.profit)} sub="قبل الخصومات والهدر والمصاريف — صافي الربح في «الأرباح»" />
         <Stat label="أصناف بيعت" value={`${formatNumber(sold.length)} من ${formatNumber(all.filter((i) => i.is_active).length)}`} />
         <Stat
           label="لم تُطلب أبداً"

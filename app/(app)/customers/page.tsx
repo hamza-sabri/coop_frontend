@@ -22,6 +22,7 @@ import { ConfirmDelete } from "@/components/confirm-delete"
 import { StatusPill, ago } from "@/components/customers/status"
 import { DataTable, type Column } from "@/components/data-table"
 import { Fab } from "@/components/fab"
+import { ErrorState } from "@/components/states"
 import { CustomerForm } from "@/components/forms/customer-form"
 import { Enter, PageShell } from "@/components/page-shell"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -40,7 +41,7 @@ export default function CustomersPage() {
   const [toDelete, setToDelete] = useState<CustomerRow | null>(null)
   const [deleting, setDeleting] = useState(false)
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["customers", "table"],
     queryFn: () => customersTable().then((r) => r.data.results),
     placeholderData: (p) => p,
@@ -199,7 +200,9 @@ export default function CustomersPage() {
         </Button>
       }
     >
-      <Enter i={0}>
+      {/* A failed request is never shown as "no customers yet". */}
+      {isError && !data ? <ErrorState onRetry={() => refetch()} /> : null}
+      <Enter i={0} className={isError && !data ? "hidden" : undefined}>
         <DataTable<CustomerRow>
           rows={rows}
           rowKey={(c) => c.id}
