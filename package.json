@@ -70,5 +70,8 @@
     "edge >= 88",
     "firefox >= 78",
     "safari >= 14"
-  ]
+  ],
+  "overrides": {
+    "express": "5.2.1"
+  }
 }
