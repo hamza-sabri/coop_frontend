@@ -1,3 +1,4 @@
+import { CAFE_GUIDES } from "@/lib/tour/cafe-guides"
 /**
  * Interactive guided-tour definitions. Each tour is a sequence of steps that
  * spotlight a real element on the real screen (by its `data-tour` anchor) and
@@ -28,6 +29,13 @@ export type TourStep = {
   advanceOn?: string
   /** Enter/Return also advances this step (used on the "complete sale" step). */
   advanceOnEnter?: boolean
+  /** Live guides: a button to click first (opens a drawer — never saves). */
+  prepare?: string
+  /** Like `prepare`, but only if that button is on screen (the phone's
+   *  cart button, say) — skipped quickly where it is not. */
+  prepareIfShown?: string
+  /** Live guides: close any open drawer before this step. */
+  closeFirst?: boolean
 }
 
 export type Tour = {
@@ -36,6 +44,9 @@ export type Tour = {
   subtitle: string
   /** lucide-react icon name, resolved in the guide hub. */
   icon: string
+  /** "live" = the café's real screens, read-only (lib/tour/guide-live).
+   *  Default "demo" = the old mock-data sandbox. */
+  mode?: "demo" | "live"
   steps: TourStep[]
 }
 
@@ -273,5 +284,5 @@ export const TOURS: Tour[] = [
 ]
 
 export function getTour(id: string): Tour | undefined {
-  return TOURS.find((t) => t.id === id)
+  return TOURS.find((t) => t.id === id) ?? CAFE_GUIDES.find((t) => t.id === id)
 }

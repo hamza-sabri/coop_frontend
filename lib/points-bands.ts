@@ -1,8 +1,8 @@
 /* The points ladder, client side — ONLY for previews. The server computes
  * every real award with the same rule (apps/store/points.py rate_for):
  * the band containing the CASH paid sets the rate for the whole receipt,
- * points = floor(amount × rate × 10). */
-import { POINTS_PER_ILS } from "@/lib/points"
+ * points = floor(amount × rate × points-per-shekel). */
+import { pointsPerIls } from "@/lib/points"
 
 export type Band = { min_total: string; max_total: string | null; rate_percent: string }
 
@@ -22,7 +22,7 @@ export function pointsFor(bands: Band[], amount: number, defaultPercent = 2): nu
   const rate = rateFor(bands, amount, defaultPercent)
   // Integer agorot first, so 35 × 2% is exactly 7 and not 6.999….
   const agorot = Math.round(amount * 100)
-  return Math.floor((agorot * rate * POINTS_PER_ILS) / 10000 + 1e-9)
+  return Math.floor((agorot * rate * pointsPerIls()) / 10000 + 1e-9)
 }
 
 /** Bands as the editor keeps them: each starts where the previous ended. */

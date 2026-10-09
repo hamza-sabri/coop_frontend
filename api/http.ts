@@ -15,6 +15,8 @@ import { refreshOfflineCredentialTokens } from "@/lib/offline/credential"
 // Resolved in ONE place — see lib/api-base.ts for why there is no default.
 export { API_BASE } from "@/lib/api-base"
 import { API_BASE } from "@/lib/api-base"
+import { guideWriteBlocked, isGuideLive } from "@/lib/tour/guide-live"
+import { isGatewayStatus, reportServer } from "@/lib/offline/server-health"
 
 /** Pull a human message out of a DRF error body (detail or field errors). */
 function extractErrorMessage(detail: unknown, status: number): string {
@@ -107,6 +109,8 @@ export const customFetch = async <T>(
 
   const method = (options.method || "GET").toUpperCase()
   const isRead = method === "GET"
+  // A guide is running on the real screens: look, never write.
+  if (!isRead && method !== "HEAD" && isGuideLive()) throw guideWriteBlocked()
   // READS fall back to the last cached copy for EVERY tier. Showing yesterday's
   // list beats throwing an error the moment the Wi-Fi blinks — the paid
   // "offline" module is about SELLING offline (queuing writes), not about
@@ -146,12 +150,26 @@ export const customFetch = async <T>(
   try {
     res = await fetch(target, buildInit())
   } catch (e) {
+    // Wi-Fi is up but nothing answered: the server, not the shop, is down.
+    if (typeof navigator === "undefined" || navigator.onLine !== false) reportServer(false)
     // Network died mid-request — fall back to local data for reads.
     if (offlineReads) {
       const local = await localReadResponse<T>(url)
       if (local) return local
     }
     throw e
+  }
+  // 502/503/504 = the proxy answered for a server that is restarting (a
+  // deploy). Same as no answer: reads come from the saved copy, so the screen
+  // keeps its data instead of turning into an error.
+  if (isGatewayStatus(res.status)) {
+    reportServer(false)
+    if (offlineReads) {
+      const local = await localReadResponse<T>(url)
+      if (local) return local
+    }
+  } else {
+    reportServer(true)
   }
 
   if (res.status === 401) {

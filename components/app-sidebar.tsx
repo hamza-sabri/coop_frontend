@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { useQueryClient } from "@tanstack/react-query"
-import { Lock, LogOut, PanelLeft, Settings } from "lucide-react"
+import { Lock, LogOut, PanelLeft, Settings, GraduationCap } from "lucide-react"
 import { toast } from "sonner"
 
 import { logout } from "@/lib/auth"
@@ -21,6 +21,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
+import { usePointsRate } from "@/hooks/use-points-rate"
 
 const RAIL_KEY = "mawadda_sidebar_collapsed"
 /** Below this the rail would eat a phone's screen, so it starts as icons. */
@@ -34,6 +35,8 @@ const NARROW_PX = 1024
  *  toggle is remembered per device, and only a narrow screen (a phone) starts
  *  collapsed on a first visit. */
 export function AppSidebar() {
+  // Keeps the shop's points rate loaded for every screen (lib/points).
+  usePointsRate()
   const pathname = usePathname()
   const router = useRouter()
   const qc = useQueryClient()
@@ -195,6 +198,10 @@ export function AppSidebar() {
         {/* Footer utilities — Settings, logout. (The full data export left the
             sidebar at the owner's request; lib/export-data still has it.) */}
         <div className={cn("pb-3.5 pt-2", collapsed ? "px-2" : "px-3.5")}>
+          <Link href="/guide" title={collapsed ? "الدليل" : undefined} className={rowCls()} data-tour="nav-guide">
+            <GraduationCap className="size-5 shrink-0" />
+            {!collapsed && <span>الدليل</span>}
+          </Link>
           <Link href="/settings" title={collapsed ? "الإعدادات" : undefined} className={rowCls()}>
             <Settings className="size-5 shrink-0" />
             {!collapsed && <span>الإعدادات</span>}

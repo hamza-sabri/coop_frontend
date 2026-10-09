@@ -81,7 +81,9 @@ export type Cart = {
   /** A customer created at this till while offline: no server id yet, only
    *  the client id they will be created with. Sent as customer_client_uuid. */
   customerClientUuid?: string
-  payment: "cash" | "debt"
+  /** How the customer pays: cash (counts in the drawer) or card. "debt" is
+   *  only ever an old parked cart, and is sent as cash. */
+  payment: "cash" | "card" | "debt"
   /** Return mode (إرجاع): stock goes back and the amount is refunded. */
   isReturn?: boolean
   /**
@@ -590,7 +592,7 @@ export function usePosCarts() {
       receiptCode?: string
       customerId?: number | null
       customerName?: string
-      payment?: "cash" | "debt"
+      payment?: "cash" | "card" | "debt"
       isReturn?: boolean
       discounted?: string
       lines: CartLine[]

@@ -7,7 +7,7 @@
 */
 import { useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
-import { Banknote, CalendarDays, Coins, Pencil, Printer, StickyNote, Trash2, Undo2, UserCog, User as UserIcon } from "lucide-react"
+import { Banknote, CalendarDays, CreditCard, Coins, Pencil, Printer, StickyNote, Trash2, Undo2, UserCog, User as UserIcon } from "lucide-react"
 import { saleItemName, type Sale, type SaleItem } from "@/api/sales"
 import { useMe, displayName } from "@/hooks/use-me"
 import { formatDate, formatMoney, formatNumber, toNumber } from "@/lib/format"
@@ -23,6 +23,7 @@ import { ReturnDialog, remainingQty } from "@/components/sales/return-dialog"
 import { SALE_AFFECTED_KEYS } from "@/lib/sale-queries"
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { payLabel } from "@/lib/payment"
 
 export function SaleDetail({
   sale: given,
@@ -154,13 +155,15 @@ export function SaleDetail({
                 <span
                   className={cn(
                     "pill",
-                    sale.payment_method === "cash"
-                      ? "bg-success/25 text-white"
-                      : "bg-warning/25 text-white",
+                    sale.payment_method === "debt"
+                      ? "bg-warning/25 text-white"
+                      : sale.payment_method === "card"
+                        ? "bg-white/15 text-white"
+                        : "bg-success/25 text-white",
                   )}
                 >
-                  <Banknote className="size-3.5" />
-                  {sale.payment_method === "cash" ? "نقدي" : "دين"}
+                  {sale.payment_method === "card" ? <CreditCard className="size-3.5" /> : <Banknote className="size-3.5" />}
+                  {payLabel(sale.payment_method)}
                 </span>
               </div>
               <div className="mt-4 flex items-end justify-between rounded-2xl bg-white/8 px-4 py-3 ring-1 ring-white/10">

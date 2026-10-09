@@ -8,6 +8,7 @@ import { onQueueChange, pendingCount } from "@/lib/offline/queue"
 import { flushPendingSales } from "@/lib/offline/sync"
 import { canAutoUpload } from "@/lib/offline/sync-mode"
 import { SALE_AFFECTED_KEYS } from "@/lib/sale-queries"
+import { isServerDown, onServerChange } from "@/lib/offline/server-health"
 
 const RETRY_MS = 20_000
 
@@ -78,6 +79,15 @@ export function useOfflineSync() {
   useEffect(() => {
     if (online) void autoFlush()
   }, [online, autoFlush])
+
+  // The server is back after a deploy: send what waited, straight away.
+  useEffect(
+    () =>
+      onServerChange(() => {
+        if (!isServerDown()) void autoFlush()
+      }),
+    [autoFlush],
+  )
 
   // Flush on focus and on a slow interval while pending.
   useEffect(() => {

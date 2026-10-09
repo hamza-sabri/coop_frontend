@@ -3,73 +3,79 @@
 import { useEffect, useState } from "react"
 import { RefreshCw } from "lucide-react"
 
+const BUILD_ID = process.env.NEXT_PUBLIC_BUILD_ID ?? "dev"
+/** Set just before a reload the cashier asked for (see SwRegister). */
+export const UPDATING_KEY = "coop_updating"
+
 /**
- * "A new version is available — tap to update."
+ * «يوجد تحديث جديد — اضغط للتحديث»
  *
- * Replaces an automatic reload. The service worker used to call skipWaiting()
- * and SwRegister reloaded the page the moment a new build activated — which on
- * a till means the screen can blank mid-sale, while a customer is standing
- * there. A cart survives (it is in localStorage), but the cashier does not
- * know that, and an app that reloads itself unprompted is an app they stop
- * trusting.
+ * The app never reloads itself: on a till that means the screen can blank
+ * mid-sale with a customer standing there. Instead it asks, and the cashier
+ * taps when they are free.
  *
- * So the new build waits. The cashier finishes what they are doing, taps once,
- * and the page reloads deliberately.
+ * Two ways to learn a new version is out, either is enough:
+ *   - GET /version answers with a different build id than the one this page
+ *     was loaded from. It only answers once the new deploy is actually up, so
+ *     a deploy that is still starting — or failed — is never offered.
+ *   - the service worker has a newer version waiting.
+ * Checked every minute and whenever the tab is looked at again.
  */
 export function UpdatePrompt() {
+  const [ready, setReady] = useState(false)
   const [waiting, setWaiting] = useState<ServiceWorker | null>(null)
   const [reloading, setReloading] = useState(false)
 
   useEffect(() => {
-    if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return
+    if (process.env.NODE_ENV !== "production" || BUILD_ID === "dev") return
     let cancelled = false
-    // Hoisted. These used to be created inside the `.then`, which returned a
-    // cleanup function to a PROMISE — where nothing calls it. The interval
-    // survived every remount and stacked up.
-    let timer = 0
-    let onVisible: (() => void) | null = null
 
-    navigator.serviceWorker.ready
-      .then((reg) => {
-        if (cancelled) return
-        // Already waiting when this tab opened (deployed while it was closed).
-        if (reg.waiting && navigator.serviceWorker.controller) {
-          setWaiting(reg.waiting)
-        }
-        reg.addEventListener("updatefound", () => {
-          const fresh = reg.installing
-          if (!fresh) return
-          fresh.addEventListener("statechange", () => {
-            // "installed" WITH a controller means an update, not a first install.
-            if (fresh.state === "installed" && navigator.serviceWorker.controller) {
-              setWaiting(fresh)
-            }
+    const checkVersion = async () => {
+      try {
+        const res = await fetch("/version", { cache: "no-store" })
+        if (!res.ok) return // deploying, or down: say nothing
+        const body = (await res.json()) as { build?: string }
+        if (!cancelled && body.build && body.build !== BUILD_ID) setReady(true)
+      } catch {
+        /* offline or restarting — not an update */
+      }
+    }
+
+    let reg: ServiceWorkerRegistration | null = null
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.ready
+        .then((r) => {
+          if (cancelled) return
+          reg = r
+          if (r.waiting && navigator.serviceWorker.controller) setWaiting(r.waiting)
+          r.addEventListener("updatefound", () => {
+            const fresh = r.installing
+            fresh?.addEventListener("statechange", () => {
+              if (fresh.state === "installed" && navigator.serviceWorker.controller) setWaiting(fresh)
+            })
           })
         })
+        .catch(() => {})
+    }
 
-        const check = () => void reg.update().catch(() => {})
-        // Deploys are irregular, so poll rather than wait for a navigation.
-        timer = window.setInterval(check, 5 * 60_000)
-        // …and check the moment the tab is looked at again. Polling alone
-        // meant a deploy could sit unnoticed for five minutes in the one tab
-        // someone had just switched back to — which is exactly when they are
-        // wondering why the change they shipped is not on screen.
-        onVisible = () => {
-          if (document.visibilityState === "visible") check()
-        }
-        document.addEventListener("visibilitychange", onVisible)
-        check()
-      })
-      .catch(() => {})
-
+    const check = () => {
+      void checkVersion()
+      void reg?.update().catch(() => {})
+    }
+    check()
+    const timer = window.setInterval(check, 60_000)
+    const onVisible = () => {
+      if (document.visibilityState === "visible") check()
+    }
+    document.addEventListener("visibilitychange", onVisible)
     return () => {
       cancelled = true
-      if (timer) window.clearInterval(timer)
-      if (onVisible) document.removeEventListener("visibilitychange", onVisible)
+      window.clearInterval(timer)
+      document.removeEventListener("visibilitychange", onVisible)
     }
   }, [])
 
-  if (!waiting) return null
+  if (!ready && !waiting) return null
 
   return (
     <div className="animate-in slide-in-from-bottom-4 fade-in fixed inset-x-0 bottom-4 z-[90] mx-auto w-fit px-4 duration-300">
@@ -78,13 +84,14 @@ export function UpdatePrompt() {
         disabled={reloading}
         onClick={() => {
           setReloading(true)
-          // Tell the waiting worker to take over; SwRegister's
-          // controllerchange listener does the reload.
-          waiting.postMessage({ type: "SKIP_WAITING" })
-          // Belt and braces: reload anyway shortly after, in case the message
-          // is missed. A till that says "updating" and never does is worse
-          // than a hard reload.
-          window.setTimeout(() => window.location.reload(), 1200)
+          try {
+            sessionStorage.setItem(UPDATING_KEY, "1")
+          } catch {
+            /* ignore */
+          }
+          // Let a waiting worker take over; either way, load the new version.
+          waiting?.postMessage({ type: "SKIP_WAITING" })
+          window.setTimeout(() => window.location.reload(), waiting ? 600 : 50)
         }}
         className="flex items-center gap-2 rounded-full bg-ink px-5 py-3 text-sm font-semibold text-white shadow-xl transition hover:brightness-110 active:scale-95 disabled:opacity-70"
       >

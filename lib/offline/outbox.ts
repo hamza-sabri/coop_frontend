@@ -20,6 +20,7 @@
 import { customFetch } from "@/api/http"
 import { STORE_OUTBOX, idbDelete, idbGetAll, idbPut } from "@/lib/offline/idb"
 import { announceQueueChange, uuid } from "@/lib/offline/queue"
+import { guideWriteBlocked, isGuideLive } from "@/lib/tour/guide-live"
 
 export type OutboxKind = "customer" | "return"
 
@@ -80,6 +81,8 @@ export async function sendOrQueue<T>(
   body: Record<string, unknown>,
   label: string,
 ): Promise<SendResult<T>> {
+  // A guide is running: never keep a practice write to send later.
+  if (isGuideLive()) throw guideWriteBlocked()
   const id = String(body.client_uuid ?? uuid())
   const op: OutboxOp = {
     id,

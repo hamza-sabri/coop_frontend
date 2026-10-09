@@ -5,8 +5,10 @@ import Link from "next/link"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
-  Check,
+  Banknote,
   ChartColumn,
+  Check,
+  CreditCard,
   Layers,
   Loader2,
   Minus,
@@ -59,7 +61,8 @@ import { CustomerChips } from "@/components/pos/customer-chips"
 import { ManualLineRow } from "@/components/pos/manual-line-row"
 import { useCustomersCatalog } from "@/hooks/use-customers-catalog"
 import { invalidateSaleData } from "@/lib/sale-queries"
-import { POINTS_PER_ILS, pointsForBill, pointsValue } from "@/lib/points"
+import { pointsValue, spendablePoints, wholePoints } from "@/lib/points"
+import { usePointsRate } from "@/hooks/use-points-rate"
 import { pointsFor } from "@/lib/points-bands"
 import { fetchEarnRules } from "@/api/finance"
 import { useSaleEditLink } from "@/hooks/use-sale-edit-link"
@@ -104,6 +107,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
+import { CashDrawerButton } from "@/components/pos/cash-drawer"
 
 type Pos = ReturnType<typeof usePosCarts>
 
@@ -114,7 +118,7 @@ type SaleSnapshot = {
   total: number
   discountedTotal: number
   isReturn: boolean
-  paymentMethod: "cash" | "debt"
+  paymentMethod: "cash" | "card" | "debt"
   customerName?: string
   /** The note on the whole order — printed in its own box. */
   note?: string
@@ -433,10 +437,10 @@ function buildPayload(pos: Pos): CheckoutInput | null {
   const discounted = hasDiscount ? toNumber(active.discounted) : null
   /* كوب attaches a customer to ANY sale — that is how points accrue on a cash
      coffee, which is the whole loyalty premise — but it never REQUIRES one.
-     Everything here is paid at the counter, so the method is always cash; a
-     cart parked from before the debt switch was removed still says "debt", and
-     is corrected here rather than being sent as one. */
-  const paymentMethod = "cash" as const
+     Paid at the counter in cash or by card (the cashier's choice above the
+     button). A cart parked from before the debt switch was removed still says
+     "debt", and is sent as cash rather than as one. */
+  const paymentMethod: "cash" | "card" = active.payment === "card" ? "card" : "cash"
   // A correction keeps the ORIGINAL sale's identity. Minting a new
   // client_uuid or receipt code for it would be meaningless at best (the
   // server refuses to move either) and confusing at worst, so neither is sent.
@@ -498,7 +502,7 @@ function buildPayload(pos: Pos): CheckoutInput | null {
   const billed = discounted != null ? discounted : total
   const beansSpent =
     active.customerId != null
-      ? Math.max(0, Math.min(active.beansSpent ?? 0, pointsForBill(billed)))
+      ? spendablePoints(active.beansSpent ?? 0, billed)
       : 0
   const beansWorth = pointsValue(beansSpent)
   const snapshot: SaleSnapshot = {
@@ -723,7 +727,7 @@ function SaleControls({ pos }: { pos: Pos }) {
               }
             />
           )}
-          <div className={cn("flex items-center gap-2", active.customerClientUuid && active.customerId == null && "hidden")}>
+          <div data-tour="pos-customer" className={cn("flex items-center gap-2", active.customerClientUuid && active.customerId == null && "hidden")}>
             <div className="min-w-0 flex-1">
               <EntityCombobox
                 value={active.customerId}
@@ -749,6 +753,7 @@ function SaleControls({ pos }: { pos: Pos }) {
             <button
               type="button"
               onClick={() => setCustFormOpen(true)}
+              data-tour="pos-add-customer"
               aria-label="زبون جديد"
               title="زبون جديد"
               className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary transition hover:bg-primary/15"
@@ -765,6 +770,7 @@ function SaleControls({ pos }: { pos: Pos }) {
           place down there; this is now the one thing the till had no way to
           record: what the customer actually asked for. */}
       <Input
+        data-tour="pos-note"
         placeholder="ملاحظة على الطلب (بدون سكر، تيك أواي…)"
         className="text-start"
         value={active.note ?? ""}
@@ -794,6 +800,7 @@ function SaleControls({ pos }: { pos: Pos }) {
  * "just take ten shekels off it".
  */
 function PointsRow({ pos }: { pos: Pos }) {
+  usePointsRate()
   const { customers } = useCustomersCatalog()
   const active = pos.active
   if (!active || active.customerId == null || active.isReturn) return null
@@ -814,16 +821,17 @@ function PointsRow({ pos }: { pos: Pos }) {
       : raw
   // Bounded by the balance AND the bill: points cannot buy more than the
   // coffee costs. Floor, never round up.
-  const maxUsable = Math.max(0, Math.min(balance, Math.floor(total * POINTS_PER_ILS)))
-  const spending = Math.min(active.beansSpent ?? 0, maxUsable)
-  const worth = (spending / POINTS_PER_ILS).toFixed(2)
+  // Whole shekels only: steps of the shop's rate (10, 20, 30… at 10 per ₪).
+  const maxUsable = spendablePoints(balance, total)
+  const spending = wholePoints(Math.min(active.beansSpent ?? 0, maxUsable))
+  const worth = pointsValue(spending).toFixed(2)
 
   return (
     <div className="flex items-center justify-between gap-2 rounded-2xl border border-dashed px-4 py-2.5">
       <div className="flex flex-col">
         <span className="text-sm font-medium">نقاط الزبون</span>
         <span className="text-xs text-muted-foreground">
-          {balance} نقطة · تساوي {(balance / POINTS_PER_ILS).toFixed(2)} ₪
+          {balance} نقطة · تساوي {pointsValue(balance).toFixed(2)} ₪
         </span>
       </div>
       {spending > 0 ? (
@@ -857,6 +865,7 @@ function TotalRow({
   onSubmitSale?: () => void
 }) {
   const active = pos.active
+  usePointsRate()
   const rules = useQuery({
     queryKey: ["points-rules"],
     queryFn: () => fetchEarnRules().then((r) => r.data),
@@ -882,7 +891,7 @@ function TotalRow({
   // cashier may have rounded the total DOWN after the points were applied.
   const beans =
     active.customerId != null
-      ? Math.max(0, Math.min(active.beansSpent ?? 0, Math.floor(billed * POINTS_PER_ILS)))
+      ? spendablePoints(active.beansSpent ?? 0, billed)
       : 0
   const beansWorth = pointsValue(beans)
   const due = Math.max(0, billed - beansWorth)
@@ -902,7 +911,7 @@ function TotalRow({
           </span>
         </p>
       ) : null}
-      <div className="flex flex-col gap-1 rounded-2xl bg-muted/60 px-4 py-2.5">
+      <div data-tour="pos-total" className="flex flex-col gap-1 rounded-2xl bg-muted/60 px-4 py-2.5">
         <div className="flex items-baseline justify-between">
           <span className="text-sm text-muted-foreground">
             {beans > 0 ? "قبل النقاط" : "الإجمالي"}
@@ -956,6 +965,42 @@ function TotalRow({
   )
 }
 
+/** نقداً / بطاقة — how this customer pays. Cash goes into the drawer count;
+ *  card does not. A return refunds the same way. */
+function PayToggle({ pos }: { pos: Pos }) {
+  const active = pos.active
+  if (!active) return null
+  const method = active.payment === "card" ? "card" : "cash"
+  const opts = [
+    { v: "cash" as const, label: active.isReturn ? "إرجاع نقداً" : "نقداً", Icon: Banknote },
+    { v: "card" as const, label: active.isReturn ? "إرجاع للبطاقة" : "بطاقة", Icon: CreditCard },
+  ]
+  return (
+    <div className="grid grid-cols-2 gap-1 rounded-2xl bg-muted/60 p-1" role="radiogroup" aria-label="طريقة الدفع" data-tour="pos-pay">
+      {opts.map((o) => {
+        const on = method === o.v
+        return (
+          <button
+            key={o.v}
+            type="button"
+            role="radio"
+            aria-checked={on}
+            data-tour={`pos-pay-${o.v}`}
+            onClick={() => pos.patchActive({ payment: o.v })}
+            className={cn(
+              "flex h-10 items-center justify-center gap-2 rounded-xl text-sm font-semibold transition",
+              on ? "bg-card text-foreground shadow-sm ring-1 ring-border" : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            <o.Icon className="size-4" />
+            {o.label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
 function CheckoutButtons({
   pos,
   checkout,
@@ -984,6 +1029,7 @@ function CheckoutButtons({
           تعديل فاتورة: ستُحدَّث الفاتورة نفسها، وتبقى النسخة السابقة محفوظة في السجل
         </p>
       )}
+      {active ? <PayToggle pos={pos} /> : null}
       <div className="flex items-center gap-2">
       <button
         type="button"
@@ -1702,9 +1748,11 @@ function PosPageInner() {
     if (!el) return
     const measure = () => {
       const main = el.closest("main")
-      const pb = main ? parseFloat(getComputedStyle(main).paddingBottom) || 0 : 0
       const top = el.getBoundingClientRect().top + (main?.scrollTop ?? 0)
-      setFitH(Math.max(420, Math.floor(window.innerHeight - top - pb)))
+      // To the very bottom of the screen: the drinks run under the edge and
+      // scroll, instead of stopping at a hard line above it. The page's own
+      // bottom padding is cancelled by the grid's negative margin below.
+      setFitH(Math.max(420, Math.floor(window.innerHeight - top)))
     }
     measure()
     window.addEventListener("resize", measure)
@@ -1744,6 +1792,8 @@ function PosPageInner() {
     () => ({
       search: search || undefined,
       category: catId ?? undefined,
+      // A drink switched off ("في المنيو") is not sold at the till.
+      is_active: true,
       ordering: "name",
       page_size: 30,
     }),
@@ -1974,7 +2024,7 @@ function PosPageInner() {
   return (
     <div
       ref={shellRef}
-      className="w-full lg:grid lg:h-[var(--pos-fit)] lg:grid-cols-[minmax(0,1fr)_440px] lg:grid-rows-[auto_minmax(0,1fr)] lg:gap-x-5 2xl:grid-cols-[minmax(0,1fr)_480px]"
+      className="w-full lg:-mb-10 lg:grid lg:h-[var(--pos-fit)] lg:grid-cols-[minmax(0,1fr)_440px] lg:grid-rows-[auto_minmax(0,1fr)] lg:gap-x-5 2xl:grid-cols-[minmax(0,1fr)_480px]"
       style={{ ["--pos-fit" as string]: fitH ? `${fitH}px` : "calc(100dvh - 7rem)" }}
     >
       {scanAlertOverlay}
@@ -2022,13 +2072,19 @@ function PosPageInner() {
                 </button>
               </div>
             )}
-            <CategoryCircles value={catId} onChange={setCatId} />
+            <div className="flex items-start gap-1">
+              <div className="min-w-0 flex-1">
+                <CategoryCircles value={catId} onChange={setCatId} />
+              </div>
+              {/* The cash drawer: open with a count, close with a count. */}
+              <CashDrawerButton />
+            </div>
           </StickyToolbar>
           </div>
           <div className="grid gap-5 lg:contents">
             {/* Products — the only thing that scrolls on a desktop. */}
             <div
-              className="min-w-0 lg:col-start-1 lg:row-start-2 lg:-me-3 lg:h-full lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain lg:pe-3 lg:pb-4 lg:[scrollbar-gutter:stable]"
+              className="min-w-0 lg:col-start-1 lg:row-start-2 lg:-me-3 lg:h-full lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain lg:pe-3 lg:pb-8 lg:[scrollbar-gutter:stable]"
               data-tour="pos-search"
             >
               {/* Kept inside the products column so it never slides over the cart. */}
@@ -2082,7 +2138,7 @@ function PosPageInner() {
             </div>
 
             {/* Cart — desktop side panel */}
-            <div className="relative z-30 hidden min-h-0 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:block lg:h-full" data-tour="pos-cart">
+            <div className="relative z-30 hidden min-h-0 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:block lg:h-full lg:pb-6" data-tour="pos-cart">
               <Card
                 className={cn(
                   // Fills the column, which fills the screen: the checkout
@@ -2113,6 +2169,7 @@ function PosPageInner() {
                   setSheetScan(scannerOn)
                   setCartOpen(true)
                 }}
+                data-tour="pos-cart-open"
                 aria-label="السلة"
                 className="ink-panel animate-in zoom-in-75 ms-auto grid size-14 place-items-center rounded-full text-white shadow-2xl transition duration-200 active:scale-95"
               >
@@ -2127,6 +2184,7 @@ function PosPageInner() {
                   setSheetScan(scannerOn)
                   setCartOpen(true)
                 }}
+                data-tour="pos-cart-open"
                 className={cn(
                   "ink-panel animate-in fade-in zoom-in-95 flex w-full items-center justify-between rounded-2xl px-4 py-3 text-white shadow-2xl transition duration-200 active:scale-[0.99]",
                   bumping && "cart-bump",
@@ -2158,6 +2216,7 @@ function PosPageInner() {
             {/* Bottom sheet: fixed height, internal scroll — actions always visible. */}
             <DialogContent
               showCloseButton={false}
+              data-tour="pos-cart"
               className={cn(
                 "top-auto bottom-0 left-0 h-[88dvh] w-full max-w-none translate-x-0 translate-y-0 rounded-b-none rounded-t-3xl data-closed:zoom-out-100 data-open:zoom-in-100 data-open:slide-in-from-bottom-10 flex flex-col gap-0 overflow-hidden p-4 pt-5",
                 pos.active?.isReturn && "return-glow",

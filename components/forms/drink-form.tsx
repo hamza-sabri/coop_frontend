@@ -548,10 +548,13 @@ export function DrinkForm({
   open,
   onOpenChange,
   product,
+  onDelete,
 }: {
   open: boolean
   onOpenChange: (o: boolean) => void
   product?: Product | null
+  /** Owner only: shows the bin in the footer; the page asks to confirm. */
+  onDelete?: (p: Product) => void
 }) {
   const qc = useQueryClient()
   const editing = Boolean(product)
@@ -876,6 +879,18 @@ export function DrinkForm({
           >
             إلغاء
           </Button>
+          {product && onDelete && isOwner ? (
+            <Button
+              type="button"
+              variant="outline"
+              className="text-rose-600 hover:text-rose-700"
+              aria-label="حذف المشروب"
+              title="حذف المشروب"
+              onClick={() => onDelete(product)}
+            >
+              <Trash2 className="size-4" />
+            </Button>
+          ) : null}
         </>
         )
       }

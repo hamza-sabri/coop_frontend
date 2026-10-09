@@ -16,6 +16,7 @@ import { ArrowLeft, ArrowRight, Check, FlaskConical, X } from "lucide-react"
 
 import { getTour, type Tour, type TourStep } from "@/lib/tour/tours"
 import { startTourDemo, endTourDemo, markTourExit } from "@/lib/tour/demo"
+import { setGuideLive } from "@/lib/tour/guide-live"
 import { isGuestDemo } from "@/lib/demo/guest"
 import { cn } from "@/lib/utils"
 
@@ -23,6 +24,48 @@ type TourCtx = { startTour: (id: string) => void; active: boolean }
 const Ctx = createContext<TourCtx>({ startTour: () => {}, active: false })
 export function useTour() {
   return useContext(Ctx)
+}
+
+/** Set while WE send Escape to close a drawer, so the tour does not end. */
+let syntheticEscape = false
+
+/**
+ * Close whatever drawer or dialog is open — UI only, nothing is saved.
+ * Prefers the drawer's own close button; falls back to Escape.
+ */
+function closeOverlays() {
+  const closers = Array.from(
+    document.querySelectorAll<HTMLElement>('[data-slot="sheet-close"], [data-slot="dialog-close"]'),
+  ).filter((b) => b.getBoundingClientRect().width > 0)
+  if (closers.length) {
+    closers.forEach((b) => b.click())
+    return
+  }
+  syntheticEscape = true
+  try {
+    document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))
+  } finally {
+    syntheticEscape = false
+  }
+}
+
+/** A `data-tour` anchor, else a CSS selector — the first one on screen. */
+function findVisible(anchor: string | undefined): HTMLElement | null {
+  if (!anchor) return null
+  const nodes = Array.from(document.querySelectorAll<HTMLElement>(`[data-tour="${anchor}"]`))
+  for (const n of nodes) {
+    const r = n.getBoundingClientRect()
+    if (r.width > 0 && r.height > 0) return n
+  }
+  try {
+    for (const n of Array.from(document.querySelectorAll<HTMLElement>(anchor))) {
+      const r = n.getBoundingClientRect()
+      if (r.width > 0 && r.height > 0) return n
+    }
+  } catch {
+    /* not a selector */
+  }
+  return null
 }
 
 const CARD_W = 340
@@ -122,20 +165,29 @@ export function TourProvider({ children }: { children: ReactNode }) {
   rectRef.current = rect
 
   const step: TourStep | null = tour ? (tour.steps[index] ?? null) : null
+  const live = tour?.mode === "live"
+  const liveRef = useRef(live)
+  liveRef.current = live
 
   // A tour only ever lives in React state, so on any fresh load no tour is
   // running yet. Clear a stale tour-demo flag left by an unclean exit so the
   // app always comes back to real data.
   useEffect(() => {
     endTourDemo()
+    setGuideLive(false)
   }, [])
 
   const startTour = useCallback(
     (id: string) => {
       const t = getTour(id)
       if (!t) return
-      startTourDemo() // route every API call to the in-browser mock backend
-      qc.clear() // swap the real cached data out for demo data
+      if (t.mode === "live") {
+        // The real screens, read-only: every write is refused while it runs.
+        setGuideLive(true)
+      } else {
+        startTourDemo() // route every API call to the in-browser mock backend
+        qc.clear() // swap the real cached data out for demo data
+      }
       setRect(null)
       setIndex(0)
       setTour(t)
@@ -156,6 +208,16 @@ export function TourProvider({ children }: { children: ReactNode }) {
   // - Logged-in user: back to the /guide hub, as always.
   const finish = useCallback(
     (reason: "done" | "exit" = "exit") => {
+      if (liveRef.current) {
+        // Nothing was swapped out, so nothing to restore: close any drawer
+        // the guide opened, lift the write lock, back to the guides.
+        setTour(null)
+        setRect(null)
+        closeOverlays()
+        setGuideLive(false)
+        router.push("/guide")
+        return
+      }
       setTour(null)
       setRect(null)
       endTourDemo()
@@ -199,29 +261,31 @@ export function TourProvider({ children }: { children: ReactNode }) {
     let advanced = false
     let raf = 0
     let scrolled = false
-    const startedAt = Date.now()
-    if (step.route) router.push(step.route)
+    let startedAt = Date.now()
+    let prepared = !step.prepare && !step.prepareIfShown
+    const prepSel = step.prepare ?? step.prepareIfShown
+    const prepWait = step.prepare ? 4000 : 900
+    if (step.closeFirst) closeOverlays()
+    if (step.route && window.location.pathname !== step.route) router.push(step.route)
 
-    function findEl(): HTMLElement | null {
-      if (!step?.anchor) return null
-      const nodes = Array.from(
-        document.querySelectorAll<HTMLElement>(`[data-tour="${step.anchor}"]`),
-      )
-      for (const n of nodes) {
-        const r = n.getBoundingClientRect()
-        if (r.width > 0 && r.height > 0) return n
-      }
-      try {
-        const sel = document.querySelector<HTMLElement>(step.anchor)
-        if (sel && sel.getBoundingClientRect().width > 0) return sel
-      } catch {
-        /* not a selector */
-      }
-      return null
-    }
+    const findEl = () => findVisible(step?.anchor)
 
     function loop() {
       if (cancelled) return
+      // Open the drawer this step talks about (a UI-only click on a button
+      // that opens a form — never one that saves).
+      if (!prepared) {
+        const opener = findVisible(prepSel)
+        if (opener) {
+          prepared = true
+          opener.click()
+          startedAt = Date.now()
+        } else if (Date.now() - startedAt > prepWait) {
+          prepared = true
+        }
+        raf = requestAnimationFrame(loop)
+        return
+      }
       const el = findEl()
       if (el) {
         if (!scrolled) {
@@ -276,6 +340,7 @@ export function TourProvider({ children }: { children: ReactNode }) {
     if (!tour) return
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") {
+        if (syntheticEscape) return
         e.preventDefault()
         finishRef.current("exit")
       } else if (e.key === "ArrowLeft") {
@@ -293,6 +358,7 @@ export function TourProvider({ children }: { children: ReactNode }) {
       {children}
       {tour && step && (
         <TourOverlay
+          live={live}
           rect={rect}
           step={step}
           index={index}
@@ -307,6 +373,7 @@ export function TourProvider({ children }: { children: ReactNode }) {
 }
 
 function TourOverlay({
+  live,
   rect,
   step,
   index,
@@ -315,6 +382,7 @@ function TourOverlay({
   onBack,
   onExit,
 }: {
+  live?: boolean
   rect: DOMRect | null
   step: TourStep
   index: number
@@ -347,7 +415,9 @@ function TourOverlay({
     <div className="pointer-events-none fixed inset-x-0 top-2 z-[220] flex justify-center px-3">
       <div className="flex items-center gap-2 rounded-full bg-ink px-4 py-1.5 text-xs font-semibold text-white shadow-lg ring-1 ring-white/10">
         <FlaskConical className="size-3.5 text-lime" />
-        وضع تجريبي — بيانات وهمية للتدريب فقط، لا يُحفَظ أي شيء
+        {live
+          ? "وضع التدريب — هذه شاشاتك الحقيقية، ولا يُحفَظ أي شيء"
+          : "وضع تجريبي — بيانات وهمية للتدريب فقط، لا يُحفَظ أي شيء"}
       </div>
     </div>
   )
@@ -454,6 +524,15 @@ function TourOverlay({
         className={panel}
         style={{ top, left: right, right: 0, height: bottom - top }}
       />
+      {live ? (
+        // Training only shows WHERE to tap: the highlighted control is not
+        // pressed for real, so nothing is ever saved.
+        <div
+          className="fixed z-[204] cursor-not-allowed"
+          style={{ top, left, width: right - left, height: bottom - top }}
+          title="هنا تضغط — في التدريب لا يُنفَّذ شيء"
+        />
+      ) : null}
       <div
         className="pointer-events-none fixed z-[205] rounded-2xl ring-2 ring-lime transition-all duration-200"
         style={{

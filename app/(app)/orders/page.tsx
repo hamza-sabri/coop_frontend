@@ -37,13 +37,14 @@ import { LOCAL_SALE_LABEL, isLocalSale } from "@/lib/offline/local-sale"
 import { businessToday } from "@/lib/period"
 import { invalidateSaleData } from "@/lib/sale-queries"
 import { cn } from "@/lib/utils"
+import { payLabel, payPill } from "@/lib/payment"
 
 /* The list is left open on the counter screen, so it polls. */
 const LIVE_MS = 15_000
 const PAGE_SIZE = 20
 
 type PeriodId = "today" | "yesterday" | "week" | "month" | "all"
-type PayId = "all" | "cash" | "return"
+type PayId = "all" | "sales" | "cash" | "card" | "return"
 
 function days(today: string, back: number): string {
   const d = new Date(`${today}T00:00:00`)
@@ -104,8 +105,8 @@ export default function SalesPage() {
     () => ({
       ...periodRange(period, today),
       item: search || undefined,
-      payment_method: pay === "cash" ? "cash" : undefined,
-      is_return: pay === "return" ? true : pay === "cash" ? false : undefined,
+      payment_method: pay === "cash" || pay === "card" ? pay : undefined,
+      is_return: pay === "return" ? true : pay === "all" ? undefined : false,
       created_by: cashier?.id,
       ordering: "-created_at",
     }),
@@ -303,10 +304,12 @@ export default function SalesPage() {
           toolbar={
             <>
               <Menu
-                label={{ all: "كل الفواتير", cash: "المبيعات فقط", return: "المرتجعات فقط" }[pay]}
+                label={{ all: "كل الفواتير", sales: "المبيعات فقط", cash: "مبيعات نقدية", card: "مبيعات بالبطاقة", return: "المرتجعات فقط" }[pay]}
                 options={[
                   { id: "all", label: "كل الفواتير" },
-                  { id: "cash", label: "المبيعات فقط" },
+                  { id: "sales", label: "المبيعات فقط" },
+                  { id: "cash", label: "مبيعات نقدية" },
+                  { id: "card", label: "مبيعات بالبطاقة" },
                   { id: "return", label: "المرتجعات فقط" },
                 ]}
                 value={pay}
@@ -413,9 +416,7 @@ function CustomerCell({ sale: s }: { sale: Sale }) {
 function PayPill({ sale }: { sale: Sale }) {
   if (sale.is_return) return <span className="pill pill-danger">إرجاع</span>
   return (
-    <span className={cn("pill", sale.payment_method === "cash" ? "pill-success" : "pill-warning")}>
-      {sale.payment_method === "cash" ? "نقدي" : "دين"}
-    </span>
+    <span className={cn("pill", payPill(sale.payment_method))}>{payLabel(sale.payment_method)}</span>
   )
 }
 

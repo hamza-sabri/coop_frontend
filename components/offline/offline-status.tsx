@@ -2,7 +2,11 @@
 
 import { CloudOff, Loader2, RefreshCw, UploadCloud } from "lucide-react"
 
+import { useEffect } from "react"
+
 import { useOfflineSync } from "@/hooks/use-offline-sync"
+import { API_BASE } from "@/lib/api-base"
+import { reportServer, useServerDown } from "@/lib/offline/server-health"
 import { useModules } from "@/lib/modules"
 import { formatNumber } from "@/lib/format"
 import { cn } from "@/lib/utils"
@@ -16,9 +20,52 @@ import { cn } from "@/lib/utils"
 export function OfflineStatus() {
   const { modules } = useModules()
   const { pending, syncing, online, flush } = useOfflineSync()
+  const serverDown = useServerDown()
+
+  // While our server is not answering (a deploy restarting it), knock gently
+  // every 8 s; the first answer below 500 clears the pill and the queued
+  // sales go up on their own (useOfflineSync listens for it).
+  useEffect(() => {
+    if (!serverDown) return
+    const knock = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/v1/`, { cache: "no-store" })
+        if (res.status < 500) reportServer(true)
+      } catch {
+        /* still away */
+      }
+    }
+    const id = window.setInterval(knock, 8_000)
+    return () => window.clearInterval(id)
+  }, [serverDown])
 
   // Offline mode is a top-tier capability.
   const enabled = modules === null || modules.has("offline")
+
+  // The server is restarting but the shop's internet is fine: calm, not red.
+  // The screen keeps its saved data; sales are kept on the device and sent
+  // the moment the server answers.
+  if (online && serverDown) {
+    return (
+      <div className="pointer-events-none fixed inset-x-0 bottom-24 z-40 flex justify-center px-3 lg:bottom-4 lg:justify-start lg:ps-6">
+        <div
+          className="pointer-events-auto flex items-center gap-2 rounded-full bg-ink px-4 py-2 text-xs font-semibold text-white shadow-lg ring-1 ring-black/10 animate-in fade-in slide-in-from-bottom-2"
+          role="status"
+          aria-live="polite"
+        >
+          <Loader2 className="size-4 animate-spin" />
+          <span>
+            {enabled
+              ? pending > 0
+                ? `جارٍ الاتصال بالخادم — ${formatNumber(pending)} عملية محفوظة وستُرسل تلقائياً`
+                : "جارٍ الاتصال بالخادم — تابع البيع، كل شيء يُحفظ"
+              : "جارٍ الاتصال بالخادم…"}
+          </span>
+        </div>
+      </div>
+    )
+  }
+
   if (!enabled) return null
 
   // All good and nothing queued → render nothing.

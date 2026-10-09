@@ -36,7 +36,12 @@ const VERSION = (() => {
 
 const NAV_CACHE = `pos-nav-${VERSION}`
 const STATIC_CACHE = `pos-static-${VERSION}`
-const KEEP = new Set([NAV_CACHE, STATIC_CACHE])
+// Drink and customer pictures (served from the storage host, signed links).
+// NOT versioned: a picture does not change with a deploy, and keeping them is
+// what keeps the menu's photos on screen while the server restarts.
+const IMG_CACHE = "pos-img"
+const IMG_MAX = 400
+const KEEP = new Set([NAV_CACHE, STATIC_CACHE, IMG_CACHE])
 
 // Every page a user can land on: the nav rail's routes, plus /login and
 // /price. lib/offline/sw-routes.test.ts fails if a page is added under
@@ -65,6 +70,7 @@ const PRECACHE_ROUTES = [
   "/reports",
   "/settings",
   "/customers",
+  "/guide",
   "/debts",
   "/debts/stats",
   "/price",
@@ -78,23 +84,70 @@ const PRECACHE_ROUTES = [
  */
 async function warmAssetsFrom(html, cache) {
   const urls = new Set()
-  const re = /\/_next\/static\/[^"'\s>)]+/g
+  const re = /\/_next\/static\/[^"'\s>)\\]+/g
   let m
   while ((m = re.exec(html)) !== null) {
-    // Strip HTML entities that can trail a URL inside an attribute.
-    urls.add(m[0].replace(/&amp;/g, "&"))
+    // Strip HTML entities that can trail a URL inside an attribute, and skip
+    // fragments the regex catches inside inline RSC data ("/_next/static/c").
+    const u = m[0].replace(/&amp;/g, "&")
+    if (/\.(?:js|css|woff2?|ttf|png|jpe?g|svg|webp|ico)$/.test(u)) urls.add(u)
   }
-  await Promise.allSettled(
-    [...urls].map(async (u) => {
-      if (await cache.match(u)) return
+  await Promise.allSettled([...urls].map((u) => warmOnce(u, cache)))
+}
+
+/* Every route lists mostly the SAME chunks. Fetching each one once, a few at
+ * a time, matters: 21 routes asking for one URL at once queue behind the
+ * browser's cache lock and its six connections, and the install sat there
+ * until the worker gave up — which is how the till ended up with no offline
+ * copy at all. */
+const warming = new Map()
+let slots = 4
+const queue = []
+function withSlot(fn) {
+  return new Promise((resolve) => {
+    const run = async () => {
+      slots--
       try {
-        const res = await fetch(u, { credentials: "same-origin" })
-        if (res.ok) await cache.put(u, res.clone())
+        resolve(await fn())
       } catch {
-        /* one missing chunk shouldn't fail the install */
+        resolve(undefined)
+      } finally {
+        slots++
+        const next = queue.shift()
+        if (next) next()
       }
-    }),
-  )
+    }
+    if (slots > 0) run()
+    else queue.push(run)
+  })
+}
+
+function warmOnce(u, cache) {
+  if (!warming.has(u)) {
+    warming.set(
+      u,
+      withSlot(async () => {
+        if (await cache.match(u)) return
+        const res = await fetchWithin(u, 20_000)
+        // Put the response itself (no clone left unread), and always finish
+        // reading a failed one — an unread body holds its connection.
+        if (res.ok) await cache.put(u, res)
+        else await res.body?.cancel()
+      }),
+    )
+  }
+  return warming.get(u)
+}
+
+/** fetch() that gives up: one hung request must never hold the install. */
+async function fetchWithin(url, ms) {
+  const ctl = new AbortController()
+  const t = setTimeout(() => ctl.abort(), ms)
+  try {
+    return await fetch(url, { credentials: "same-origin", signal: ctl.signal })
+  } finally {
+    clearTimeout(t)
+  }
 }
 
 // Without /pos cached there is no working POS offline, so it is the one route
@@ -109,8 +162,11 @@ self.addEventListener("install", (event) => {
       await Promise.allSettled(
         PRECACHE_ROUTES.map(async (route) => {
           try {
-            const res = await fetch(route, { credentials: "same-origin" })
-            if (!res.ok) return
+            const res = await fetchWithin(route, 20_000)
+            if (!res.ok) {
+              await res.body?.cancel()
+              return
+            }
             await nav.put(route, res.clone())
             await warmAssetsFrom(await res.text(), stat)
           } catch {
@@ -180,7 +236,14 @@ self.addEventListener("fetch", (event) => {
   } catch {
     return
   }
-  // Only manage our own origin — never the API, Convex realtime, or analytics.
+  // Pictures from the storage host: keep a copy, keyed WITHOUT the signature
+  // (it changes on every response), and show it whenever the host or our
+  // server cannot be reached.
+  if (url.origin !== self.location.origin && req.destination === "image") {
+    event.respondWith(cachedPicture(req, url))
+    return
+  }
+  // Otherwise only manage our own origin — never the API, Convex realtime, or analytics.
   if (url.origin !== self.location.origin) return
 
   if (req.mode === "navigate") {
@@ -188,6 +251,15 @@ self.addEventListener("fetch", (event) => {
       (async () => {
         try {
           const fresh = await fetch(req)
+          // A deploy in progress: the proxy answers 502/503/504 for a server
+          // that is restarting. That is not a page — show the copy we have,
+          // exactly as if the network were down, so nobody sees "Bad Gateway".
+          if (fresh.status >= 500) {
+            const cache = await caches.open(NAV_CACHE)
+            const saved = (await cache.match(req)) || (await cache.match(url.pathname))
+            if (saved) return saved
+            return fresh
+          }
           // Only cache a real page. A 502/504 from Traefik mid-deploy, or a
           // Next 500, would otherwise become THIS route's offline copy — and
           // the till would serve an error page as the POS the next time the
@@ -240,3 +312,51 @@ self.addEventListener("fetch", (event) => {
     )
   }
 })
+
+/** Origins whose pictures cannot be read with CORS — we pass those through
+ *  and keep the (opaque) answer only when we have none yet. */
+const noCors = new Set()
+
+async function cachedPicture(req, url) {
+  const key = url.origin + url.pathname
+  const cache = await caches.open(IMG_CACHE)
+  const keep = (res) => {
+    cache.put(key, res.clone()).then(trimPictures).catch(() => {})
+    return res
+  }
+  if (!noCors.has(url.origin)) {
+    try {
+      const res = await fetch(req.url, { mode: "cors", credentials: "omit" })
+      if (res.ok) return keep(res)
+      // Expired link, or gone: the saved copy is better than a broken image.
+      return (await cache.match(key)) || res
+    } catch {
+      // Either the host is down, or it does not allow CORS. Remember the
+      // second so we stop asking twice.
+      const saved = await cache.match(key)
+      if (saved) return saved
+      noCors.add(url.origin)
+    }
+  }
+  try {
+    const res = await fetch(req)
+    if (!(await cache.match(key))) keep(res)
+    return res
+  } catch {
+    return (await cache.match(key)) || Response.error()
+  }
+}
+
+let trimming = false
+async function trimPictures() {
+  if (trimming) return
+  trimming = true
+  try {
+    const cache = await caches.open(IMG_CACHE)
+    const keys = await cache.keys()
+    // Oldest first (insertion order); keep the most recent IMG_MAX.
+    for (const k of keys.slice(0, Math.max(0, keys.length - IMG_MAX))) await cache.delete(k)
+  } finally {
+    trimming = false
+  }
+}

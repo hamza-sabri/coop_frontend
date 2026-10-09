@@ -139,7 +139,7 @@ export function renderReceiptCanvas(
   const meta: Array<[string, string]> = [
     [data.isReturn ? "إرجاع رقم" : "فاتورة رقم", code || "—"],
     ["التاريخ", fmtDate(data.createdAt)],
-    ["الدفع", data.paymentMethod === "debt" ? "دين (آجل)" : "نقدي"],
+    ["الدفع", data.paymentMethod === "debt" ? "دين (آجل)" : data.paymentMethod === "card" ? "بطاقة" : "نقدي"],
   ]
   if (data.customerName) meta.push(["الزبون", data.customerName])
   if (data.cashierName) meta.push(["الكاشير", data.cashierName])

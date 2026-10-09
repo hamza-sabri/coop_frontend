@@ -49,7 +49,7 @@ export default function StockPage() {
       action={
         <>
           {isOwner ? (
-            <Button size="sm" className="bg-brand-gradient gap-1.5 shadow-md shadow-primary/25" onClick={() => setOpen("new")}>
+            <Button size="sm" className="bg-brand-gradient gap-1.5 shadow-md shadow-primary/25" onClick={() => setOpen("new")} data-tour="stock-add">
               <Plus className="size-4" />
               صنف
             </Button>

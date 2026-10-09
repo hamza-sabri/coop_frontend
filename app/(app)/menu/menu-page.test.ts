@@ -26,6 +26,6 @@ describe("the menu page", () => {
   })
 
   it("opens the drink drawer for adding and editing", () => {
-    expect(PAGE).toContain("<DrinkForm open={formOpen}")
+    expect(PAGE).toContain("<DrinkForm\n        open={formOpen}")
   })
 })

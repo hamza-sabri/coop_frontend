@@ -6,6 +6,7 @@ import { STORE_KV, idbGet, idbPut } from "@/lib/offline/idb"
 import { listQueuedSales } from "@/lib/offline/queue"
 import { readCachedCatalog } from "@/lib/offline/catalog-cache"
 import { matches } from "@/lib/search"
+import { getAccessToken } from "@/lib/tokens"
 
 /**
  * Offline reads for the top tier: while there's no connection the app serves
@@ -16,6 +17,29 @@ import { matches } from "@/lib/search"
 
 type Env<T> = { status: number; data: T; headers: Headers }
 const ok = <T>(data: T): Env<T> => ({ status: 200, data, headers: new Headers() })
+
+/** Every other GET is kept by its exact address, so ANY screen re-opens
+ *  with its last data while the server restarts (categories, the café's
+ *  reports, stock, settings…). Searches are not kept — too many variants. */
+function exactKey(url: string): string | null {
+  const u = new URL(url, "http://x")
+  if (u.searchParams.get("search")) return null
+  if (!u.pathname.includes("/api/")) return null
+  // Per signed-in account: an employee on a shared till must never be shown
+  // a screen the owner opened earlier on the same device.
+  return `read:url:${whoAmI()}:${u.pathname}${u.search}`
+}
+
+function whoAmI(): string {
+  try {
+    const t = getAccessToken()
+    if (!t) return "anon"
+    const payload = JSON.parse(atob(t.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")))
+    return String(payload.user_id ?? payload.sub ?? "anon")
+  } catch {
+    return "anon"
+  }
+}
 
 function keyFor(url: string): string | null {
   const [path, query = ""] = url.split("?")
@@ -73,7 +97,7 @@ function isCacheableSalesList(url: string): boolean {
 
 /** Write-through cache for a successful online GET. */
 export async function cacheReadResponse(url: string, data: unknown): Promise<void> {
-  const k = keyFor(url)
+  const k = keyFor(url) ?? exactKey(url)
   if (!k || data === undefined) return
   if (k === "read:sales:list" && !isCacheableSalesList(url)) return
   try {
@@ -309,6 +333,10 @@ export async function localReadResponse<T>(url: string): Promise<T | null> {
       stock: m.stock,
       barcode: m.barcode,
       category: m.category,
+      // The picture and the sizes ride along so the till looks and sells the
+      // same while the server is away (the service worker keeps the photos).
+      image: (m as { image?: string }).image ?? "",
+      variants: m.variants ?? [],
     }))
     const next =
       start + pageSize < rows.length
@@ -326,11 +354,17 @@ export async function localReadResponse<T>(url: string): Promise<T | null> {
     const found = (list?.results ?? []).find(
       (c) => c.id === Number(custDetail[1]),
     )
-    return found ? (ok(found) as T) : null
+    if (found) return ok(found) as T
   }
 
   const k = keyFor(url)
-  if (!k) return null
+  if (!k) {
+    // Anything else: the last answer for this exact address, if we have one.
+    const ek = exactKey(url)
+    if (!ek) return null
+    const data = await cached<unknown>(ek)
+    return data === undefined ? null : (ok(data) as T)
+  }
 
   if (k === "read:debts:list") {
     const u = new URL(url, "http://x")

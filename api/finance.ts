@@ -206,7 +206,11 @@ export type EarnRules = {
   rules: EarnRule[]
   default_rate_percent: string
   points_per_ils: number
+  /** Points customers hold right now. */
+  points_outstanding?: number
 }
+export const savePointsRate = (points_per_ils: number) =>
+  customFetch<Env<EarnRules>>(`/api/v1/points/rules/`, json("PATCH", { points_per_ils }))
 export const fetchEarnRules = () => customFetch<Env<EarnRules>>(`/api/v1/points/rules/`)
 export const saveEarnRules = (rules: EarnRule[]) =>
   customFetch<Env<EarnRules>>(`/api/v1/points/rules/`, json("PUT", { rules }))
@@ -266,7 +270,7 @@ export type ItemDetail = {
   days: { date: string; qty: string }[]
   by_hour: { hour: number; qty: string }[]
   sizes: { label: string; qty: string; revenue: string; profit: string; margin_pct: string | null }[]
-  buyers: { customer_id: number; name: string; qty: string }[]
+  buyers: { customer_id: number; name: string; avatar?: string; qty: string; times?: number }[]
   returns: { reason: string; count: number }[]
 }
 export type TimesReport = HourGrid & {

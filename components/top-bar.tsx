@@ -151,6 +151,10 @@ export function TopBar() {
                 التقارير
               </DropdownMenuItem>
             )}
+            <DropdownMenuItem onClick={() => router.push("/guide")}>
+              <GraduationCap className="size-4" />
+              الدليل
+            </DropdownMenuItem>
             <DropdownMenuItem onClick={() => router.push("/settings")}>
               <Settings className="size-4" />
               الإعدادات

@@ -4,11 +4,13 @@
  * (tab التقارير) and the الأصناف report tab. Same component, so the numbers
  * cannot disagree between them. */
 import { useQuery } from "@tanstack/react-query"
-import { Clock } from "lucide-react"
+import Link from "next/link"
+import { ChevronLeft, Clock } from "lucide-react"
 
 import { fetchItem, type PnlQuery } from "@/api/finance"
 import { Bars, dayAxis, daySpoken, hourShort, hourSpoken } from "@/components/charts"
 import { BarList, Empty, Failed, Panel, Stat } from "@/components/reports/kit"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet"
 import { Skeleton } from "@/components/ui/skeleton"
 import { formatMoney, formatNumber, toNumber } from "@/lib/format"
@@ -92,6 +94,11 @@ export function ItemReport({ productId, q }: { productId: number; q: PnlQuery })
         </p>
       </Panel>
 
+      {/* Who orders it — high up, because it is the first thing asked. */}
+      <Panel title="أكثر من يطلبه" hint="اضغط على زبون لفتح ملفه">
+        <Buyers rows={data.buyers} />
+      </Panel>
+
       {days.length > 1 ? (
         <Panel title="الأكواب يومياً">
           <Bars
@@ -140,22 +147,13 @@ export function ItemReport({ productId, q }: { productId: number; q: PnlQuery })
         </Panel>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Panel title="أكثر من يطلبه">
-          <BarList
-            rows={data.buyers.map((b) => ({ key: b.customer_id, label: b.name, value: toNumber(b.qty) }))}
-            format={(v) => `${n0(v)} كوب`}
-            empty="لا زبائن مسجلين على هذا الصنف"
-          />
-        </Panel>
-        <Panel title="المرتجعات">
-          <BarList
-            rows={data.returns.map((r) => ({ key: r.reason, label: r.reason, value: r.count }))}
-            format={(v) => n0(v)}
-            empty="لا مرتجعات — ممتاز"
-          />
-        </Panel>
-      </div>
+      <Panel title="المرتجعات">
+        <BarList
+          rows={data.returns.map((r) => ({ key: r.reason, label: r.reason, value: r.count }))}
+          format={(v) => n0(v)}
+          empty="لا مرتجعات — ممتاز"
+        />
+      </Panel>
     </div>
   )
 }
@@ -180,5 +178,39 @@ export function ItemReportSheet({
         <div className="flex-1 overflow-y-auto p-5">{productId != null ? <ItemReport productId={productId} q={q} /> : null}</div>
       </SheetContent>
     </Sheet>
+  )
+}
+
+/** Who orders this drink most — each row opens that customer's profile. */
+function Buyers({ rows }: { rows: { customer_id: number; name: string; avatar?: string; qty: string; times?: number }[] }) {
+  if (!rows.length) return <Empty>لا زبائن مسجلين على هذا الصنف</Empty>
+  const max = Math.max(...rows.map((r) => toNumber(r.qty)), 1)
+  return (
+    <ol className="space-y-1">
+      {rows.map((b) => (
+        <li key={b.customer_id}>
+          <Link
+            href={`/customers/${b.customer_id}`}
+            className="group relative flex items-center gap-2.5 overflow-hidden rounded-lg px-2 py-1.5 transition hover:bg-muted/60"
+          >
+            <span
+              aria-hidden
+              className="absolute inset-y-1 start-0 rounded-md bg-primary/10"
+              style={{ width: `${Math.max(2, (toNumber(b.qty) / max) * 100)}%` }}
+            />
+            <Avatar className="relative size-8 shrink-0">
+              {b.avatar ? <AvatarImage src={b.avatar} alt="" className="object-cover" /> : null}
+              <AvatarFallback className="bg-primary/10 text-xs font-bold text-primary">{b.name.charAt(0)}</AvatarFallback>
+            </Avatar>
+            <span className="relative min-w-0 flex-1">
+              <span className="block truncate text-sm font-medium">{b.name}</span>
+              {b.times ? <span className="text-[11px] text-muted-foreground">{formatNumber(b.times)} {b.times === 1 ? "مرة" : "مرات"}</span> : null}
+            </span>
+            <span className="relative shrink-0 text-sm font-semibold tabular-nums">{formatNumber(toNumber(b.qty))} كوب</span>
+            <ChevronLeft className="relative size-4 shrink-0 text-muted-foreground transition group-hover:-translate-x-0.5" />
+          </Link>
+        </li>
+      ))}
+    </ol>
   )
 }

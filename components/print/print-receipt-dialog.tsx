@@ -37,6 +37,7 @@ import {
   EMPTY_SALE_FILTERS,
   type SaleFilters,
 } from "@/components/sales/sale-filters-panel"
+import { payLabel, payPill } from "@/lib/payment"
 
 function saleToReceipt(s: Sale, cashierFallback: string): ReceiptData {
   return {
@@ -278,10 +279,10 @@ export function PrintReceiptDialog({
                     <span
                       className={cn(
                         "pill px-2 py-0.5 text-[10px]",
-                        s.is_return ? "pill-danger" : s.payment_method === "cash" ? "pill-success" : "pill-warning",
+                        s.is_return ? "pill-danger" : payPill(s.payment_method),
                       )}
                     >
-                      {s.is_return ? "إرجاع" : s.payment_method === "cash" ? "نقدي" : "دين"}
+                      {s.is_return ? "إرجاع" : payLabel(s.payment_method)}
                     </span>
                   </div>
                   <div className="mt-0.5 text-[11px] text-muted-foreground">

@@ -139,7 +139,7 @@ export function SaleFiltersPanel({
           <select className={selectCls} value={f.payment} onChange={(e) => patch({ payment: e.target.value })}>
             <option value="">الكل</option>
             <option value="cash">نقدي</option>
-            <option value="debt">دين</option>
+            <option value="card">بطاقة</option>
           </select>
         </div>
       )}

@@ -5,21 +5,26 @@
  * A ladder: bigger receipts earn a bigger share, and the step a receipt lands
  * on sets the rate for ALL of it. Each band starts where the one above it
  * ends, so the owner only types where a band stops and what it pays; the last
- * band has no top. Ten points are always one shekel — that is shown, not
- * editable, because changing it would silently re-price every balance. */
+ * band has no top.
+ *
+ * Above it, what a point is worth: 10, 20, 50 or 100 points = 1 ₪. Fixed
+ * steps only, so a balance always spends in whole shekels. Changing it
+ * re-prices balances customers hold NOW (said plainly before saving); bills
+ * already paid keep the value they were given. */
 import { useEffect, useState } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
-import { Calculator, Coins, Loader2, Plus, Save, Trash2 } from "lucide-react"
+import { Calculator, Coins, Loader2, Plus, Save, Scale, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 
-import { fetchEarnRules, saveEarnRules } from "@/api/finance"
+import { fetchEarnRules, savePointsRate, saveEarnRules } from "@/api/finance"
 import { SettingsCard } from "@/components/settings/kit"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { formatMoney, formatNumber } from "@/lib/format"
+import { cn } from "@/lib/utils"
 import { chain, pointsFor, problem, type Band } from "@/lib/points-bands"
-import { POINTS_PER_ILS } from "@/lib/points"
+import { pointsPerIls, setPointsPerIls } from "@/lib/points"
 
 const STARTER: Band[] = [
   { min_total: "0", max_total: "20", rate_percent: "1" },
@@ -38,6 +43,8 @@ export function PointsSection() {
   const [dirty, setDirty] = useState(false)
   const [saving, setSaving] = useState(false)
   const [sample, setSample] = useState("35")
+  setPointsPerIls(data?.points_per_ils)
+  const per = pointsPerIls()
 
   useEffect(() => {
     if (data && !dirty) {
@@ -88,6 +95,7 @@ export function PointsSection() {
 
   return (
     <div className="grid items-start gap-4 lg:grid-cols-5">
+      <RateCard per={per} outstanding={data?.points_outstanding ?? 0} loading={isLoading} />
       <SettingsCard
         className="lg:col-span-3"
         icon={Coins}
@@ -95,7 +103,7 @@ export function PointsSection() {
         hint={
           <>
             الفاتورة الأكبر تكسب نسبة أكبر، والنسبة تُحسب على الفاتورة كلها.{" "}
-            <b className="text-foreground">{formatNumber(POINTS_PER_ILS)} نقاط = 1 ₪</b> دائماً.
+            <b className="text-foreground">{formatNumber(per)} نقطة = 1 ₪</b>.
           </>
         }
       >
@@ -211,7 +219,7 @@ export function PointsSection() {
             <p className="font-heading text-2xl font-bold leading-none tabular-nums text-primary">
               {formatNumber(pts)} <span className="text-sm font-semibold">نقطة</span>
             </p>
-            <p className="mt-1 text-[11px] text-muted-foreground">قيمتها {formatMoney(pts / POINTS_PER_ILS)}</p>
+            <p className="mt-1 text-[11px] text-muted-foreground">قيمتها {formatMoney(pts / per)}</p>
           </div>
         </div>
         <ul className="mt-3 divide-y divide-border/70 text-sm">
@@ -226,7 +234,7 @@ export function PointsSection() {
                 >
                   <span className="text-muted-foreground">فاتورة {formatMoney(a)}</span>
                   <span className="tabular-nums">
-                    <b>{formatNumber(p)}</b> نقطة <span className="text-[11px] text-muted-foreground">({formatMoney(p / POINTS_PER_ILS)})</span>
+                    <b>{formatNumber(p)}</b> نقطة <span className="text-[11px] text-muted-foreground">({formatMoney(p / per)})</span>
                   </span>
                 </button>
               </li>
@@ -235,5 +243,86 @@ export function PointsSection() {
         </ul>
       </SettingsCard>
     </div>
+  )
+}
+
+/** The fixed rates a shop may pick: a point is 10, 5, 2 or 1 agora. */
+export const RATES = [10, 20, 50, 100] as const
+
+/** قيمة النقاط — how many points make one shekel. */
+function RateCard({ per, outstanding, loading }: { per: number; outstanding: number; loading: boolean }) {
+  const qc = useQueryClient()
+  const [pick, setPick] = useState<number | null>(null)
+  const [saving, setSaving] = useState(false)
+  const chosen = pick ?? per
+  const changed = pick != null && pick !== per
+  const step = (n: number) => [1, 2, 5].map((k) => `${formatNumber(n * k)} نقطة = ${formatMoney(k)}`).join(" · ")
+
+  async function save() {
+    if (!changed || pick == null) return
+    setSaving(true)
+    try {
+      const r = await savePointsRate(pick)
+      setPointsPerIls(r.data.points_per_ils)
+      qc.invalidateQueries({ queryKey: ["points-rules"] })
+      qc.invalidateQueries({ queryKey: ["customers-quick"] })
+      toast.success(`حُفظ: ${formatNumber(pick)} نقطة = 1 ₪`)
+      setPick(null)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "تعذر الحفظ")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <SettingsCard
+      className="lg:col-span-5"
+      icon={Scale}
+      title="قيمة النقاط"
+      hint="كم نقطة تساوي شيكلاً واحداً. الزبون يستبدل نقاطه بشواقل كاملة فقط — لا كسور."
+    >
+      <div className="flex flex-wrap items-center gap-2" role="radiogroup" aria-label="كم نقطة تساوي 1 ₪">
+        {RATES.map((n) => {
+          const on = chosen === n
+          return (
+            <button
+              key={n}
+              type="button"
+              role="radio"
+              aria-checked={on}
+              disabled={loading}
+              onClick={() => setPick(n)}
+              className={cn(
+                "rounded-xl border px-4 py-2.5 text-sm font-semibold tabular-nums transition",
+                on ? "border-primary bg-primary text-primary-foreground shadow-sm" : "border-border bg-card hover:bg-muted/60",
+              )}
+            >
+              {formatNumber(n)} نقطة = 1 ₪
+            </button>
+          )
+        })}
+      </div>
+      <p className="mt-3 text-xs text-muted-foreground">
+        يستبدل الزبون: {step(chosen)}… — وما يبقى أقل من {formatNumber(chosen)} نقطة ينتظر الزيارة التالية.
+      </p>
+      {changed && outstanding > 0 ? (
+        <p className="mt-3 rounded-lg bg-amber-500/10 px-3 py-2 text-xs leading-relaxed text-amber-800 dark:text-amber-300">
+          عند الزبائن الآن {formatNumber(outstanding)} نقطة، قيمتها {formatMoney(outstanding / per)}. بعد الحفظ تصبح قيمتها{" "}
+          <b>{formatMoney(outstanding / chosen)}</b>. الفواتير السابقة لا تتغيّر.
+        </p>
+      ) : null}
+      {changed ? (
+        <div className="mt-3 flex justify-end gap-2">
+          <Button variant="outline" size="sm" onClick={() => setPick(null)} disabled={saving}>
+            تراجع
+          </Button>
+          <Button size="sm" className="bg-brand-gradient gap-1.5" onClick={save} disabled={saving}>
+            {saving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
+            حفظ القيمة
+          </Button>
+        </div>
+      ) : null}
+    </SettingsCard>
   )
 }

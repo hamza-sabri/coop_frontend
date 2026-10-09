@@ -13,13 +13,13 @@
    a `beansSpent > 0` guard that is never true. */
 import { readFileSync } from "node:fs"
 import { describe, expect, it } from "vitest"
-import { POINTS_PER_ILS, pointsForBill, pointsValue } from "@/lib/points"
+import { pointsForBill, pointsPerIls, pointsValue } from "@/lib/points"
 
 const read = (p: string) => readFileSync(p, "utf8")
 
 describe("the shekel value of points", () => {
   it("matches the server's rate", () => {
-    expect(POINTS_PER_ILS).toBe(10)
+    expect(pointsPerIls()).toBe(10) // the default until the shop's rate loads
     expect(pointsValue(43)).toBeCloseTo(4.3, 5)
   })
 
@@ -97,7 +97,8 @@ describe("the offline till agrees with the server", () => {
   })
 
   it("clamps the same way the server clamps", () => {
-    expect(src).toContain("pointsForBill(billed)")
+    // Whole shekels only, bounded by the bill — lib/points.spendablePoints.
+    expect(src).toContain("spendablePoints(active.beansSpent ?? 0, billed)")
   })
 })
 

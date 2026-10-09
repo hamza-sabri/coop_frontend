@@ -43,7 +43,7 @@ type Opener = (arg: {
   receiptCode?: string
   customerId?: number | null
   customerName?: string
-  payment?: "cash" | "debt"
+  payment?: "cash" | "card" | "debt"
   isReturn?: boolean
   discounted?: string
   lines: CartLine[]

@@ -93,7 +93,9 @@ export default function ReportsPage() {
       {/* One row: which question (tabs) · which period. */}
       <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
         <SegmentedTabs tabs={tabs} active={active} onChange={pick} className="mb-0 min-w-0 xl:w-fit" />
-        <PeriodBar value={period} onChange={setPeriod} today={today} className="shrink-0" />
+        <div data-tour="reports-period" className="shrink-0">
+          <PeriodBar value={period} onChange={setPeriod} today={today} />
+        </div>
       </div>
 
       {active === "overview" && <OverviewTab q={q} onOpenItem={(id) => openItem(id)} goTo={pick} />}

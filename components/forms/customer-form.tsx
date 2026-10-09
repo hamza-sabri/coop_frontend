@@ -161,7 +161,7 @@ export function CustomerForm({
         </>
       }
     >
-      <div className="flex flex-col gap-1.5">
+      <div className="flex flex-col gap-1.5" data-tour="customer-name">
         <Label>الاسم</Label>
         <Input autoFocus={!editing} placeholder="مثال: لين عودة" {...register("name", { required: "اكتب اسم الزبون" })} />
         {errors.name && (
@@ -169,9 +169,9 @@ export function CustomerForm({
         )}
       </div>
 
-      <div className="flex flex-col gap-1.5">
+      <div className="flex flex-col gap-1.5" data-tour="customer-phone">
         <Label>
-          رقم الهاتف <span className="text-xs font-normal text-muted-foreground">(ليجده الكاشير بسرعة)</span>
+          رقم الهاتف <span className="text-xs font-normal text-muted-foreground">(اختياري)</span>
         </Label>
         <Input
           dir="ltr"
@@ -186,7 +186,9 @@ export function CustomerForm({
           live in the edit form. Whether a customer is new, a regular or has
           stopped coming is worked out from their visits — never typed. */}
       <div className="flex flex-col gap-1.5">
-          <Label>الجنس</Label>
+          <Label>
+            الجنس <span className="text-xs font-normal text-muted-foreground">(اختياري)</span>
+          </Label>
           <RadioGroup
             value={gender}
             onValueChange={(v) => setGender(v as GenderEnum)}

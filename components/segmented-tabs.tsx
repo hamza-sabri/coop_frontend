@@ -55,6 +55,7 @@ export function SegmentedTabs({
             key={t.id}
             role="tab"
             type="button"
+            data-tour={`tab-${t.id}`}
             aria-selected={on}
             onClick={() => onChange(t.id)}
             className={cn(

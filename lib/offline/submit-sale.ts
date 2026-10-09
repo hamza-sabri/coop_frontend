@@ -9,12 +9,13 @@ import {
 } from "@/lib/offline/queue"
 import { isOfflineEnabled } from "@/lib/offline/enabled"
 import { canAutoUpload } from "@/lib/offline/sync-mode"
+import { guideWriteBlocked, isGuideLive } from "@/lib/tour/guide-live"
 
 export type SubmitMeta = {
   total: number
   discountedTotal: number
   isReturn: boolean
-  paymentMethod: "cash" | "debt"
+  paymentMethod: "cash" | "card" | "debt"
   customerName?: string
   cashierName?: string
 }
@@ -54,6 +55,9 @@ export async function submitSale(
   payload: SalePayload,
   meta: SubmitMeta,
 ): Promise<SubmitResult> {
+  // A guide is running: refuse BEFORE the write-ahead queue, or a practice
+  // sale would sit in the queue and upload later as a real one.
+  if (isGuideLive()) throw guideWriteBlocked()
   const clientUuid = payload.client_uuid ?? uuid()
   const body: SalePayload = { ...payload, client_uuid: clientUuid }
 

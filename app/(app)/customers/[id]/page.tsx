@@ -40,6 +40,8 @@ import { usePagedList } from "@/hooks/use-paged-list"
 import { formatDate, formatMoney, formatNumber, toNumber } from "@/lib/format"
 import { useIsOwner } from "@/lib/modules"
 import { cn } from "@/lib/utils"
+import { pointsValue } from "@/lib/points"
+import { usePointsRate } from "@/hooks/use-points-rate"
 
 const PAGE_SIZE = 12
 
@@ -69,6 +71,7 @@ function hourLabel(h: number): string {
 /* ── the page ────────────────────────────────────────────────────────── */
 
 export default function CustomerDetailPage() {
+  usePointsRate()
   const routeParams = useParams<{ id: string }>()
   const id = Number(routeParams?.id)
   const qc = useQueryClient()
@@ -264,7 +267,7 @@ function Hero({
             <Fact label="كوب">{p ? <CountUp value={toNumber(p.cups)} /> : "—"}</Fact>
           )}
           <Fact label="يزورنا">{p ? short(p.every_days, p.visits) : "—"}</Fact>
-          <Fact label="نقطة" sub={points != null ? formatMoney(points / 10) : undefined}>{points != null ? <CountUp value={points} /> : "—"}</Fact>
+          <Fact label="نقطة" sub={points != null ? formatMoney(pointsValue(points)) : undefined}>{points != null ? <CountUp value={points} /> : "—"}</Fact>
         </dl>
 
         <div className="flex shrink-0 gap-1.5">

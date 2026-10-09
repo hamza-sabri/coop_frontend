@@ -216,7 +216,15 @@ export default function MenuPage() {
       )}
 
       <Fab onClick={openAdd} label="إضافة صنف" />
-      <DrinkForm open={formOpen} onOpenChange={setFormOpen} product={editing} />
+      <DrinkForm
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        product={editing}
+        onDelete={(p) => {
+          setFormOpen(false)
+          setToDelete(p)
+        }}
+      />
       <NewCategoryDialog open={newCat} onOpenChange={setNewCat} />
       <ConfirmDelete
         open={Boolean(toDelete)}

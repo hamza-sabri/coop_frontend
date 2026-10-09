@@ -206,11 +206,11 @@ export function ItemDrawer({
               }}
             >
               <div className="grid grid-cols-2 gap-3">
-                <div className="col-span-2 flex flex-col gap-1.5">
+                <div className="col-span-2 flex flex-col gap-1.5" data-tour="item-name">
                   <Label>الاسم</Label>
                   <Input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} placeholder="حليب كامل الدسم" />
                 </div>
-                <div className="flex flex-col gap-1.5">
+                <div className="flex flex-col gap-1.5" data-tour="item-category">
                   <Label>التصنيف</Label>
                   <PickOrCreate
                     value={f.category}
@@ -229,7 +229,7 @@ export function ItemDrawer({
                     createLabel="تصنيف جديد"
                   />
                 </div>
-                <div className="flex flex-col gap-1.5">
+                <div className="flex flex-col gap-1.5" data-tour="item-supplier">
                   <Label>
                     المورّد <span className="text-xs font-normal text-muted-foreground">(اختياري)</span>
                   </Label>
@@ -253,7 +253,7 @@ export function ItemDrawer({
                 </div>
               </div>
 
-              <div className="rounded-2xl bg-muted/40 p-3">
+              <div className="rounded-2xl bg-muted/40 p-3" data-tour="item-buy">
                 <p className="mb-2 text-xs font-semibold">كيف تشتريه؟</p>
                 <div className="mb-2 flex flex-wrap gap-1.5">
                   {BUY_UNITS.filter((u) => isNew || baseOf(u) === item.unit).map((u) => (
@@ -292,7 +292,7 @@ export function ItemDrawer({
                 ) : null}
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3" data-tour="item-stock">
                 {isNew ? (
                   <div className="flex flex-col gap-1.5">
                     <Label>الموجود الآن ({unitWord})</Label>

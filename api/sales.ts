@@ -45,7 +45,7 @@ export type Sale = {
   customer: number | null
   customer_name?: string
   customer_phone?: string
-  payment_method: "cash" | "debt"
+  payment_method: "cash" | "card" | "debt"
   is_return?: boolean
   items: SaleItem[]
   total: string
@@ -136,7 +136,7 @@ export type SaleRevision = {
   snapshot: {
     total: string
     discounted_total: string
-    payment_method: "cash" | "debt"
+    payment_method: "cash" | "card" | "debt"
     is_return: boolean
     customer_name: string
     note: string
@@ -159,7 +159,7 @@ export type SalePayload = {
   /** A customer created at the till while offline: the id the till minted.
    *  The server resolves it after the customer itself has synced. */
   customer_client_uuid?: string
-  payment_method: "cash" | "debt"
+  payment_method: "cash" | "card" | "debt"
   is_return?: boolean
   items: Array<{
     product?: number | null
@@ -214,7 +214,7 @@ export type SalesStats = {
     qty?: string | number
   }[]
   daily: { date: string; amount: string | number; count: number }[]
-  payment_split: { cash: string | number; debt: string | number }
+  payment_split: { cash: string | number; card?: string | number; debt: string | number }
 }
 
 function qs(params: Record<string, unknown>): string {

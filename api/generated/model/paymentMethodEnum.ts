@@ -8,6 +8,7 @@
 
 /**
  * * `cash` - Cash
+ * * `card` - Card
  * * `debt` - Debt
  */
 export type PaymentMethodEnum = typeof PaymentMethodEnum[keyof typeof PaymentMethodEnum];
@@ -15,5 +16,6 @@ export type PaymentMethodEnum = typeof PaymentMethodEnum[keyof typeof PaymentMet
 
 export const PaymentMethodEnum = {
   cash: 'cash',
+  card: 'card',
   debt: 'debt',
 } as const;

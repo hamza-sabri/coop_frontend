@@ -56,7 +56,7 @@ export type ReceiptData = {
   beansSpent?: number
   /** Shekel value of `beansSpent`, from the server where one exists. */
   beansValue?: number
-  paymentMethod: "cash" | "debt"
+  paymentMethod: "cash" | "card" | "debt"
   isReturn?: boolean
   customerName?: string
   cashierName?: string
@@ -219,7 +219,7 @@ function receiptBodyHtml(data: ReceiptData, name: string, s: PrintSettings, logo
   // negative «خصم إضافي».
   const beansOff = Math.min(Number(data.beansValue) || 0, Math.max(0, discount))
   const otherOff = Math.max(0, discount - beansOff)
-  const payLabel = data.paymentMethod === "debt" ? "دين (آجل)" : "نقدي"
+  const payLabel = data.paymentMethod === "debt" ? "دين (آجل)" : data.paymentMethod === "card" ? "بطاقة" : "نقدي"
 
   // The sync state used to be printed as a badge too; it is the till's
   // business, not the customer's, and by the time anyone reads the paper it is

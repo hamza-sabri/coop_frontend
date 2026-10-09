@@ -25,7 +25,7 @@ export type QueuedSale = {
   total: number
   discountedTotal: number
   isReturn: boolean
-  paymentMethod: "cash" | "debt"
+  paymentMethod: "cash" | "card" | "debt"
   customerName?: string
   cashierName?: string
   attempts: number

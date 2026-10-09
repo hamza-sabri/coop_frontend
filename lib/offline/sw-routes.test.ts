@@ -21,9 +21,9 @@ const ROOT = path.resolve(__dirname, "../..")
  * Pages that exist on disk but are deliberately unreachable, so there is no
  * point spending install-time bandwidth on them. Anything added here needs a
  * reason.
- *   /guide — the tutorial, pulled from the nav for this store.
+ * (none — /guide is the café's step-by-step guides, in the nav.)
  */
-const NOT_LINKED = new Set(["/guide"])
+const NOT_LINKED = new Set<string>([])
 
 function appRoutes(): string[] {
   const base = path.join(ROOT, "app", "(app)")

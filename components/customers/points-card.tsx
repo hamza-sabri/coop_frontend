@@ -32,12 +32,15 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
+import { useIsOwner } from "@/lib/modules"
 
 /** Quick amounts, because a barista is not going to type "10" fifty times. */
 const QUICK = [5, 10, 25, 50]
 
 export function PointsCard({ customerId }: { customerId: number }) {
   const qc = useQueryClient()
+  // Points are worked out from purchases; only the owner corrects by hand.
+  const isOwner = useIsOwner()
   const [amount, setAmount] = useState("")
   const [note, setNote] = useState("")
   const [adjusting, setAdjusting] = useState(false)
@@ -94,6 +97,7 @@ export function PointsCard({ customerId }: { customerId: number }) {
           <Sparkles className="size-4 text-amber-500" />
           النقاط
         </h3>
+        {isOwner ? (
         <button
           type="button"
           onClick={() => setAdjusting((v) => !v)}
@@ -104,6 +108,7 @@ export function PointsCard({ customerId }: { customerId: number }) {
         >
           {adjusting ? "إغلاق" : "إضافة / خصم"}
         </button>
+        ) : null}
       </header>
 
       {isLoading || !points ? (
@@ -132,7 +137,7 @@ export function PointsCard({ customerId }: { customerId: number }) {
         </div>
       )}
 
-      {adjusting ? (
+      {adjusting && isOwner ? (
         <div className="mt-3 space-y-2 rounded-xl border border-dashed p-3 animate-in fade-in slide-in-from-top-1 duration-200">
           <div className="flex flex-wrap items-center gap-1.5">
             <Input
