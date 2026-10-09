@@ -22,6 +22,7 @@ import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { formatNumber } from "@/lib/format"
 import { cn } from "@/lib/utils"
+import { matches } from "@/lib/search"
 
 export type Align = "start" | "end" | "center"
 
@@ -132,7 +133,7 @@ export function DataTable<T>({
     const active = filters?.find((x) => x.id === f)
     if (active?.test) list = list.filter(active.test)
     const needle = q.trim()
-    if (needle && searchText) list = list.filter((r) => searchText(r).includes(needle))
+    if (needle && searchText) list = list.filter((r) => matches(searchText(r), needle))
     const col = s ? columns.find((c) => c.key === s.key) : undefined
     if (col?.sort) {
       const get = col.sort

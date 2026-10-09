@@ -6,6 +6,7 @@ import { Plus, Search } from "lucide-react"
 import type { CatalogMed } from "@/api/sales"
 import { formatMoney } from "@/lib/format"
 import { cn } from "@/lib/utils"
+import { matches } from "@/lib/search"
 
 /**
  * The items that can't be scanned.
@@ -106,7 +107,7 @@ export function QuickItemsPanel({
   const items = useMemo(() => {
     const all = (catalog ?? []).filter(isQuickItem)
     const q = query.trim().toLowerCase()
-    const rows = q ? all.filter((m) => m.name.toLowerCase().includes(q)) : all
+    const rows = q ? all.filter((m) => matches(m.name, q)) : all
     // Ordering, in order of precedence:
     //   1. tobacco before everything else (owner's request, backed by the data)
     //   2. most-recently tapped first — the traffic is extremely concentrated

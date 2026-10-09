@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input"
 import { formatMoney, formatNumber, toNumber } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { Bars } from "@/components/charts"
+import { matches } from "@/lib/search"
 
 type Sort = "qty" | "profit" | "margin" | "dead"
 
@@ -56,7 +57,7 @@ export function ItemsTab({ q, onOpenItem }: { q: PnlQuery; onOpenItem: (id: numb
   })
 
   const rows = useMemo(() => {
-    const list = (data?.items ?? []).filter((i) => !search.trim() || i.name.includes(search.trim()))
+    const list = (data?.items ?? []).filter((i) => matches(i.name, search))
     const n = (v: string | null) => (v == null ? Infinity : toNumber(v))
     if (sort === "dead") return list.filter((i) => toNumber(i.qty) === 0 && i.is_active)
     const sold = list.filter((i) => toNumber(i.qty) > 0)

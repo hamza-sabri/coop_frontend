@@ -9,8 +9,10 @@ import { toast } from "sonner"
 
 import {
   createInvCategory,
+  createSupplier,
   deleteItem,
   listInvCategories,
+  listSuppliers,
   formatQty,
   saveItem,
   UNIT_LABEL,
@@ -95,6 +97,13 @@ export function ItemDrawer({
   const cats = useQuery({
     queryKey: ["inventory", "categories"],
     queryFn: () => listInvCategories().then((r) => r.data),
+    enabled: open,
+    staleTime: 60_000,
+  })
+
+  const sups = useQuery({
+    queryKey: ["inventory", "suppliers"],
+    queryFn: () => listSuppliers().then((r) => r.data),
     enabled: open,
     staleTime: 60_000,
   })
@@ -224,7 +233,23 @@ export function ItemDrawer({
                   <Label>
                     المورّد <span className="text-xs font-normal text-muted-foreground">(اختياري)</span>
                   </Label>
-                  <Input value={f.supplier} onChange={(e) => setF({ ...f, supplier: e.target.value })} placeholder="مثال: ألبان الجنيدي" />
+                  <PickOrCreate
+                    value={f.supplier}
+                    options={(sups.data ?? []).map((x) => ({ name: x.name, hint: x.items ? String(x.items) : undefined }))}
+                    loading={sups.isLoading}
+                    onChange={(v) => setF({ ...f, supplier: v })}
+                    onCreate={
+                      isOwner
+                        ? async (name) => {
+                            await createSupplier(name)
+                            await sups.refetch()
+                          }
+                        : undefined
+                    }
+                    placeholder="اختر المورّد"
+                    createLabel="مورّد جديد"
+                    clearLabel="بلا مورّد"
+                  />
                 </div>
               </div>
 

@@ -28,6 +28,7 @@ import { Input } from "@/components/ui/input"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { formatMoney, toNumber } from "@/lib/format"
 import { cn } from "@/lib/utils"
+import { matches } from "@/lib/search"
 
 export type Draft = { key: string; item: number | null; qty: string; unit: BuyUnit }
 
@@ -81,7 +82,7 @@ function ItemPicker({
   const [open, setOpen] = useState(false)
   const [q, setQ] = useState("")
   const current = items.find((i) => i.id === value)
-  const shown = items.filter((i) => !q.trim() || i.name.includes(q.trim()))
+  const shown = items.filter((i) => matches(i.name, q))
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger

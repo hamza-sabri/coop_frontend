@@ -77,6 +77,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { cn } from "@/lib/utils"
+import { matches } from "@/lib/search"
 
 const DRAFT_KEY = "pharma_purchase_draft_v1"
 const PENDING_KEY = "pharma_purchase_pending_v1"
@@ -534,7 +535,7 @@ export default function PurchasesPage() {
     const cMin = num(costMin)
     const cMax = num(costMax)
     return lines.filter((l) => {
-      if (s && !(l.name.toLowerCase().includes(s) || l.barcode.includes(s))) return false
+      if (s && !(matches(l.name, s) || l.barcode.includes(s))) return false
       if (fCompany && l.company !== fCompany) return false
       if (fCategory && l.category !== fCategory) return false
       if (pMin != null && l.price < pMin) return false
@@ -1462,8 +1463,8 @@ function HistoryView({
     return orders.filter(
       (o) =>
         String(o.id).includes(f) ||
-        o.supplier.toLowerCase().includes(f) ||
-        o.items.some((it) => it.medication_name.toLowerCase().includes(f)),
+        matches(o.supplier, f) ||
+        o.items.some((it) => matches(it.medication_name, f)),
     )
   }, [orders, orderQuery])
 

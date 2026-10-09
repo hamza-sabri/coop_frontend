@@ -25,6 +25,7 @@ import {
 import { defaultGroups, groupProducts } from "@/lib/pos/quick-groups"
 import { formatMoney } from "@/lib/format"
 import { cn } from "@/lib/utils"
+import { matches } from "@/lib/search"
 
 /**
  * Quick cards — the handful of things this shop sells constantly.
@@ -160,7 +161,7 @@ export function QuickCards({
     ? all
         .filter(
           (m) =>
-            m.name.toLowerCase().includes(q) ||
+            matches(m.name, q) ||
             (m.barcode || "").startsWith(q) ||
             (m.alt_barcodes ?? []).some((c) => c.startsWith(q)),
         )

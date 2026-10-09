@@ -152,6 +152,11 @@ export const createInvCategory = (name: string) =>
   customFetch<Env<InventoryCategory>>(`/api/v1/inventory-categories/`, json("POST", { name }))
 
 // ── the item's statement ───────────────────────────────────────────────
+export type Supplier = { id: number; name: string; phone: string; items: number }
+export const listSuppliers = () => customFetch<Env<Supplier[]>>(`/api/v1/suppliers/`)
+export const createSupplier = (name: string) =>
+  customFetch<Env<Supplier>>(`/api/v1/suppliers/`, json("POST", { name }))
+
 export type Ledger = {
   item: { id: number; name: string; unit: BaseUnit }
   range: { start: string; end: string }

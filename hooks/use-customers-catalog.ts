@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query"
 import { customersQuick } from "@/api/sales"
 import { customersList } from "@/api/generated/customers/customers"
 import type { ComboOption } from "@/components/entity-combobox"
+import { matches } from "@/lib/search"
 
 /**
  * Customers held client-side (server side is Redis-cached, invalidated on any
@@ -12,12 +13,12 @@ import type { ComboOption } from "@/components/entity-combobox"
  * Falls back to the paginated API until the catalogue has loaded.
  */
 export function useCustomersCatalog() {
-  const { data } = useQuery({
+  const { data, dataUpdatedAt, refetch } = useQuery({
     queryKey: ["customers-quick"],
     queryFn: async () => (await customersQuick()).data.results,
-    staleTime: 5 * 60_000,
-    refetchInterval: 5 * 60_000,
-    refetchOnWindowFocus: false,
+    staleTime: 30_000,
+    refetchInterval: 2 * 60_000,
+    refetchOnWindowFocus: true,
   })
 
   /* App customers first, then whoever has the most points. Someone who signed
@@ -50,17 +51,20 @@ export function useCustomersCatalog() {
         badge: c.signed_up ? "تطبيق" : undefined,
       })
 
-      if (data) {
-        const q = search.trim().toLowerCase()
-        const hits = q
-          ? data.filter(
-              (c) =>
-                c.name.toLowerCase().includes(q) || (c.phone || "").includes(q),
-            )
-          : data
-        return rank(hits).slice(0, 20).map(toOption)
+      // Opening the picker on a list older than 30 s fetches it again first
+      // (cheap: the server caches it), so someone who just signed up in the
+      // app is there when the cashier looks.
+      let list = data
+      if (list && !search.trim() && Date.now() - dataUpdatedAt > 30_000) {
+        list = (await refetch()).data ?? list
       }
-      // Catalogue still loading → hit the API once.
+      if (list) {
+        const q = search.trim()
+        const hits = q ? list.filter((c) => matches(c.name, q) || matches(c.phone, q)) : list
+        if (hits.length || !q) return rank(hits).slice(0, 20).map(toOption)
+        // Nothing here — ask the server before saying "no one".
+      }
+      // Catalogue still loading, or no local match → ask the API.
       const r = await customersList({ search: search || undefined, page_size: 20 })
       const rows = (r.data.results ?? []) as unknown as {
         id: number; name: string; phone?: string
@@ -68,7 +72,7 @@ export function useCustomersCatalog() {
       }[]
       return rank(rows).map(toOption)
     },
-    [data, rank],
+    [data, dataUpdatedAt, refetch, rank],
   )
 
   return { customers: sorted, fetcher, ready: Boolean(data) }

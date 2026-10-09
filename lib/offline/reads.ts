@@ -5,6 +5,7 @@ import type { Debt } from "@/api/generated/model"
 import { STORE_KV, idbGet, idbPut } from "@/lib/offline/idb"
 import { listQueuedSales } from "@/lib/offline/queue"
 import { readCachedCatalog } from "@/lib/offline/catalog-cache"
+import { matches } from "@/lib/search"
 
 /**
  * Offline reads for the top tier: while there's no connection the app serves
@@ -261,7 +262,7 @@ export async function localReadResponse<T>(url: string): Promise<T | null> {
     else if (search)
       rows = rows.filter(
         (m) =>
-          m.name.toLowerCase().includes(search) ||
+          matches(m.name, search) ||
           codesOf(m).some((c) => c.includes(search)),
       )
     if (category) rows = rows.filter((m) => (m.category || "") === category)
@@ -363,8 +364,8 @@ export async function localReadResponse<T>(url: string): Promise<T | null> {
     if (search)
       results = results.filter(
         (c) =>
-          c.name.toLowerCase().includes(search) ||
-          (c.phone || "").includes(search),
+          matches(c.name, search) ||
+          matches(c.phone, search),
       )
     return ok({ count: results.length, next: null, previous: null, results }) as T
   }

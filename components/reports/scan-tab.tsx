@@ -37,6 +37,7 @@ import { ConfirmDelete } from "@/components/confirm-delete"
 import { LockedReportsTeaser } from "@/components/reports/reports-teaser"
 import { SearchInput } from "@/components/search-input"
 import { Skeleton } from "@/components/ui/skeleton"
+import { matches } from "@/lib/search"
 
 type SortKey = "name" | "count" | "days" | "price" | "stock"
 type Sort = { key: SortKey; dir: "asc" | "desc" }
@@ -152,7 +153,7 @@ export function ScanTab({ days, unlocked }: { days: number; unlocked: boolean })
     else if (filter === "missing") r = r.filter((p) => !p.found)
     if (q) {
       r = r.filter(
-        (p) => p.name.toLowerCase().includes(q) || p.barcode.toLowerCase().includes(q),
+        (p) => matches(p.name, q) || p.barcode.toLowerCase().includes(q),
       )
     }
     const dir = sort.dir === "asc" ? 1 : -1

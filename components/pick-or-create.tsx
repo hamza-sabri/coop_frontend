@@ -1,7 +1,7 @@
 "use client"
 
 /* A dropdown you can also add to: pick one of the options, or type a new
- * name and add it in place. Used for the inventory categories. */
+ * name and add it in place. Used for the inventory categories and suppliers. */
 import { useState } from "react"
 import { Check, ChevronsUpDown, Loader2, PlusCircle, X } from "lucide-react"
 
@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Command, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
+import { matches } from "@/lib/search"
 
 export function PickOrCreate({
   value,
@@ -18,6 +19,7 @@ export function PickOrCreate({
   loading,
   placeholder = "اختر…",
   createLabel = "إضافة",
+  clearLabel = "بلا تصنيف",
   className,
 }: {
   value: string
@@ -28,13 +30,15 @@ export function PickOrCreate({
   loading?: boolean
   placeholder?: string
   createLabel?: string
+  /** The "none" row at the bottom, e.g. "بلا مورّد". */
+  clearLabel?: string
   className?: string
 }) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState("")
   const [busy, setBusy] = useState(false)
   const t = search.trim()
-  const shown = options.filter((o) => !t || o.name.includes(t))
+  const shown = options.filter((o) => matches(o.name, t))
   const exact = options.some((o) => o.name === t)
 
   async function create() {
@@ -99,7 +103,7 @@ export function PickOrCreate({
               {value ? (
                 <CommandItem value="__clear__" onSelect={() => { onChange(""); setOpen(false) }} className="gap-2 text-muted-foreground">
                   <X className="size-4 shrink-0" />
-                  بلا تصنيف
+                  {clearLabel}
                 </CommandItem>
               ) : null}
             </CommandGroup>

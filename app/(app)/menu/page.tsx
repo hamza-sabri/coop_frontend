@@ -36,6 +36,7 @@ import { formatMoney, formatNumber } from "@/lib/format"
 import { useIsOwner } from "@/lib/modules"
 import { ENDPOINTS, remove } from "@/lib/mutate"
 import { cn } from "@/lib/utils"
+import { matches } from "@/lib/search"
 
 const NO_CATEGORY = "بلا تصنيف"
 
@@ -87,7 +88,7 @@ export default function MenuPage() {
   const shown = useMemo(() => {
     const needle = q.trim()
     let list = items.filter(
-      (p) => (cat === "all" || (p.category || NO_CATEGORY) === cat) && (!needle || (p.name ?? "").includes(needle)),
+      (p) => (cat === "all" || (p.category || NO_CATEGORY) === cat) && matches(`${p.name ?? ""} ${p.category ?? ""}`, needle),
     )
     list = [...list].sort((a, b) => {
       if (sort === "price") return num(b.price) - num(a.price)
