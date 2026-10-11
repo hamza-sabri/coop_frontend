@@ -5,6 +5,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type CSSProperties,
@@ -161,6 +162,12 @@ export function TourProvider({ children }: { children: ReactNode }) {
   const [tour, setTour] = useState<Tour | null>(null)
   const [index, setIndex] = useState(0)
   const [rect, setRect] = useState<DOMRect | null>(null)
+  // Has THIS step found where it goes? Until it has, the card stays hidden —
+  // it used to show in the middle of the screen first and then jump.
+  // Tied to the step index, so it is false in the very render that switches
+  // steps (an effect resetting a boolean is one render too late).
+  const [placedAt, setPlacedAt] = useState(-1)
+  const placedRef = useRef(false)
   const rectRef = useRef<DOMRect | null>(null)
   rectRef.current = rect
 
@@ -235,15 +242,13 @@ export function TourProvider({ children }: { children: ReactNode }) {
   const goNext = useCallback(() => {
     if (!tour) return
     if (index + 1 >= tour.steps.length) finish("done")
-    else {
-      setRect(null)
-      setIndex(index + 1)
-    }
+    // The spotlight is NOT cleared between steps: it glides from the last
+    // control to the next one instead of blinking to a dark screen.
+    else setIndex(index + 1)
   }, [tour, index, finish])
 
   const goBack = useCallback(() => {
     if (index <= 0) return
-    setRect(null)
     setIndex(index - 1)
   }, [index])
 
@@ -262,9 +267,18 @@ export function TourProvider({ children }: { children: ReactNode }) {
     let raf = 0
     let scrolled = false
     let startedAt = Date.now()
+    placedRef.current = false
+    const stepIndex = index
+    const place = () => {
+      if (!placedRef.current) {
+        placedRef.current = true
+        setPlacedAt(stepIndex)
+      }
+    }
+    let still = 0
     let prepared = !step.prepare && !step.prepareIfShown
     const prepSel = step.prepare ?? step.prepareIfShown
-    const prepWait = step.prepare ? 4000 : 900
+    const prepWait = step.prepare ? 4000 : 2500
     if (step.closeFirst) closeOverlays()
     if (step.route && window.location.pathname !== step.route) router.push(step.route)
 
@@ -275,6 +289,13 @@ export function TourProvider({ children }: { children: ReactNode }) {
       // Open the drawer this step talks about (a UI-only click on a button
       // that opens a form — never one that saves).
       if (!prepared) {
+        // Already on screen (desktop's cart, a drawer already open): nothing
+        // to open, show it now instead of waiting.
+        if (step?.anchor && step.anchor !== prepSel && findVisible(step.anchor)) {
+          prepared = true
+          raf = requestAnimationFrame(loop)
+          return
+        }
         const opener = findVisible(prepSel)
         if (opener) {
           prepared = true
@@ -293,9 +314,16 @@ export function TourProvider({ children }: { children: ReactNode }) {
           scrolled = true
         }
         const r = el.getBoundingClientRect()
-        if (!sameRect(rectRef.current, r)) setRect(r)
+        if (!sameRect(rectRef.current, r)) {
+          setRect(r)
+          still = 0
+        } else still++
+        // Show the card once the control has stopped moving (a drawer slides
+        // in, the page scrolls) — so it lands once, in the right place.
+        if (still >= 6) place()
       } else if (Date.now() - startedAt > 1400) {
         if (rectRef.current !== null) setRect(null)
+        place() // no control to point at: a centred card is right here
       }
       raf = requestAnimationFrame(loop)
     }
@@ -358,6 +386,7 @@ export function TourProvider({ children }: { children: ReactNode }) {
       {children}
       {tour && step && (
         <TourOverlay
+          placed={placedAt === index}
           live={live}
           rect={rect}
           step={step}
@@ -373,6 +402,7 @@ export function TourProvider({ children }: { children: ReactNode }) {
 }
 
 function TourOverlay({
+  placed = true,
   live,
   rect,
   step,
@@ -382,6 +412,7 @@ function TourOverlay({
   onBack,
   onExit,
 }: {
+  placed?: boolean
   live?: boolean
   rect: DOMRect | null
   step: TourStep
@@ -399,15 +430,18 @@ function TourOverlay({
   // placement never overlaps the spotlight because of a bad estimate.
   const cardRef = useRef<HTMLDivElement>(null)
   const [cardH, setCardH] = useState(CARD_H)
-  useEffect(() => {
+  // Measured BEFORE paint (layout effect) and without the entry animation's
+  // scale (offsetHeight ignores transforms): otherwise the card painted at a
+  // guessed height, then hopped ~30px once the real one was known.
+  useLayoutEffect(() => {
     const el = cardRef.current
     if (!el) return
-    const measure = () => setCardH(el.getBoundingClientRect().height || CARD_H)
+    const measure = () => setCardH(el.offsetHeight || CARD_H)
     measure()
     const ro = new ResizeObserver(measure)
     ro.observe(el)
     return () => ro.disconnect()
-  }, [index, rect])
+  }, [index, rect, placed])
   const cardStyle = placeCard(rect, vw, vh, cardH)
 
   // Persistent "this is demo data" banner, always on top.
@@ -498,15 +532,17 @@ function TourOverlay({
       <>
         {banner}
         <div className="fixed inset-0 z-[200]">
-          <div className="absolute inset-0 bg-ink/70 backdrop-blur-[1px]" />
-          {card}
+          <div className="absolute inset-0 bg-ink/70" />
+          {placed ? card : null}
         </div>
       </>
     )
   }
 
   // Four dim panels around the target leave a clickable, highlighted hole.
-  const panel = "fixed z-[200] bg-ink/65 backdrop-blur-[1px]"
+  // No backdrop blur: blurring the whole live screen every frame is what made
+  // the guides stutter on the till.
+  const panel = "fixed z-[200] bg-ink/65"
   const top = Math.max(rect.top - PAD, 0)
   const bottom = rect.bottom + PAD
   const left = Math.max(rect.left - PAD, 0)
@@ -543,7 +579,7 @@ function TourOverlay({
           boxShadow: "0 0 0 3px color-mix(in oklab, var(--lime) 35%, transparent)",
         }}
       />
-      {card}
+      {placed ? card : null}
     </>
   )
 }
