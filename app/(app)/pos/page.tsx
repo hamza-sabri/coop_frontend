@@ -934,7 +934,9 @@ function TotalRow({
               className="h-9 w-28 text-xl"
               onCommit={(v) =>
                 pos.patchActive({
-                  discounted: v.toFixed(2),
+                  // Down for a discount, or up to the next whole shekel to
+                  // round — never more (the server clamps the same way).
+                  discounted: Math.min(Math.max(0, v), Math.ceil(total)).toFixed(2),
                   discountTouched: true,
                   discountFromOriginal: false,
                 })
