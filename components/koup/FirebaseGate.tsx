@@ -4,7 +4,7 @@
 import { useEffect, useState } from 'react'
 import { gsap } from 'gsap'
 import {
-  FACEBOOK_ON, firebaseAuth, inAppBrowser, signInError, signInWithFacebook, signInWithGoogle,
+  FACEBOOK_ON, completeFacebookReturn, firebaseAuth, inAppBrowser, signInError, signInWithFacebook, signInWithGoogle,
 } from '@/lib/firebase-web'
 
 export default function FirebaseGate() {
@@ -13,13 +13,19 @@ export default function FirebaseGate() {
   const [inApp, setInApp] = useState(false)
   useEffect(() => {
     setInApp(inAppBrowser())
-    // A redirect sign-in that failed (e.g. the email is already a Google
-    // account) comes back here — say why instead of silently showing the door.
+    // Back from a sign-in that left the page (Facebook on a phone, or a
+    // redirect): finish it, or say why it failed instead of silently showing
+    // the door again.
     void (async () => {
       try {
+        if (await completeFacebookReturn()) {
+          setBusy('facebook')
+          return
+        }
         const { getRedirectResult } = await import('firebase/auth')
         await getRedirectResult(await firebaseAuth())
       } catch (e) {
+        setBusy('')
         setError(signInError(e))
       }
     })()

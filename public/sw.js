@@ -316,6 +316,10 @@ self.addEventListener("fetch", (event) => {
 /** Origins whose pictures cannot be read with CORS — we pass those through
  *  and keep the (opaque) answer only when we have none yet. */
 const noCors = new Set()
+// The picture bucket (Backblaze B2) sends no CORS headers. Known up front so a
+// fresh worker does not first try CORS on every picture and fill the console
+// with "blocked by CORS policy" errors before it learns.
+const isNoCorsHost = (u) => /(^|\.)backblazeb2\.com$/.test(u.hostname)
 
 async function cachedPicture(req, url) {
   const key = url.origin + url.pathname
@@ -324,7 +328,7 @@ async function cachedPicture(req, url) {
     cache.put(key, res.clone()).then(trimPictures).catch(() => {})
     return res
   }
-  if (!noCors.has(url.origin)) {
+  if (!noCors.has(url.origin) && !isNoCorsHost(url)) {
     try {
       const res = await fetch(req.url, { mode: "cors", credentials: "omit" })
       if (res.ok) return keep(res)

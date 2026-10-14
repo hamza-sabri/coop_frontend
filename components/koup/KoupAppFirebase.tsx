@@ -10,7 +10,7 @@ import KoupApp from '@/components/KoupApp'
 import FirebaseGate from '@/components/koup/FirebaseGate'
 import InstallPrompt from '@/components/koup/InstallPrompt'
 import { clearShopMeCache, useShopMe } from '@/lib/koup-me'
-import { firebaseAuth, signOutWeb } from '@/lib/firebase-web'
+import { firebaseAuth, linkPendingFacebook, signOutWeb } from '@/lib/firebase-web'
 
 const API = process.env.NEXT_PUBLIC_API_BASE_URL ?? ''
 
@@ -25,7 +25,12 @@ export default function KoupAppFirebase() {
       const { onAuthStateChanged, getRedirectResult } = await import('firebase/auth')
       // Finishes a redirect sign-in (the popup-blocked fallback), if any.
       getRedirectResult(auth).catch(() => {})
-      off = onAuthStateChanged(auth, (u) => { setUser(u); setReady(true) })
+      off = onAuthStateChanged(auth, (u) => {
+        setUser(u); setReady(true)
+        // Came in with Google after Facebook was refused for the same email:
+        // attach Facebook now, so either button opens this account next time.
+        if (u) void linkPendingFacebook()
+      })
     }).catch(() => setReady(true))
     return () => off?.()
   }, [])

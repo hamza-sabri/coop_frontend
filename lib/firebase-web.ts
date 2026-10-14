@@ -66,12 +66,133 @@ export async function signInWithGoogle(): Promise<void> {
   await signInWith(provider)
 }
 
+/* ── Facebook on phones ──────────────────────────────────────────────────
+ * Firebase's redirect keeps its "login in progress" note in sessionStorage,
+ * which belongs to ONE tab. On a phone the Facebook app usually catches the
+ * hop to facebook.com and sends the person back in a NEW tab — the note is
+ * gone and Firebase shows "Unable to process request due to missing initial
+ * state". So on phones we talk to Facebook directly: our own note goes in
+ * localStorage (shared by every tab), Facebook hands the access token back to
+ * /app in the URL fragment, and Firebase signs in with that token. */
+const FB_APP_ID = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID || "1062994576218349"
+const FB_STATE_KEY = "koup_fb_state"
+const isPhone = () =>
+  typeof navigator !== "undefined" && (/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || inAppBrowser())
+
+function facebookDirect(): void {
+  const state = Math.random().toString(36).slice(2) + Date.now().toString(36)
+  try {
+    localStorage.setItem(FB_STATE_KEY, JSON.stringify({ state, at: Date.now() }))
+  } catch {
+    /* private mode: the state check below will simply not match */
+  }
+  const q = new URLSearchParams({
+    client_id: FB_APP_ID,
+    redirect_uri: `${window.location.origin}/app`,
+    response_type: "token",
+    scope: "public_profile,email",
+    state,
+  })
+  window.location.assign(`https://www.facebook.com/v19.0/dialog/oauth?${q}`)
+}
+
+/** Back from Facebook (any tab): finish the sign-in. Returns true when it did. */
+export async function completeFacebookReturn(): Promise<boolean> {
+  if (typeof window === "undefined" || !window.location.hash.includes("access_token")) {
+    if (typeof window !== "undefined" && /[#&]error/.test(window.location.hash)) {
+      history.replaceState(null, "", window.location.pathname + window.location.search)
+    }
+    return false
+  }
+  const p = new URLSearchParams(window.location.hash.slice(1))
+  // The token must never stay in the address bar (or in history).
+  history.replaceState(null, "", window.location.pathname + window.location.search)
+  let saved: { state?: string; at?: number } = {}
+  try {
+    saved = JSON.parse(localStorage.getItem(FB_STATE_KEY) || "{}")
+    localStorage.removeItem(FB_STATE_KEY)
+  } catch {
+    /* ignore */
+  }
+  const token = p.get("access_token")
+  const fresh = saved.at && Date.now() - saved.at < 15 * 60_000
+  if (!token || !saved.state || saved.state !== p.get("state") || !fresh) return false
+  const auth = await firebaseAuth()
+  const { FacebookAuthProvider, signInWithCredential } = await import("firebase/auth")
+  try {
+    await signInWithCredential(auth, FacebookAuthProvider.credential(token))
+  } catch (e) {
+    rememberFacebookToLink(e, token)
+    throw e
+  }
+  return true
+}
+
+/* ── One person, two buttons ────────────────────────────────────────────
+ * Someone who first came in with Google and now taps Facebook (same email)
+ * is refused by Firebase: one account per email. We keep the Facebook token
+ * for a few minutes, ask them to tap Google once, and then attach Facebook to
+ * that same account — from then on either button opens the same points. */
+const FB_LINK_KEY = "koup_fb_link"
+
+function rememberFacebookToLink(e: unknown, token?: string | null) {
+  if ((e as { code?: string })?.code !== "auth/account-exists-with-different-credential") return
+  void (async () => {
+    let t = token
+    if (!t) {
+      const { FacebookAuthProvider } = await import("firebase/auth")
+      t = FacebookAuthProvider.credentialFromError(e as never)?.accessToken ?? null
+    }
+    if (!t) return
+    try {
+      localStorage.setItem(FB_LINK_KEY, JSON.stringify({ token: t, at: Date.now() }))
+    } catch {
+      /* ignore */
+    }
+  })()
+}
+
+/** Called once a user is signed in: attach a Facebook login waiting for them. */
+export async function linkPendingFacebook(): Promise<boolean> {
+  let pending: { token?: string; at?: number } = {}
+  try {
+    pending = JSON.parse(localStorage.getItem(FB_LINK_KEY) || "{}")
+  } catch {
+    return false
+  }
+  if (!pending.token) return false
+  try {
+    localStorage.removeItem(FB_LINK_KEY)
+  } catch {
+    /* ignore */
+  }
+  if (!pending.at || Date.now() - pending.at > 15 * 60_000) return false
+  const auth = await firebaseAuth()
+  if (!auth.currentUser) return false
+  const { FacebookAuthProvider, linkWithCredential } = await import("firebase/auth")
+  try {
+    await linkWithCredential(auth.currentUser, FacebookAuthProvider.credential(pending.token))
+    return true
+  } catch {
+    return false // already linked, or the token expired — nothing to undo
+  }
+}
+
 export async function signInWithFacebook(): Promise<void> {
+  if (isPhone()) {
+    facebookDirect()
+    return
+  }
   const { FacebookAuthProvider } = await import("firebase/auth")
   const provider = new FacebookAuthProvider()
   provider.addScope("email")
   provider.setCustomParameters({ display: "popup" })
-  await signInWith(provider)
+  try {
+    await signInWith(provider)
+  } catch (e) {
+    rememberFacebookToLink(e)
+    throw e
+  }
 }
 
 async function signInWith(provider: import("firebase/auth").AuthProvider): Promise<void> {
@@ -107,7 +228,7 @@ export function signInError(e: unknown): string | null {
   if (code === "auth/unauthorized-domain") return "هذا العنوان غير مسموح للدخول بعد — بلّغ المقهى."
   if (code === "auth/network-request-failed") return "ما في إنترنت — جرّب كمان شوي."
   if (code === "auth/account-exists-with-different-credential")
-    return "إيميلك مسجّل عندنا عبر Google — ادخل بزر Google."
+    return "حسابك عندنا مسجّل عبر Google — اضغط Google مرّة وحدة، وبنربط فيسبوك بنفس الحساب."
   if (code === "auth/operation-not-allowed") return "هذه الطريقة غير مفعّلة بعد — جرّب الطريقة الثانية."
   return "ما زبط الدخول. جرّب كمان مرة."
 }
