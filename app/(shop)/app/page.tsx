@@ -1,21 +1,12 @@
 import KoupApp from '@/components/KoupApp'
-import KoupAppAuthed from '@/components/koup/KoupAppAuthed'
-import KoupAppFirebase from '@/components/koup/KoupAppFirebase'
-import { CLERK_ON } from '@/components/koup/auth'
-import { OrderingGate } from '@/components/koup/ordering-gate'
-import { FIREBASE_ON } from '@/lib/firebase-web'
+import PhoneGate from '@/components/koup/PhoneGate'
 
-/* Firebase built in → the customer's web page: Google sign-in, profile,
-   points and visits. Ordering lives in the Flutter app, so this page is never
-   behind the ordering switch.
+/* Sign-up is by mobile number now: the staff register customers at the till
+   (name + number) and points count there. Google/Facebook sign-in on the web
+   is retired; the كوب app (Flutter, coming soon) will sign customers in with
+   that same number by SMS code and find their points.
 
-   Otherwise the older Clerk ordering app, gated as before; with neither key it
-   opens straight up rather than crashing on a missing provider. */
+   So the web page is the menu behind a card that explains exactly that. */
 export default function Page() {
-  if (FIREBASE_ON) return <KoupAppFirebase />
-  return (
-    <OrderingGate>
-      {CLERK_ON ? <KoupAppAuthed /> : <KoupApp auth={{ locked: false, user: null }} />}
-    </OrderingGate>
-  )
+  return <KoupApp auth={{ locked: true, user: null, Gate: PhoneGate }} />
 }

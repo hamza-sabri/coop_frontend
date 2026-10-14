@@ -34,9 +34,12 @@ describe("online ordering is switched off end to end", () => {
     expect(src).toContain("enabled: ordersOn")
   })
 
-  it("the customer shop asks the server before showing a cart", () => {
+  it("the customer web page shows no cart at all (sign-up is at the till)", () => {
+    // The page is the menu behind the mobile-number card: locked, no user,
+    // so nothing can be ordered from it.
     const page = code(read("app/(shop)/app/page.tsx"))
-    expect(page).toContain("<OrderingGate>")
+    expect(page).toContain("locked: true")
+    expect(page).toContain("Gate: PhoneGate")
   })
 
   it("the gate treats an unreachable server as closed", () => {

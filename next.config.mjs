@@ -51,15 +51,24 @@ const nextConfig = {
           { source: "/__/firebase/:path*", destination: `https://${fb}.firebaseapp.com/__/firebase/:path*` },
         ]
       : []
+    // Product pictures through our own origin (see public/sw.js): only
+    // Backblaze's S3 hosts — the pattern keeps this from being an open proxy.
+    // The signed query string is passed through untouched.
+    const b2 = [
+      {
+        source: "/b2proxy/:host(s3\\.[a-z0-9-]+\\.backblazeb2\\.com)/:path*",
+        destination: "https://:host/:path*",
+      },
+    ]
     const target = process.env.DEV_API_PROXY
-    if (!target) return auth
+    if (!target) return [...auth, ...b2]
     // The trailing slash must be put back EXPLICITLY. Django's URLs all end
     // in one (APPEND_SLASH), and Next normalises it away on the rewrite
     // destination even with skipTrailingSlashRedirect — verified against an
     // echo server: the backend received "/api/v1/auth/login", not
     // "/api/v1/auth/login/". Query strings are appended by Next afterwards,
     // so "?page=1" still arrives intact.
-    return [...auth, { source: "/api/:path*", destination: `${target}/api/:path*/` }]
+    return [...auth, ...b2, { source: "/api/:path*", destination: `${target}/api/:path*/` }]
   },
   // Produce a self-contained server bundle for a small Docker runtime image.
   output: "standalone",

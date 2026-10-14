@@ -206,16 +206,28 @@ export function CustomerForm({
       </div>
 
       <div className="flex flex-col gap-1.5" data-tour="customer-phone">
-        <Label>
-          رقم الهاتف <span className="text-xs font-normal text-muted-foreground">(اختياري)</span>
-        </Label>
+        <Label>رقم الجوال</Label>
         <Input
           dir="ltr"
-          placeholder="059…"
+          placeholder="0599123456"
           inputMode="tel"
           className="text-start"
-          {...register("phone")}
+          {...register("phone", {
+            // The customer's key: they will sign in to the app with this
+            // number (OTP), which is how their points find them. Required for
+            // new customers; older ones without a number can still be edited.
+            validate: (v) => {
+              const d = v.replace(/\D/g, "").replace(/^(00)?97[02]/, "0")
+              if (!d) return customer ? true : "اكتب رقم جوال الزبون"
+              return /^0\d{8,9}$/.test(d.length === 9 && !d.startsWith("0") ? "0" + d : d) || "رقم غير صحيح — مثال: 0599123456"
+            },
+          })}
         />
+        {errors.phone ? (
+          <p className="text-xs text-destructive">{errors.phone.message}</p>
+        ) : !customer ? (
+          <p className="text-[11px] text-muted-foreground">بهذا الرقم يدخل الزبون تطبيق كوب لاحقاً وتظهر له نقاطه.</p>
+        ) : null}
       </div>
 
       {/* Creation stays minimal (name, phone, ذكر/أنثى); the photo and notes

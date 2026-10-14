@@ -316,38 +316,50 @@ self.addEventListener("fetch", (event) => {
 /** Origins whose pictures cannot be read with CORS — we pass those through
  *  and keep the (opaque) answer only when we have none yet. */
 const noCors = new Set()
-// The picture bucket (Backblaze B2) sends no CORS headers. Known up front so a
-// fresh worker does not first try CORS on every picture and fill the console
-// with "blocked by CORS policy" errors before it learns.
-const isNoCorsHost = (u) => /(^|\.)backblazeb2\.com$/.test(u.hostname)
 
+/** Backblaze serves no CORS headers, so a picture fetched straight from it
+ *  comes back "opaque": the worker cannot tell a photo from an error page (a
+ *  403 when the daily cap is hit). Fetched through our own /b2proxy/ instead,
+ *  it is same-origin, the status is readable, and only a REAL photo is kept. */
+const proxied = (u) =>
+  /^s3\.[a-z0-9-]+\.backblazeb2\.com$/.test(u.hostname) ? `/b2proxy/${u.hostname}${u.pathname}${u.search}` : null
+
+/**
+ * Pictures: kept on the device for good, served from there with no network.
+ *
+ * Every upload gets a new random file name and is never edited in place — a
+ * changed photo is a NEW file. So the name (the link without its signature)
+ * identifies the picture exactly, and a picture we have is never stale.
+ * This is what keeps Backblaze's daily download cap out of reach: each device
+ * downloads each picture once, ever.
+ */
 async function cachedPicture(req, url) {
   const key = url.origin + url.pathname
   const cache = await caches.open(IMG_CACHE)
-  const keep = (res) => {
+  const saved = await cache.match(key)
+  // A good copy is final. (An "opaque" one, kept by older versions, might be
+  // an error page — fetch it again properly.)
+  if (saved && saved.type !== "opaque") return saved
+
+  let res = null
+  const via = proxied(url)
+  try {
+    if (via) res = await fetch(via, { credentials: "omit" })
+    else if (!noCors.has(url.origin)) res = await fetch(req.url, { mode: "cors", credentials: "omit" })
+  } catch {
+    if (!via) noCors.add(url.origin) // a host without CORS: stop asking
+  }
+  if (res && res.ok) {
     cache.put(key, res.clone()).then(trimPictures).catch(() => {})
     return res
   }
-  if (!noCors.has(url.origin) && !isNoCorsHost(url)) {
-    try {
-      const res = await fetch(req.url, { mode: "cors", credentials: "omit" })
-      if (res.ok) return keep(res)
-      // Expired link, or gone: the saved copy is better than a broken image.
-      return (await cache.match(key)) || res
-    } catch {
-      // Either the host is down, or it does not allow CORS. Remember the
-      // second so we stop asking twice.
-      const saved = await cache.match(key)
-      if (saved) return saved
-      noCors.add(url.origin)
-    }
-  }
+  // Could not get a verified copy (offline, cap reached, proxy down): an old
+  // copy beats nothing; otherwise ask the host directly, as a plain <img> would.
+  if (saved) return saved
   try {
-    const res = await fetch(req)
-    if (!(await cache.match(key))) keep(res)
-    return res
+    return await fetch(req)
   } catch {
-    return (await cache.match(key)) || Response.error()
+    return Response.error()
   }
 }
 
