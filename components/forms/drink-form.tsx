@@ -40,7 +40,7 @@ import {
   updateVariant,
   type Variant,
 } from "@/api/variants"
-import { useIsOwner } from "@/lib/modules"
+import { useCanEditPrices, useIsOwner } from "@/lib/modules"
 import { businessToday } from "@/lib/period"
 import { PeriodBar, type PeriodState } from "@/components/finance/period-bar"
 import { ItemReport } from "@/components/reports/item-report"
@@ -263,6 +263,7 @@ function OptionsTable({
   onPatch,
   onAdd,
   onRemove,
+  locked = false,
 }: {
   options: Option[]
   base: number
@@ -271,6 +272,8 @@ function OptionsTable({
   onPatch: (key: string, p: Partial<Option>) => void
   onAdd: (kind: Kind, label?: string) => void
   onRemove: (key: string) => void
+  /** No price permission: prices read-only, no adding or removing sizes. */
+  locked?: boolean
 }) {
   const sizes = options.filter((o) => o.kind !== "flavour")
   const flavours = options.filter((o) => o.kind === "flavour")
@@ -278,6 +281,10 @@ function OptionsTable({
   const cols = showCost
     ? "sm:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1fr)_4.5rem_3rem_2rem]"
     : "sm:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_3rem_2rem]"
+
+  if (options.length === 0 && locked) {
+    return <p className="py-4 text-center text-sm text-muted-foreground">بلا أحجام — يُباع بالسعر الأساسي{base > 0 ? ` (${base.toFixed(2)} ₪)` : ""}.</p>
+  }
 
   if (options.length === 0) {
     return (
@@ -320,16 +327,17 @@ function OptionsTable({
           cols={cols}
           onChange={(p) => onPatch(o.key, p)}
           onRemove={() => onRemove(o.key)}
+          locked={locked}
         />
       ))}
-      <button
+      {locked ? null : <button
         type="button"
         onClick={() => onAdd(kind)}
         className="flex w-full items-center gap-1 px-3 py-2 text-xs font-semibold text-primary transition hover:bg-primary/5"
       >
         <Plus className="size-3.5" />
         {addLabel}
-      </button>
+      </button>}
     </>
   )
 
@@ -366,6 +374,7 @@ function OptionLine({
   cols,
   onChange,
   onRemove,
+  locked = false,
 }: {
   o: Option
   base: number
@@ -374,6 +383,7 @@ function OptionLine({
   cols: string
   onChange: (patch: Partial<Option>) => void
   onRemove: () => void
+  locked?: boolean
 }) {
   const resolved = resolvePrice(o, base)
   const cost = o.cost.trim() !== "" ? num(o.cost) : baseCost
@@ -401,6 +411,7 @@ function OptionLine({
       <div className={cn("order-4 flex min-w-0 items-stretch sm:order-none sm:col-span-1", showCost ? "col-span-2" : "col-span-4")}>
         <button
           type="button"
+          disabled={locked}
           onClick={() => onChange({ mode: o.mode === "abs" ? "delta" : "abs" })}
           title={o.mode === "abs" ? "السعر كاملاً — اضغط لتكتب زيادة على السعر الأساسي" : "زيادة على السعر الأساسي — اضغط لتكتب السعر كاملاً"}
           className="grid w-8 shrink-0 place-items-center rounded-s-lg border border-e-0 border-border/70 bg-muted text-xs font-bold text-muted-foreground"
@@ -411,11 +422,12 @@ function OptionLine({
           inputMode="decimal"
           dir="ltr"
           value={o.amount}
+          readOnly={locked}
+          title={locked ? "تعديل الأسعار يحتاج صلاحية من المالك" : o.mode === "delta" ? `= ${resolved.toFixed(2)} ₪` : undefined}
           onChange={(e) => onChange({ amount: e.target.value })}
           placeholder={o.mode === "abs" ? (base > 0 ? base.toFixed(2) : "0") : "0"}
           aria-label="السعر"
-          title={o.mode === "delta" ? `= ${resolved.toFixed(2)} ₪` : undefined}
-          className={cn(cell, "rounded-s-none text-end tabular-nums")}
+          className={cn(cell, "rounded-s-none text-end tabular-nums", locked && "cursor-not-allowed bg-muted/50 text-muted-foreground")}
         />
       </div>
       {showCost ? (
@@ -450,9 +462,10 @@ function OptionLine({
       <button
         type="button"
         onClick={onRemove}
+        disabled={locked}
         aria-label="حذف"
         title="حذف"
-        className="order-3 grid size-8 place-items-center justify-self-end rounded-lg text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive sm:order-none"
+        className="order-3 grid size-8 place-items-center justify-self-end rounded-lg text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive sm:order-none disabled:invisible"
       >
         <X className="size-4" />
       </button>
@@ -559,6 +572,7 @@ export function DrinkForm({
   const qc = useQueryClient()
   const editing = Boolean(product)
   const isOwner = useIsOwner()
+  const canPrice = useCanEditPrices()
   const [cost, setCost] = useState("")
   const today = businessToday()
   const [tab, setTab] = useState<"info" | "ingredients" | "report">("info")
@@ -879,7 +893,7 @@ export function DrinkForm({
           >
             إلغاء
           </Button>
-          {product && onDelete && isOwner ? (
+          {product && onDelete && canPrice ? (
             <Button
               type="button"
               variant="outline"
@@ -987,7 +1001,15 @@ export function DrinkForm({
 
           <div className={cn("grid gap-3", isOwner ? "grid-cols-2 sm:grid-cols-3" : "grid-cols-2")}>
             <Field label="السعر (₪)">
-              <Input inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="0.00" />
+              <Input
+                inputMode="decimal"
+                value={price}
+                onChange={(e) => setPrice(e.target.value)}
+                placeholder="0.00"
+                readOnly={!canPrice}
+                title={canPrice ? undefined : "تعديل الأسعار يحتاج صلاحية من المالك"}
+                className={cn(!canPrice && "cursor-not-allowed bg-muted/50 text-muted-foreground")}
+              />
             </Field>
             {isOwner ? (
               <Field label="التكلفة (₪)">
@@ -1028,7 +1050,11 @@ export function DrinkForm({
           onPatch={patch}
           onAdd={addOption}
           onRemove={removeOption}
+          locked={!canPrice}
         />
+        {!canPrice ? (
+          <p className="mt-2 text-[11px] text-muted-foreground">🔒 الأسعار يعدّلها المالك أو من يمنحه الصلاحية من صفحة الموظفين.</p>
+        ) : null}
       </Fold>
 
       <Fold

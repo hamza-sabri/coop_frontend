@@ -1,5 +1,6 @@
 "use client"
 
+import { useCanEditPrices } from "@/lib/modules"
 import { Suspense, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
@@ -866,6 +867,7 @@ function TotalRow({
 }) {
   const active = pos.active
   usePointsRate()
+  const canPrice = useCanEditPrices()
   const rules = useQuery({
     queryKey: ["points-rules"],
     queryFn: () => fetchEarnRules().then((r) => r.data),
@@ -930,7 +932,8 @@ function TotalRow({
             <MoneyEditor
               value={billed}
               edited={discounted != null && discounted !== total}
-              title="اضغط لتعديل الإجمالي"
+              readOnly={!canPrice}
+              title={canPrice ? "اضغط لتعديل الإجمالي" : "تعديل الإجمالي يحتاج صلاحية الأسعار من المالك"}
               className="h-9 w-28 text-xl"
               onCommit={(v) =>
                 pos.patchActive({
@@ -1417,7 +1420,7 @@ function CartPanel({
       {active.isReturn && (
         <div className="animate-in fade-in slide-in-from-top-1 flex items-center gap-2 rounded-2xl bg-destructive/10 px-3.5 py-2 text-xs font-semibold text-destructive duration-200">
           <Undo2 className="size-4 shrink-0" />
-          وضع الإرجاع — المخزون سيُعاد والمبلغ سيُخصم من المبيعات
+          وضع الإرجاع — المبلغ يُخصم من المبيعات، والمكونات لا تعود للمخزون (المشروب استُهلك)
         </div>
       )}
 
@@ -1545,7 +1548,10 @@ function MoneyEditor({
   className,
   title,
   onSubmitSale,
+  readOnly = false,
 }: {
+  /** No price permission: shows the amount, can't change it. */
+  readOnly?: boolean
   value: number
   onCommit: (v: number) => void
   /** Show it as changed-from-catalogue. */
@@ -1589,7 +1595,10 @@ function MoneyEditor({
     <input
       value={text}
       title={title}
+      readOnly={readOnly}
+      tabIndex={readOnly ? -1 : undefined}
       onFocus={(e) => {
+        if (readOnly) return
         setEditing(true)
         e.currentTarget.select()
       }}

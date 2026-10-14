@@ -17,7 +17,7 @@
 import { useMemo, useState } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { Coffee, Layers, MoreVertical, Pencil, Plus, Trash2 } from "lucide-react"
+import { Coffee, Layers, MoreVertical, Pencil, Plus, Shapes, Trash2 } from "lucide-react"
 
 import type { Product } from "@/api/generated/model"
 import { productsList } from "@/api/generated/products/products"
@@ -25,7 +25,7 @@ import { ConfirmDelete } from "@/components/confirm-delete"
 import { FilterChips, SearchBox } from "@/components/data-table"
 import { Fab } from "@/components/fab"
 import { DrinkForm } from "@/components/forms/drink-form"
-import { NewCategoryDialog } from "@/components/pos/category-circles"
+import { CategoryIconsDialog, NewCategoryDialog } from "@/components/pos/category-circles"
 import { Enter, PageShell } from "@/components/page-shell"
 import { SortMenu } from "@/components/sort-menu"
 import { ErrorState } from "@/components/states"
@@ -33,7 +33,7 @@ import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Skeleton } from "@/components/ui/skeleton"
 import { formatMoney, formatNumber } from "@/lib/format"
-import { useIsOwner } from "@/lib/modules"
+import { useCanEditPrices, useIsOwner } from "@/lib/modules"
 import { ENDPOINTS, remove } from "@/lib/mutate"
 import { cn } from "@/lib/utils"
 import { matches } from "@/lib/search"
@@ -58,9 +58,12 @@ const profitOf = (p: Product) => num(p.price) - num(p.cost)
 export default function MenuPage() {
   const qc = useQueryClient()
   const isOwner = useIsOwner()
+  // Adding or deleting a drink sets/removes prices — owner or permitted staff.
+  const canPrice = useCanEditPrices()
   const [q, setQ] = useState("")
   const [cat, setCat] = useState("all")
   const [newCat, setNewCat] = useState(false)
+  const [catIcons, setCatIcons] = useState(false)
   const [sort, setSort] = useState("category")
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<Product | null>(null)
@@ -135,10 +138,12 @@ export default function MenuPage() {
     <PageShell
       title="المنيو"
       action={
-        <Button size="sm" className="bg-brand-gradient gap-1.5 shadow-md shadow-primary/25" onClick={openAdd} data-tour="page-add">
-          <Plus className="size-4" />
-          صنف
-        </Button>
+        canPrice ? (
+          <Button size="sm" className="bg-brand-gradient gap-1.5 shadow-md shadow-primary/25" onClick={openAdd} data-tour="page-add">
+            <Plus className="size-4" />
+            صنف
+          </Button>
+        ) : undefined
       }
     >
       {/* Same toolbar as every table: search · chips · sort, one row. */}
@@ -166,6 +171,14 @@ export default function MenuPage() {
               <Plus className="size-3.5" />
               تصنيف
             </button>
+            <button
+              type="button"
+              onClick={() => setCatIcons(true)}
+              className="flex shrink-0 items-center gap-1 rounded-xl border px-3 py-1.5 text-xs font-semibold text-muted-foreground transition hover:bg-muted/60 hover:text-foreground"
+            >
+              <Shapes className="size-3.5" />
+              الأيقونات
+            </button>
           </div>
         </div>
       </Enter>
@@ -191,10 +204,12 @@ export default function MenuPage() {
           </span>
           <p className="font-heading text-base font-bold">المنيو فارغ</p>
           <p className="max-w-sm text-sm text-muted-foreground">أضف أول مشروب: صورته، اسمه وسعره — ويظهر فوراً في شاشة البيع.</p>
-          <Button className="bg-brand-gradient mt-1 gap-1.5" onClick={openAdd}>
-            <Plus className="size-4" />
-            أضف أول صنف
-          </Button>
+          {canPrice ? (
+            <Button className="bg-brand-gradient mt-1 gap-1.5" onClick={openAdd}>
+              <Plus className="size-4" />
+              أضف أول صنف
+            </Button>
+          ) : null}
         </div>
       ) : shown.length === 0 ? (
         <p className="rounded-2xl border bg-card px-4 py-12 text-center text-sm text-muted-foreground animate-in fade-in">
@@ -209,7 +224,7 @@ export default function MenuPage() {
               i={i}
               isOwner={isOwner}
               onOpen={() => openEdit(p)}
-              onDelete={() => setToDelete(p)}
+              onDelete={canPrice ? () => setToDelete(p) : undefined}
             />
           ))}
         </div>
@@ -226,6 +241,7 @@ export default function MenuPage() {
         }}
       />
       <NewCategoryDialog open={newCat} onOpenChange={setNewCat} />
+      <CategoryIconsDialog open={catIcons} onOpenChange={setCatIcons} />
       <ConfirmDelete
         open={Boolean(toDelete)}
         onOpenChange={(o) => !o && setToDelete(null)}
@@ -249,7 +265,7 @@ function MenuCard({
   i: number
   isOwner: boolean
   onOpen: () => void
-  onDelete: () => void
+  onDelete?: () => void
 }) {
   const price = num(p.price)
   const cost = num(p.cost)
@@ -308,10 +324,12 @@ function MenuCard({
                 <Pencil className="size-4" />
                 تعديل
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={onDelete} className="text-destructive focus:text-destructive">
-                <Trash2 className="size-4" />
-                حذف
-              </DropdownMenuItem>
+              {onDelete ? (
+                <DropdownMenuItem onClick={onDelete} className="text-destructive focus:text-destructive">
+                  <Trash2 className="size-4" />
+                  حذف
+                </DropdownMenuItem>
+              ) : null}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

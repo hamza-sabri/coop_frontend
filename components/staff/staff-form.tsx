@@ -37,6 +37,7 @@ type Form = {
   password: string
   role: StaffRole
   pages: string[]
+  prices: boolean
   is_active: boolean
 }
 
@@ -77,6 +78,7 @@ export function StaffForm({
       password: "",
       role: user.role,
       pages: user.allowed_modules?.length ? granted : pages.map((p) => p.key),
+      prices: Boolean(user.can_edit_prices),
       is_active: user.is_active,
     })
   }, [open, user, pages])
@@ -104,6 +106,7 @@ export function StaffForm({
         role: f.role,
         // All ticked = no limit (also covers pages added to the plan later).
         allowed_modules: f.role === "owner" || everything ? [] : f.pages,
+        can_edit_prices: f.role === "employee" && f.prices,
         ...(user ? { is_active: f.is_active } : {}),
         ...(f.password ? { password: f.password } : {}),
       }
@@ -264,6 +267,20 @@ export function StaffForm({
           </div>
         ) : null}
 
+        {f.role === "employee" ? (
+          <div className="flex items-center justify-between gap-3 rounded-xl border p-3">
+            <div>
+              <p className="text-sm font-semibold">يستطيع تعديل الأسعار والخصومات</p>
+              <p className="text-[11px] text-muted-foreground">
+                {f.prices
+                  ? "يغيّر أسعار الأصناف والأحجام، ويعدّل سعر السطر والمجموع عند البيع."
+                  : "يبيع بأسعار القائمة فقط — لا يغيّر سعراً ولا يعطي خصماً."}
+              </p>
+            </div>
+            <Switch checked={f.prices} onCheckedChange={(v) => set("prices", Boolean(v))} aria-label="يستطيع تعديل الأسعار والخصومات" />
+          </div>
+        ) : null}
+
         {user ? (
           <div className="flex items-center justify-between gap-3 rounded-xl border p-3">
             <div>
@@ -285,5 +302,5 @@ export function StaffForm({
 }
 
 function blank(pages: { key: string }[]): Form {
-  return { display_name: "", username: "", phone: "", password: "", role: "employee", pages: pages.map((p) => p.key), is_active: true }
+  return { display_name: "", username: "", phone: "", password: "", role: "employee", pages: pages.map((p) => p.key), prices: false, is_active: true }
 }

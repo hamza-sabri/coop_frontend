@@ -33,6 +33,8 @@ export function useInfiniteList<T>(
   fetcher: (params: any) => Promise<ListResponse<T>>,
   params: Record<string, unknown>,
   enabled = true,
+  /** Poll (all loaded pages) every N ms — for screens left open. */
+  refetchInterval?: number,
 ) {
   const query = useInfiniteQuery({
     queryKey: [...keyBase, params],
@@ -40,6 +42,7 @@ export function useInfiniteList<T>(
     initialPageParam: 1 as number,
     getNextPageParam: (last) => nextPageParam(last.data.next),
     enabled,
+    refetchInterval,
   })
 
   const items = query.data?.pages.flatMap((p) => p.data.results ?? []) ?? []

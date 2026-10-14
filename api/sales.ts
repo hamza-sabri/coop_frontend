@@ -276,8 +276,10 @@ export const salesRevisions = (id: number) =>
     `/api/v1/sales/${id}/revisions/`,
   )
 
+/** `restocked`: ingredient lines put back on the shelf (0 for a return, an
+ *  imported sale, or drinks without a recipe). */
 export const salesDelete = (id: number) =>
-  customFetch<void>(`/api/v1/sales/${id}/`, { method: "DELETE" })
+  customFetch<{ data?: { restocked?: number; was_return?: boolean } }>(`/api/v1/sales/${id}/`, { method: "DELETE" })
 
 /**
  * Takings for the CURRENT trading day — which does not begin at midnight.

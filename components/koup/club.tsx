@@ -48,70 +48,62 @@ const relDay = (iso: string) => {
 const dayMonth = (iso: string) =>
   new Date(iso).toLocaleDateString('ar', { day: 'numeric', month: 'long' })
 
-function Pic({ src, name }: { src?: string; name: string }) {
-  const [bad, setBad] = useState(false)
-  return src && !bad
-    ? <img src={src} alt={name} loading="lazy" onError={() => setBad(true)} />
-    : <span className="cv-ph" aria-hidden>☕</span>
-}
-
-/* One visit to the café. The drinks lead — big, on white like a menu photo —
-   then what it cost and what it did to the points. A bill paid entirely in
-   points says so instead of showing "₪0". */
+/* One visit, in the menu's own card: tall, the drink's photo filling it,
+   the details on a frosted banner at the bottom. More than one drink → the
+   first is the picture and the rest sit as small thumbs on the banner. */
 function VisitCard({ p, i }: { p: ShopPurchase; i: number }) {
   const free = Number(p.total) === 0 && p.points_spent > 0
   const cups = p.items.reduce((n, it) => n + (Number(it.qty) || 0), 0)
-  const solo = p.items.length === 1
+  const lead = p.items.find((it) => it.image) ?? p.items[0]
+  const [bad, setBad] = useState(false)
+  const img = lead?.image && !bad ? lead.image : ''
+  const rest = p.items.filter((it) => it !== lead)
+  const title = lead
+    ? `${lead.name}${Number(lead.qty) > 1 ? ` ×${lead.qty}` : ''}`
+    : 'زيارة'
   return (
-    <article className={`cv ${p.is_return ? 'cv-return' : ''}`} style={{ ['--i' as string]: i }}>
-      <header className="cv-head">
-        <div className="cv-when">
-          <b>{relDay(p.at)}</b>
-          <span className="num">{dayMonth(p.at)} · {fmtTime(p.at)}</span>
-        </div>
-        {free ? (
-          <span className="cv-total cv-free">مجاناً بالنقاط</span>
-        ) : (
-          <span className="cv-total num">{p.is_return ? '−' : ''}{money(p.total)}</span>
-        )}
-      </header>
+    <article
+      className={`pcard vcard ${p.is_return ? 'vcard-return' : ''}`}
+      data-img={img ? '1' : '0'}
+      style={{
+        ['--i' as string]: i, ['--c' as string]: '#DDBC8A', ['--c0' as string]: '#3A4C8F',
+        ...(img ? { ['--img' as string]: `url("${img}")` } : {}),
+      }}
+    >
+      <div className="pcard-bg" />
+      {/* preload to catch a dead link and fall back to the drawn ground */}
+      {lead?.image && !bad && <img src={lead.image} alt="" hidden onError={() => setBad(true)} />}
+      {!img && <span className="vcard-ph" aria-hidden>☕</span>}
 
-      {solo ? (
-        <div className="cv-solo">
-          <div className="cv-img cv-img-lg"><Pic src={p.items[0].image} name={p.items[0].name} /></div>
-          <div className="cv-solo-t">
-            <b>{p.items[0].name}</b>
-            <span className="num">
-              {Number(p.items[0].qty) > 1 ? `×${p.items[0].qty} · ` : ''}
-              {p.items[0].line_total ? money(p.items[0].line_total) : ''}
-            </span>
+      <div className="vcard-top">
+        <span className="vcard-day">{relDay(p.at)}</span>
+        {free
+          ? <span className="vcard-chip vcard-free">مجاناً</span>
+          : <span className="vcard-chip num">{p.is_return ? '−' : ''}{money(p.total)}</span>}
+      </div>
+
+      <div className="pcard-banner vcard-banner">
+        <h4>{title}</h4>
+        <p className="num">
+          {p.is_return ? 'إرجاع · ' : rest.length ? `+${rest.length} ${rest.length === 1 ? 'صنف' : 'أصناف'} · ` : ''}
+          {dayMonth(p.at)} · {fmtTime(p.at)}
+        </p>
+        {rest.length > 0 && (
+          <div className="vcard-thumbs">
+            {rest.slice(0, 4).map((it, k) => (
+              <span key={k} className="vcard-thumb" title={it.name}>
+                {it.image ? <img src={it.image} alt={it.name} loading="lazy" /> : '☕'}
+              </span>
+            ))}
+            {rest.length > 4 && <span className="vcard-thumb vcard-more num">+{rest.length - 4}</span>}
           </div>
+        )}
+        <div className="vcard-pts">
+          {p.points_earned > 0 && <span className="cv-pill cv-pill-earn num">✦ <bdi dir="ltr">+{p.points_earned}</bdi></span>}
+          {p.points_spent > 0 && <span className="cv-pill cv-pill-spend num"><bdi dir="ltr">−{p.points_spent}</bdi> نقطة</span>}
+          {!p.points_earned && !p.points_spent && <span className="vcard-cups num">{cups} {cups === 1 ? 'صنف' : 'أصناف'}</span>}
         </div>
-      ) : (
-        <div className="cv-grid">
-          {p.items.map((it, k) => (
-            <div key={k} className="cv-tile">
-              <div className="cv-img">
-                <Pic src={it.image} name={it.name} />
-                {Number(it.qty) > 1 && <span className="cv-qty num"><bdi dir="ltr">×{it.qty}</bdi></span>}
-              </div>
-              <b>{it.name}</b>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <footer className="cv-foot">
-        <span className="cv-count num">{p.is_return ? 'إرجاع' : `${cups} ${cups === 1 ? 'صنف' : 'أصناف'}`}</span>
-        <span className="cv-pills">
-          {p.points_earned > 0 && (
-            <span className="cv-pill cv-pill-earn num">✦ <bdi dir="ltr">+{p.points_earned}</bdi> نقطة</span>
-          )}
-          {p.points_spent > 0 && (
-            <span className="cv-pill cv-pill-spend num"><bdi dir="ltr">−{p.points_spent}</bdi> نقطة</span>
-          )}
-        </span>
-      </footer>
+      </div>
     </article>
   )
 }

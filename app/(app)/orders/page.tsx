@@ -17,19 +17,21 @@
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
-import { Check, ChevronDown, CloudOff, Coins, Pencil, ReceiptText, ShoppingBag, StickyNote } from "lucide-react"
+import { Check, ChevronDown, Clock, CloudOff, Coins, Pencil, ReceiptText, ShoppingBag, StickyNote } from "lucide-react"
 import { toast } from "sonner"
 
 import { saleItemName, salesDelete, salesList, salesStats, salesSummary, type Sale } from "@/api/sales"
 import { ConfirmDelete } from "@/components/confirm-delete"
 import { DataTable, type Column } from "@/components/data-table"
 import { Enter, PageShell } from "@/components/page-shell"
-import { PaginationBar } from "@/components/pagination-bar"
+import { LoadMore } from "@/components/load-more"
+import { Input } from "@/components/ui/input"
+import { useInfiniteList } from "@/hooks/use-infinite-list"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { SaleDetail } from "@/components/sales/sale-detail"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { usePagedList } from "@/hooks/use-paged-list"
 import { useDebounced } from "@/hooks/use-debounced"
 import { formatDate, formatMoney, formatNumber } from "@/lib/format"
 import { useIsOwner } from "@/lib/modules"
@@ -85,7 +87,10 @@ export default function SalesPage() {
   const [period, setPeriod] = useState<PeriodId>("today")
   const [pay, setPay] = useState<PayId>("all")
   const [cashier, setCashier] = useState<{ id: number; name: string } | null>(null)
-  const [page, setPage] = useState(1)
+  /** Exact time window (date + hour + minute), as datetime-local strings. */
+  const [atFrom, setAtFrom] = useState("")
+  const [atTo, setAtTo] = useState("")
+  const timed = Boolean(atFrom || atTo)
   const [detail, setDetail] = useState<Sale | null>(null)
   const [toVoid, setToVoid] = useState<Sale | null>(null)
   const [voiding, setVoiding] = useState(false)
@@ -103,26 +108,27 @@ export default function SalesPage() {
 
   const params = useMemo(
     () => ({
-      ...periodRange(period, today),
+      // A time window replaces the period chips.
+      ...(timed
+        ? {
+            at_from: atFrom ? new Date(atFrom).toISOString() : undefined,
+            at_to: atTo ? new Date(atTo).toISOString() : undefined,
+          }
+        : periodRange(period, today)),
       item: search || undefined,
       payment_method: pay === "cash" || pay === "card" ? pay : undefined,
       is_return: pay === "return" ? true : pay === "all" ? undefined : false,
       created_by: cashier?.id,
       ordering: "-created_at",
     }),
-    [period, today, search, pay, cashier],
+    [period, today, search, pay, cashier, timed, atFrom, atTo],
   )
-  useEffect(() => setPage(1), [params])
 
-  const { results, count, pageCount, isLoading, isFetching, isPlaceholderData } = usePagedList<Sale>(
-    ["sales"],
-    salesList,
-    params,
-    page,
-    PAGE_SIZE,
-    true,
-    LIVE_MS,
-  )
+  // Infinite scroll: the next 20 load as the list's end comes into view.
+  const {
+    items: results, isLoading, fetchNextPage, hasNextPage, isFetchingNextPage,
+  } = useInfiniteList<Sale>(["sales"], salesList, { ...params, page_size: PAGE_SIZE }, true, LIVE_MS)
+  const isPlaceholderData = false
   // What the current filter shows, counted by the server.
   const summary = useQuery({
     queryKey: ["sales", "summary", params],
@@ -157,8 +163,18 @@ export default function SalesPage() {
     if (!toVoid) return
     setVoiding(true)
     try {
-      await salesDelete(toVoid.id)
-      toast.success("أُلغيت الفاتورة وعادت المكونات إلى المخزون")
+      const r = (await salesDelete(toVoid.id))?.data
+      // Say only what happened: a return never took ingredients, and a drink
+      // with no recipe (or an imported sale) has nothing to put back.
+      toast.success(
+        !r || typeof r.restocked !== "number"
+          ? "أُلغيت الفاتورة"
+          : r.was_return
+            ? "أُلغي الإرجاع — المخزون لم يتغيّر"
+            : r.restocked > 0
+              ? "أُلغيت الفاتورة وعادت مكوناتها إلى المخزون"
+              : "أُلغيت الفاتورة — لم تكن سحبت مكونات من المخزون",
+      )
       invalidateSaleData(qc)
       setToVoid(null)
       setDetail(null)
@@ -273,7 +289,9 @@ export default function SalesPage() {
           <p className="text-lg font-semibold tabular-nums text-muted-foreground">· {formatMoney(summary.data.total)}</p>
         ) : null}
         <p className="text-sm text-muted-foreground">
-          {{ today: "اليوم", yesterday: "أمس", week: "في آخر ٧ أيام", month: "هذا الشهر", all: "منذ البداية" }[period]}
+          {timed
+            ? `${atFrom ? `من ${stamp(atFrom)}` : ""}${atFrom && atTo ? " " : ""}${atTo ? `إلى ${stamp(atTo)}` : ""}`
+            : { today: "اليوم", yesterday: "أمس", week: "في آخر ٧ أيام", month: "هذا الشهر", all: "منذ البداية" }[period]}
           {search ? ` · تطابق «${search}»` : ""}
           {cashier ? ` · باعها ${cashier.name}` : ""}
         </p>
@@ -298,11 +316,23 @@ export default function SalesPage() {
           manual={{
             search: searchRaw,
             onSearch: setSearchRaw,
-            filter: period,
-            onFilter: (id) => setPeriod(id as PeriodId),
+            filter: timed ? "" : period,
+            onFilter: (id) => {
+              setPeriod(id as PeriodId)
+              setAtFrom("")
+              setAtTo("")
+            },
           }}
           toolbar={
             <>
+              <TimeWindow
+                from={atFrom}
+                to={atTo}
+                onChange={(f, t) => {
+                  setAtFrom(f)
+                  setAtTo(t)
+                }}
+              />
               <Menu
                 label={{ all: "كل الفواتير", sales: "المبيعات فقط", cash: "مبيعات نقدية", card: "مبيعات بالبطاقة", return: "المرتجعات فقط" }[pay]}
                 options={[
@@ -331,9 +361,9 @@ export default function SalesPage() {
                 : "لا فواتير في هذه الفترة."
           }
           footer={
-            pageCount > 1 ? (
-              <div className="border-t border-border/60 px-4 py-2">
-                <PaginationBar page={page} pageCount={pageCount} count={count} onPage={setPage} loading={isFetching} />
+            hasNextPage ? (
+              <div className="border-t border-border/60">
+                <LoadMore hasNext={Boolean(hasNextPage)} isFetchingNext={isFetchingNextPage} onLoad={() => fetchNextPage()} />
               </div>
             ) : null
           }
@@ -450,5 +480,71 @@ function Menu({
         ))}
       </DropdownMenuContent>
     </DropdownMenu>
+  )
+}
+
+const stamp = (v: string) =>
+  new Date(v).toLocaleString("ar-u-nu-latn", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })
+
+/** One filter: from a moment to a moment — date, hour and minute. */
+function TimeWindow({ from, to, onChange }: { from: string; to: string; onChange: (from: string, to: string) => void }) {
+  const [open, setOpen] = useState(false)
+  const [f, setF] = useState(from)
+  const [t, setT] = useState(to)
+  useEffect(() => {
+    if (open) {
+      setF(from)
+      setT(to)
+    }
+  }, [open, from, to])
+  const on = Boolean(from || to)
+  const bad = Boolean(f && t && f > t)
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger
+        render={
+          <Button variant="outline" size="sm" className={cn("h-9 gap-1.5 rounded-xl", on && "border-primary bg-primary/5 text-primary")}>
+            <Clock className="size-3.5" />
+            {on ? `${from ? stamp(from) : "…"} ← ${to ? stamp(to) : "الآن"}` : "الوقت"}
+          </Button>
+        }
+      />
+      <PopoverContent align="end" className="w-72 space-y-3 p-3">
+        <label className="block space-y-1">
+          <span className="text-xs font-semibold text-muted-foreground">من</span>
+          <Input type="datetime-local" dir="ltr" value={f} onChange={(e) => setF(e.target.value)} />
+        </label>
+        <label className="block space-y-1">
+          <span className="text-xs font-semibold text-muted-foreground">إلى</span>
+          <Input type="datetime-local" dir="ltr" value={t} onChange={(e) => setT(e.target.value)} />
+        </label>
+        {bad ? <p className="text-xs text-destructive">«من» بعد «إلى».</p> : null}
+        <div className="flex gap-2">
+          <Button
+            size="sm"
+            className="flex-1"
+            disabled={bad || (!f && !t)}
+            onClick={() => {
+              onChange(f, t)
+              setOpen(false)
+            }}
+          >
+            تطبيق
+          </Button>
+          {on ? (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                onChange("", "")
+                setOpen(false)
+              }}
+            >
+              مسح
+            </Button>
+          ) : null}
+        </div>
+      </PopoverContent>
+    </Popover>
   )
 }

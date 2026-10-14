@@ -67,6 +67,18 @@ export function useIsOwner(): boolean {
 }
 
 /**
+ * May this account change prices — menu prices, line prices and the total
+ * (discounts) at the till? Owners always; an employee only when the owner
+ * turned it on for them on the staff page. The server enforces it too.
+ */
+export function useCanEditPrices(): boolean {
+  const { user } = useMe()
+  const owner = useOwnerState()
+  if (owner !== "employee") return owner === "owner"
+  return Boolean((user as { can_edit_prices?: boolean } | null)?.can_edit_prices)
+}
+
+/**
  * The same question, with "not known yet" as its own answer.
  *
  * Treating "still loading" as owner fired every owner-only request for an

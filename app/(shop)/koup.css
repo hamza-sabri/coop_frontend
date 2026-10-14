@@ -1186,3 +1186,29 @@ body:has(.koup){overflow:hidden}
 .cv-pill-earn{color:var(--app-mint);background:rgba(127,209,174,.13);box-shadow:inset 0 0 0 1px rgba(127,209,174,.3)}
 .cv-pill-spend{color:var(--app-gold);background:rgba(221,188,138,.12);box-shadow:inset 0 0 0 1px rgba(221,188,138,.3)}
 .club-visits{gap:12px}
+
+/* ── visit cards v3: the menu card (.pcard) carrying a visit ── */
+.koup .club-visits{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.vcard{cursor:default;aspect-ratio:3/4.3;contain-intrinsic-size:auto 300px;
+  animation:club-in .55s cubic-bezier(.2,.8,.2,1) both;animation-delay:calc(var(--i,0) * 55ms)}
+.koup[data-lite="true"] .vcard{animation:none}
+.vcard-return{border-color:rgba(217,124,103,.4)}
+.vcard-ph{position:absolute;left:50%;top:40%;transform:translate(-50%,-50%);font-size:44px;z-index:1;opacity:.9}
+.vcard-top{position:absolute;top:10px;inset-inline:10px;z-index:3;display:flex;justify-content:space-between;align-items:center;gap:6px}
+.vcard-day,.vcard-chip{font-size:11.5px;font-weight:800;padding:5px 10px;border-radius:99px;line-height:1;
+  background:rgba(8,12,30,.62);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.14);color:#fff}
+.vcard-chip{color:var(--app-gold);font-size:13px}
+.vcard-return .vcard-chip{color:var(--app-rust)}
+.vcard-free{color:#241804;background:linear-gradient(158deg,#F7E4C4,var(--app-gold) 52%,#B98942);box-shadow:none;font-size:11.5px}
+.koup .vcard-banner{padding:11px 12px 12px;border-top:0;
+  background:linear-gradient(to top,rgba(8,12,30,.97),rgba(8,12,30,.9) 72%,rgba(8,12,30,.5))}
+.vcard-banner h4{font-size:14.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vcard-thumbs{display:flex;gap:4px;margin-top:7px}
+.vcard-thumb{width:26px;height:26px;border-radius:8px;overflow:hidden;display:grid;place-items:center;font-size:13px;
+  background:rgba(255,255,255,.9);box-shadow:0 0 0 1.5px rgba(8,12,30,.9)}
+.vcard-thumb img{width:100%;height:100%;object-fit:cover}
+.vcard-more{background:rgba(255,255,255,.14);color:#fff;font-size:10.5px;font-weight:800}
+.vcard-pts{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px}
+.vcard-pts .cv-pill{font-size:11px;padding:4px 8px}
+.vcard-cups{font-size:11px;color:var(--app-ink3)}
