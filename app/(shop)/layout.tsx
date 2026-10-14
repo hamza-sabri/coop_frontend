@@ -23,7 +23,7 @@ const wordmark = Aref_Ruqaa({
    iOS notch and home indicator instead of leaving white bands. */
 export const metadata: Metadata = {
   title: 'كوب',
-  description: 'اطلب من كوب، واجمع حبّاتك.',
+  description: 'نقاطك وزياراتك في كوب.',
   manifest: '/koup/manifest.webmanifest',
   appleWebApp: { capable: true, statusBarStyle: 'black-translucent', title: 'كوب' },
 }

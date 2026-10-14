@@ -19,9 +19,10 @@ import { usePullToRefresh } from '@/lib/use-pull-to-refresh'
 import { lowPower, probePerformance } from '@/lib/device'
 import { CATS as FALLBACK_CATS, TAGS, T, type Item } from '@/lib/menu'
 import { useKoupMenu } from '@/lib/koup-menu'
+import { ClubProfile, ClubVisits } from '@/components/koup/club'
 
 type Lang = 'ar' | 'en' | 'he'
-type Screen = 'home' | 'menu' | 'cart' | 'track' | 'wallet' | 'rewards'
+type Screen = 'home' | 'menu' | 'cart' | 'track' | 'wallet' | 'rewards' | 'profile'
 
 const FILL = 0.76
 /* A gear, inline — the icon set in this file has no settings glyph and adding
@@ -281,7 +282,10 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
      configured: with no keys the app simply runs open, which is what keeps
      local development working before the keys land. */
   const { locked: authLocked, user, Gate, openProfile, Account, Install, me, refreshMe, hasPhone, savePhone,
-          liveOrder, pastOrders, placeOrder, refreshOrders } = auth
+          liveOrder, pastOrders, placeOrder, refreshOrders, club } = auth
+  /* The web page: points, visits and profile only. */
+  const isClub = Boolean(club)
+  const valueIls = me?.value_ils ?? '0'
 
   /* The real numbers. `me` is null while signed out, and briefly on a cold
      first launch before the cache or the network answers — so every read
@@ -849,7 +853,15 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
                         ? t('home.subAnon', 'سجّل دخولك وابدأ تجمع نقاطك')
                         : t('home.sub', 'مكانك التاني جاهز لك')}</p>
                     </div>
-                    {Account ? (
+                    {isClub ? (
+                      <button className="avatar press" aria-label={t('home.account', 'حسابي')}
+                        onClick={() => go('profile')}>
+                        {user?.imageUrl
+                          ? <img src={user.imageUrl} alt="" width={44} height={44} referrerPolicy="no-referrer"
+                              style={{ borderRadius: '50%', display: 'block' }} />
+                          : (user?.firstName?.[0] ?? t('home.initial', 'ح'))}
+                      </button>
+                    ) : Account ? (
                       <div className="avatar avatar-slot">
                         <Account onSettings={() => setSettingsOpen(true)} />
                       </div>
@@ -877,7 +889,13 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
                     <span className="u">{t('unit.points', 'نقطة')}</span>
                   </div>
                   )}
-                  {!authLocked && (
+                  {!authLocked && isClub && (
+                    <p className="tonext">
+                      {t('club.worth', 'تساوي')} <b className="num">₪{Number(valueIls).toFixed(Number(valueIls) % 1 ? 2 : 0)}</b>
+                      {t('club.worthTail', ' عند الكاشير ☕')}
+                    </p>
+                  )}
+                  {!authLocked && !isClub && (
                     <p className="tonext">
                       {rtl ? 'باقي ' : ''}<b className="num" ref={gapRef as any}>{toNext}</b>
                       {t('home.tonextTail', ' نقطة وكوب علينا 🎉')}
@@ -889,6 +907,34 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
 
             <div className="panel" ref={panelRef}>
               {Install ? <Install /> : null}
+              {isClub && !authLocked && (<>
+                {me?.profile && !me.profile.complete && (
+                  <button className="club-nudge press" onClick={() => go('profile')}>
+                    <span className="club-nudge-ic">✦</span>
+                    <span className="t">
+                      <b>{t('club.nudgeT', 'كمّل ملفك')}</b>
+                      <span>{t('club.nudgeS', 'رقمك وجنسك — عشان نربط زياراتك ونفاجئك بعروض إلك')}</span>
+                    </span>
+                    <span className="club-nudge-go">←</span>
+                  </button>
+                )}
+                <div className="strip">
+                  <div className="stat"><div className="v num">{cupsThisYear}</div>
+                    <div className="k">{t('stat.cups', 'كوب هالسنة')}</div></div>
+                  <div className="stat"><div className="v num">{me?.points_earned_total ?? 0}</div>
+                    <div className="k">{t('club.earned', 'نقطة جمعتها')}</div></div>
+                  <div className="stat"><div className="v num">{me?.points_spent_total ?? 0}</div>
+                    <div className="k">{t('club.spent', 'نقطة صرفتها')}</div></div>
+                </div>
+                <div className="sechead">
+                  <h3>{t('club.visits', 'آخر زياراتك')}</h3>
+                  {(me?.purchases?.length ?? 0) > 3 && (
+                    <a onClick={() => go('wallet')}>{t('common.allv', 'الكل')}</a>
+                  )}
+                </div>
+                <ClubVisits purchases={(me?.purchases ?? []).slice(0, 3)} />
+              </>)}
+              {!isClub && (<>
               {/* "امسح عند الكاشير" was removed. It scanned nothing: the
                   handler threw a decorative burst of beans and returned. A
                   button that mimes an action the app cannot perform is worse
@@ -1006,6 +1052,7 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
                 ))}
               </div>
 
+              </>)}
               {/* "تحدّيات هالأسبوع" removed. Both challenges were literals —
                   "٢ / ٣ زيارات", "باقي يومين", a 66% progress bar — the same
                   numbers for every customer, advancing for nobody. Two
@@ -1278,17 +1325,44 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
               <div className="topfade" />
               <div className="hero-ui">
                 <div className="hero-top"><div className="greet"><div>
-                  <h2>{t('w.h', 'سجل النقاط')}</h2><p>{t('w.sub', 'كل نقطة إجت وين راحت')}</p>
+                  <h2>{isClub ? t('club.wh', 'زياراتي ونقاطي') : t('w.h', 'سجل النقاط')}</h2>
+                  <p>{t('w.sub', 'كل نقطة إجت وين راحت')}</p>
                 </div></div></div>
                 <div className="hero-bottom">
                   <div className="balance">
-                    <span className="n num">{beansRef.current}</span>
+                    <span className="n num">{isClub ? beans : beansRef.current}</span>
                     <span className="u">{t('unit.points', 'نقطة')}</span>
                   </div>
-                  <p className="tonext">{t('w.worth', 'تساوي تقريباً ₪٧٥ من المنيو')}</p>
+                  <p className="tonext">{isClub
+                    ? <>{t('club.worth', 'تساوي')} <b className="num">₪{Number(valueIls).toFixed(Number(valueIls) % 1 ? 2 : 0)}</b>{t('club.worthTail', ' عند الكاشير ☕')}</>
+                    : t('w.worth', 'تساوي تقريباً ₪٧٥ من المنيو')}</p>
                 </div>
               </div>
             </div>
+            {isClub ? (
+            <div className="panel">
+              <div className="sechead"><h3>{t('club.visitsAll', 'زياراتك')}</h3></div>
+              <ClubVisits purchases={me?.purchases ?? []} />
+              <div className="sechead"><h3>{t('w.hist', 'الحركات')}</h3></div>
+              <div className="ledger">
+                {(me?.activity ?? []).length === 0 && (
+                  <p className="club-empty">{t('club.noMoves', 'لسا ما في حركات — أول كوب بيبلّش العدّ.')}</p>
+                )}
+                {(me?.activity ?? []).map((a, i) => (
+                  <div className="led" key={i}>
+                    <div className={`ledic ${a.delta >= 0 ? 'earn' : 'spend'}`}>
+                      <Icon d={a.delta >= 0 ? P.plus : P.cup} s={16} />
+                    </div>
+                    <div className="t">
+                      <b>{a.note || (a.delta >= 0 ? t('club.earnRow', 'نقاط') : t('club.spendRow', 'استبدال'))}</b>
+                      <span>{new Date(a.at).toLocaleDateString('ar', { day: 'numeric', month: 'long' })}</span>
+                    </div>
+                    <span className={`d ${a.delta >= 0 ? 'pos' : 'neg'} num`} dir="ltr">{a.delta >= 0 ? `+${a.delta}` : `−${-a.delta}`}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            ) : (
             <div className="panel">
               <div className="cupcta">
                 <button className="btn-gold press">{t('w.redeem', 'اصرف نقاطك')}</button>
@@ -1331,7 +1405,23 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
                   ))}
               </div>
             </div>
+            )}
 
+          </div>
+        )}
+
+        {/* ── PROFILE (web page) ───────────────────────────────────────── */}
+        {screen === 'profile' && club && (
+          <div className="app-scroll koup-scroll" ref={scrollRef}>
+            <ClubProfile
+              me={me ?? null}
+              email={club.email ?? ''}
+              fallbackName={user?.firstName ?? ''}
+              fallbackAvatar={user?.imageUrl ?? ''}
+              save={club.saveProfile}
+              onSettings={() => setSettingsOpen(true)}
+              onSignOut={async () => { await club.signOut(); go('home') }}
+            />
           </div>
         )}
 
@@ -1527,6 +1617,22 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
             Two tabs and a button. المنيو is not a place you go, it is what
             you do — so it is the big glowing + in the middle where a thumb
             lands without aiming, not a word competing with two others. */}
+        {isClub ? (
+        <nav className="tabs">
+          <button className="tab" aria-current={screen === 'home'} onClick={() => go('home')}>
+            <Icon d={P.home} />
+            <span>{t('nav.home', 'نقاطي')}</span>
+          </button>
+          <button className="tab" aria-current={screen === 'wallet'} onClick={() => go('wallet')}>
+            <Icon d={P.bag} />
+            <span>{t('club.navVisits', 'زياراتي')}</span>
+          </button>
+          <button className="tab" aria-current={screen === 'profile'} onClick={() => go('profile')}>
+            <Icon d="M12 12a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9Zm-8 9a8 8 0 0 1 16 0" />
+            <span>{t('club.navMe', 'حسابي')}</span>
+          </button>
+        </nav>
+        ) : (
         <nav className="tabs">
           <button className="tab" aria-current={screen === 'home'}
             onClick={() => go('home')}>
@@ -1556,6 +1662,7 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
             <span>{t('nav.orders', 'طلباتي')}</span>
           </button>
         </nav>
+        )}
       </div>
     </div>
   )

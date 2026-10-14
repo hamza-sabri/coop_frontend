@@ -1,14 +1,18 @@
 import KoupApp from '@/components/KoupApp'
 import KoupAppAuthed from '@/components/koup/KoupAppAuthed'
+import KoupAppFirebase from '@/components/koup/KoupAppFirebase'
 import { CLERK_ON } from '@/components/koup/auth'
 import { OrderingGate } from '@/components/koup/ordering-gate'
+import { FIREBASE_ON } from '@/lib/firebase-web'
 
-/* With Clerk configured the app is gated. Without it — before the keys land,
-   or in a test run — it opens straight up rather than crashing on a missing
-   provider. Same screens either way. */
+/* Firebase built in → the customer's web page: Google sign-in, profile,
+   points and visits. Ordering lives in the Flutter app, so this page is never
+   behind the ordering switch.
+
+   Otherwise the older Clerk ordering app, gated as before; with neither key it
+   opens straight up rather than crashing on a missing provider. */
 export default function Page() {
-  // Behind the server's ordering switch: while it is off this page is a
-  // holding screen, not a shop. See components/koup/ordering-gate.tsx.
+  if (FIREBASE_ON) return <KoupAppFirebase />
   return (
     <OrderingGate>
       {CLERK_ON ? <KoupAppAuthed /> : <KoupApp auth={{ locked: false, user: null }} />}

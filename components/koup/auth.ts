@@ -42,6 +42,14 @@ export type KoupAuth = {
     },
   ) => Promise<Order | null>
   refreshOrders?: () => Promise<void> | void
+  /** The web door (Firebase): points, visits and profile only — no menu, no
+   *  ordering; those live in the Flutter app. */
+  club?: {
+    saveProfile: (data: Partial<{ name: string; gender: string; phone: string; birth_date: string }>)
+      => Promise<{ ok: boolean; error?: string; field?: string }>
+    signOut: () => Promise<void>
+    email?: string | null
+  }
 }
 
 /** Clerk is on only when a publishable key was built in. NEXT_PUBLIC_* is

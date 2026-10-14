@@ -25,9 +25,39 @@ export type ShopActivity = {
   at: string
 }
 
+export type ShopProfile = {
+  name: string
+  email: string
+  phone: string
+  /** "" until the customer chooses. */
+  gender: "" | "male" | "female"
+  birth_date: string
+  avatar: string
+  member_since: string
+  complete: boolean
+}
+
+export type ShopPurchase = {
+  id: number
+  code: string
+  at: string
+  is_return: boolean
+  total: string
+  points_spent: number
+  points_earned: number
+  items: { name: string; qty: string }[]
+}
+
 export type ShopMe = {
   synced: boolean
   name?: string
+  profile?: ShopProfile
+  purchases?: ShopPurchase[]
+  value_ils?: string
+  points_per_ils?: number
+  points_earned_total?: number
+  points_spent_total?: number
+  redemptions?: number
   beans: number
   tier?: "single" | "double" | "triple"
   multiplier?: string
