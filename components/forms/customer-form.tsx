@@ -51,6 +51,10 @@ export function CustomerForm({
   const qc = useQueryClient()
   const editing = Boolean(customer)
   const [gender, setGender] = useState<GenderEnum>("male")
+  /* Only a gender someone actually picked counts as known — the default
+     "male" on a fresh row is not information. */
+  const [genderSet, setGenderSet] = useState(false)
+  const [birth, setBirth] = useState("")
   const [status, setStatus] = useState("")
   const [avatarUrl, setAvatarUrl] = useState("")
   const [avatarFile, setAvatarFile] = useState<File | null>(null)
@@ -83,11 +87,15 @@ export function CustomerForm({
         notes: customer.notes ?? "",
       })
       setGender((customer.gender as GenderEnum) ?? "male")
+      setGenderSet(Boolean((customer as unknown as { gender_set?: boolean }).gender_set))
+      setBirth((customer as unknown as { birth_date?: string | null }).birth_date ?? "")
       setStatus(customer.status ?? "")
       setAvatarUrl(customer.avatar ?? "")
     } else {
       reset({ name: "", phone: "", notes: "" })
       setGender("male")
+      setGenderSet(false)
+      setBirth("")
       setStatus("")
       setAvatarUrl("")
     }
@@ -103,7 +111,7 @@ export function CustomerForm({
         const res = await sendOrQueue<Customer>(
           "customer",
           ENDPOINTS.customers,
-          { name: v.name.trim(), phone: v.phone.trim(), gender, status, notes: v.notes },
+          { name: v.name.trim(), phone: v.phone.trim(), gender, gender_set: genderSet, status, notes: v.notes },
           `زبون: ${v.name.trim()}`,
         )
         qc.invalidateQueries({ queryKey: ["customers"] })
@@ -129,6 +137,8 @@ export function CustomerForm({
           name: v.name.trim(),
           phone: v.phone.trim(),
           gender,
+          gender_set: genderSet,
+          ...(customer ? { birth_date: birth || null } : {}),
           status,
           notes: v.notes,
           avatar: avatarFile ? undefined : avatarUrl.trim(),
@@ -217,16 +227,16 @@ export function CustomerForm({
           </Label>
           <RadioGroup
             value={gender}
-            onValueChange={(v) => setGender(v as GenderEnum)}
+            onValueChange={(v) => { setGender(v as GenderEnum); setGenderSet(true) }}
             className="grid grid-cols-2 gap-2"
           >
             {GENDERS.map((g) => (
               <Label
                 key={g.value}
-                onClick={() => setGender(g.value)}
+                onClick={() => { setGender(g.value); setGenderSet(true) }}
                 className={cn(
                   "flex cursor-pointer items-center justify-center gap-2 rounded-xl border py-2.5 text-sm font-normal transition-colors",
-                  gender === g.value
+                  genderSet && gender === g.value
                     ? "border-primary bg-primary/8 font-semibold text-primary"
                     : "hover:bg-muted",
                 )}
@@ -237,6 +247,17 @@ export function CustomerForm({
             ))}
           </RadioGroup>
         </div>
+
+      {editing && (
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="customer-birth">
+            تاريخ الميلاد <span className="text-xs font-normal text-muted-foreground">(اختياري)</span>
+          </Label>
+          <Input id="customer-birth" type="date" dir="ltr" value={birth}
+            max={new Date().toISOString().slice(0, 10)}
+            onChange={(e) => setBirth(e.target.value)} />
+        </div>
+      )}
 
       {editing && (
         <>

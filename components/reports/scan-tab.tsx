@@ -369,6 +369,9 @@ export function ScanTab({ days, unlocked }: { days: number; unlocked: boolean })
             {/* Table: no title; filters + search on the right (start in RTL). */}
             <div className="clay-card scan-in p-5 lg:col-span-2">
               <div className="mb-3 flex flex-wrap items-center gap-2">
+                <div className="w-full sm:w-52">
+                  <SearchInput value={search} onChange={setSearch} placeholder="ابحث باسم أو باركود…" />
+                </div>
                 <div className="flex items-center gap-1.5">
                   {(["all", "found", "missing"] as const).map((f) => (
                     <button
@@ -383,9 +386,6 @@ export function ScanTab({ days, unlocked }: { days: number; unlocked: boolean })
                       {f === "all" ? "الكل" : f === "found" ? "موجود" : "غير موجود"}
                     </button>
                   ))}
-                </div>
-                <div className="w-full sm:w-52">
-                  <SearchInput value={search} onChange={setSearch} placeholder="ابحث باسم أو باركود…" />
                 </div>
               </div>
               <div className="max-h-[360px] overflow-x-hidden overflow-y-auto">

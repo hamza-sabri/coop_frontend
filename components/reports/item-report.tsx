@@ -3,6 +3,7 @@
 /* One drink's report — used in two places: the drink's own drawer in the menu
  * (tab التقارير) and the الأصناف report tab. Same component, so the numbers
  * cannot disagree between them. */
+import { useRef } from "react"
 import { useQuery } from "@tanstack/react-query"
 import Link from "next/link"
 import { ChevronLeft, Clock } from "lucide-react"
@@ -61,8 +62,8 @@ export function ItemReport({ productId, q }: { productId: number; q: PnlQuery })
 
       <div className="grid grid-cols-3 gap-2">
         <Stat label="اليوم" value={n0(data.cups.today)} sub="كوب" />
-        <Stat label="آخر ٧ أيام" value={n0(data.cups.week)} sub="كوب" />
-        <Stat label="آخر ٣٠ يوماً" value={n0(data.cups.month)} sub="كوب" />
+        <Stat label="هذا الأسبوع" value={n0(data.cups.week)} sub="كوب" />
+        <Stat label="هذا الشهر" value={n0(data.cups.month)} sub="كوب" />
       </div>
 
       <Panel title={`في ${periodName || "الفترة"}`} hint={P.rank ? `الترتيب ${P.rank} من ${P.of} بعدد الأكواب` : undefined}>
@@ -169,11 +170,28 @@ export function ItemReportSheet({
   q: PnlQuery
   onClose: () => void
 }) {
+  /* The name comes from whoever opened the drawer — but the overview's
+     "most ordered" list opens it with only an id, which left the title empty;
+     closing then flashed the "الصنف" fallback for a frame. So: the name passed
+     in, else the drink's own name from the report, and the last title shown
+     is kept while the drawer slides away. */
+  const { data } = useQuery({
+    queryKey: ["reports", "item", productId, q.period, q.date],
+    queryFn: () => fetchItem(productId!, q).then((r) => r.data),
+    enabled: productId != null,
+    placeholderData: (p) => p,
+  })
+  const shown = useRef("")
+  const current = name || (productId != null && data?.product?.id === productId ? data.product.name : "")
+  if (current) shown.current = current
+  const title = current || shown.current
   return (
     <Sheet open={productId != null} onOpenChange={(o) => !o && onClose()}>
       <SheetContent side="left" size="lg" className="flex flex-col gap-0 p-0">
         <div className="border-b px-5 pb-3 pt-5">
-          <SheetTitle className="font-heading text-lg">{name ?? "الصنف"}</SheetTitle>
+          <SheetTitle className="font-heading text-lg">
+            {title || <span className="inline-block h-5 w-32 animate-pulse rounded bg-muted align-middle" />}
+          </SheetTitle>
         </div>
         <div className="flex-1 overflow-y-auto p-5">{productId != null ? <ItemReport productId={productId} q={q} /> : null}</div>
       </SheetContent>

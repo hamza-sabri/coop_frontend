@@ -1130,3 +1130,12 @@ body:has(.koup){overflow:hidden}
 .koup .club-save{background:linear-gradient(158deg,#F0D8B0,var(--app-gold) 42%,#B8873F);color:#241804}
 .koup .club-actions button{background:linear-gradient(158deg,rgba(78,96,164,.4),rgba(30,41,87,.55))}
 .koup .gate-google{background:#fff;color:#1F1F1F}
+/* a visit's drinks, each with its picture */
+.club-visit-items{flex-direction:column;flex-wrap:nowrap;gap:8px}
+.club-item{display:flex;align-items:center;gap:11px}
+.club-item-img{width:46px;height:46px;border-radius:15px;flex:none;overflow:hidden;display:grid;place-items:center;
+  background:radial-gradient(circle at 35% 30%,rgba(255,255,255,.95),rgba(232,226,214,.9) 60%,rgba(201,160,99,.5));
+  box-shadow:0 8px 18px -10px rgba(0,0,0,.8),inset 0 0 0 1px rgba(255,255,255,.25);font-size:20px}
+.club-item-img img{width:100%;height:100%;object-fit:cover;display:block}
+.club-item-name{flex:1;min-width:0;font-size:13.5px;font-weight:600;color:var(--app-ink)}
+.club-item-qty{font-size:12.5px;color:var(--app-gold);font-weight:800}

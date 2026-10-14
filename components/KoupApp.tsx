@@ -20,6 +20,7 @@ import { lowPower, probePerformance } from '@/lib/device'
 import { CATS as FALLBACK_CATS, TAGS, T, type Item } from '@/lib/menu'
 import { useKoupMenu } from '@/lib/koup-menu'
 import { ClubProfile, ClubVisits } from '@/components/koup/club'
+import { compact } from '@/lib/compact-number'
 
 type Lang = 'ar' | 'en' | 'he'
 type Screen = 'home' | 'menu' | 'cart' | 'track' | 'wallet' | 'rewards' | 'profile'
@@ -528,8 +529,10 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
 
   /* One number, two places. The hero shows it big; the top bar keeps it on
      screen everywhere else, so the balance is never more than a glance away. */
+  const shownRef = useRef(0)
   function setBalance(v: number) {
-    const t = String(Math.round(v))
+    shownRef.current = v
+    const t = compact(v)
     if (balRef.current) balRef.current.textContent = t
     if (topBalRef.current) topBalRef.current.textContent = t
   }
@@ -629,7 +632,7 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
         onComplete() {
           el.remove(); Cup.pop(); Cup.splash(.5); SFX.point(i)
           Cup.setFill(Math.min(1, Cup.getFill() + (n / vis) * 0.028))
-          const b = { v: Number(balRef.current?.textContent ?? 0) }
+          const b = { v: shownRef.current }
           gsap.to(b, { v: beansRef.current, duration: .38, onUpdate() { setBalance(b.v) } })
           gsap.fromTo('.koup-topbar .tb-n', { scale: 1 },
             { scale: 1.22, duration: .18, yoyo: true, repeat: 1, ease: 'power2.out' })
@@ -788,7 +791,7 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
             <circle cx="49" cy="19" r="3" fill="#DDBC8A"/>
           </svg>
           <span className="tb-point"><Bean s={15} /></span>
-          <span className="tb-n num" ref={topBalRef}>{beans}</span>
+          <span className="tb-n num" ref={topBalRef}>{compact(beans)}</span>
           <span className="tb-u">{t('unit.points', 'نقطة')}</span>
         </header>
 
@@ -885,7 +888,7 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
                     </p>
                   ) : (
                   <div className="balance">
-                    <span className="n num" ref={balRef}>{beans}</span>
+                    <span className="n num" ref={balRef}>{compact(beans)}</span>
                     <span className="u">{t('unit.points', 'نقطة')}</span>
                   </div>
                   )}
@@ -921,9 +924,9 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
                 <div className="strip">
                   <div className="stat"><div className="v num">{cupsThisYear}</div>
                     <div className="k">{t('stat.cups', 'كوب هالسنة')}</div></div>
-                  <div className="stat"><div className="v num">{me?.points_earned_total ?? 0}</div>
+                  <div className="stat"><div className="v num">{compact(me?.points_earned_total ?? 0)}</div>
                     <div className="k">{t('club.earned', 'نقطة جمعتها')}</div></div>
-                  <div className="stat"><div className="v num">{me?.points_spent_total ?? 0}</div>
+                  <div className="stat"><div className="v num">{compact(me?.points_spent_total ?? 0)}</div>
                     <div className="k">{t('club.spent', 'نقطة صرفتها')}</div></div>
                 </div>
                 <div className="sechead">
@@ -1330,7 +1333,7 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
                 </div></div></div>
                 <div className="hero-bottom">
                   <div className="balance">
-                    <span className="n num">{isClub ? beans : beansRef.current}</span>
+                    <span className="n num">{compact(isClub ? beans : beansRef.current)}</span>
                     <span className="u">{t('unit.points', 'نقطة')}</span>
                   </div>
                   <p className="tonext">{isClub

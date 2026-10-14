@@ -1408,6 +1408,9 @@ function CartPanel({
         <div className="min-w-0 flex-1">
           <CartTabs pos={pos} />
         </div>
+        {/* The cash drawer lives with the money: open with a count, close
+            with a count — right beside «إرجاع». */}
+        <CashDrawerButton />
         <ReturnToggle pos={pos} />
       </div>
 
@@ -2074,13 +2077,7 @@ function PosPageInner() {
                 </button>
               </div>
             )}
-            <div className="flex items-start gap-1">
-              <div className="min-w-0 flex-1">
-                <CategoryCircles value={catId} onChange={setCatId} />
-              </div>
-              {/* The cash drawer: open with a count, close with a count. */}
-              <CashDrawerButton />
-            </div>
+            <CategoryCircles value={catId} onChange={setCatId} />
           </StickyToolbar>
           </div>
           <div className="grid gap-5 lg:contents">

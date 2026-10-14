@@ -45,7 +45,7 @@ export type ShopPurchase = {
   total: string
   points_spent: number
   points_earned: number
-  items: { name: string; qty: string }[]
+  items: { name: string; qty: string; image?: string }[]
 }
 
 export type ShopMe = {

@@ -220,6 +220,15 @@ function Hero({
   // Palestinian mobiles: 059x / 056x → +970 for WhatsApp.
   const wa = /^05\d{8}$/.test(phone) ? `https://wa.me/970${phone.slice(1)}` : null
   const points = (customer as { points?: number } | undefined)?.points
+  /* What the customer told us about themselves on the web page / app. Gender
+     shows only once they (or the staff) actually chose it; a birthday gives
+     an age and a date to remember. */
+  const extra = customer as unknown as { gender_set?: boolean; birth_date?: string | null } | undefined
+  const birth = extra?.birth_date ? new Date(extra.birth_date) : null
+  const age = birth
+    ? new Date().getFullYear() - birth.getFullYear() -
+      (new Date() < new Date(new Date().getFullYear(), birth.getMonth(), birth.getDate()) ? 1 : 0)
+    : null
 
   return (
     <section className={cn(STAGGER, "overflow-hidden rounded-2xl border border-border/80 bg-card")}>
@@ -246,6 +255,20 @@ function Hero({
           <p className="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
             {customer?.phone ? <span dir="ltr" className="tabular-nums">{customer.phone}</span> : null}
             {customer?.phone ? <span aria-hidden className="hidden sm:inline">·</span> : null}
+            {extra?.gender_set ? (
+              <>
+                <span>{female ? "أنثى" : "ذكر"}</span>
+                <span aria-hidden>·</span>
+              </>
+            ) : null}
+            {birth && age !== null ? (
+              <>
+                <span title={formatDate(extra!.birth_date!)}>
+                  {age} سنة · 🎂 {birth.toLocaleDateString("ar", { day: "numeric", month: "long" })}
+                </span>
+                <span aria-hidden>·</span>
+              </>
+            ) : null}
             <span>{female ? "زبونة" : "زبون"} منذ {formatDate(p?.joined ?? customer?.created_at)}</span>
             {customer?.signed_up ? (
               <>

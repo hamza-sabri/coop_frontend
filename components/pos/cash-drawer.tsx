@@ -21,6 +21,7 @@ import {
   LockOpen,
   TriangleAlert,
   Banknote,
+  Vault,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -60,6 +61,10 @@ export function useCashDrawer(enabled = true) {
 }
 
 /** The circle beside the categories on the till. */
+/** The cash drawer's button — a pill at the top of the cart, beside «إرجاع».
+ *  Green with a live dot while the drawer is open; amber "افتح الصندوق" while
+ *  it is closed, because a shift that has not counted its opening cash is the
+ *  thing to notice. */
 export function CashDrawerButton() {
   const [open, setOpen] = useState(false)
   const { data } = useCashDrawer()
@@ -70,27 +75,24 @@ export function CashDrawerButton() {
         type="button"
         onClick={() => setOpen(true)}
         data-tour="pos-drawer"
-        className="group flex w-[74px] shrink-0 flex-col items-center gap-1.5 pt-2 outline-none"
+        title={isOpen ? "الصندوق مفتوح — اضغط للإغلاق أو إخراج نقد" : "افتح الصندوق بعدّ النقود"}
         aria-label={isOpen ? "الصندوق مفتوح" : "الصندوق مغلق"}
+        className={cn(
+          "relative flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold transition-all",
+          isOpen
+            ? "bg-emerald-500/12 text-emerald-700 hover:bg-emerald-500/20 dark:text-emerald-300"
+            : "bg-amber-500/15 text-amber-800 ring-1 ring-amber-500/40 hover:bg-amber-500/25 dark:text-amber-300",
+        )}
       >
+        <Vault className="size-3.5" />
+        {isOpen ? "الصندوق" : "افتح الصندوق"}
         <span
+          aria-hidden
           className={cn(
-            "relative grid size-[58px] place-items-center rounded-full border transition-all duration-200 hover:-translate-y-0.5",
-            "group-focus-visible:ring-2 group-focus-visible:ring-ring group-focus-visible:ring-offset-2",
-            isOpen ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "border-dashed border-border bg-card text-muted-foreground",
+            "size-2 rounded-full",
+            isOpen ? "bg-emerald-500 shadow-[0_0_0_3px] shadow-emerald-500/20" : "animate-pulse bg-amber-500",
           )}
-        >
-          <Banknote className="size-[22px]" />
-          <span
-            className={cn(
-              "absolute -top-0.5 -end-0.5 size-3.5 rounded-full border-2 border-background",
-              isOpen ? "bg-emerald-500" : "bg-muted-foreground/50",
-            )}
-          />
-        </span>
-        <span className={cn("text-[11px]", isOpen ? "font-semibold text-foreground" : "text-muted-foreground")}>
-          {isOpen ? "الصندوق" : "افتح الصندوق"}
-        </span>
+        />
       </button>
       <CashDrawerSheet open={open} onOpenChange={setOpen} />
     </>
@@ -118,7 +120,7 @@ export function CashDrawerSheet({ open, onOpenChange }: { open: boolean; onOpenC
           <div aria-hidden="true" className="bg-brand-gradient pointer-events-none absolute -end-10 -top-12 size-28 rounded-full opacity-15" />
           <SheetTitle className="flex items-center gap-2.5">
             <span className="icon-chip bg-brand-gradient size-10">
-              <Banknote className="size-4.5" />
+              <Vault className="size-4.5" />
             </span>
             <span className="font-heading text-lg">الصندوق</span>
           </SheetTitle>

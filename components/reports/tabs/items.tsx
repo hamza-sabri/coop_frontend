@@ -133,17 +133,19 @@ export function ItemsTab({ q, onOpenItem }: { q: PnlQuery; onOpenItem: (id: numb
       </div>
 
       <Panel flush>
-        <div className="flex flex-col gap-2 border-b border-border/70 p-3 sm:flex-row sm:items-center sm:justify-between">
+        {/* Same order as every table in the app: search first (the right in
+            Arabic), then the filters. */}
+        <div className="flex flex-col gap-2 border-b border-border/70 p-3 sm:flex-row sm:items-center">
+          <div className="relative sm:w-64">
+            <Search className="pointer-events-none absolute start-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input className="h-8 ps-8 text-sm" placeholder="ابحث عن صنف…" value={search} onChange={(e) => setSearch(e.target.value)} />
+          </div>
           <div className="flex gap-1.5 overflow-x-auto">
             {SORTS.map((s) => (
               <Chip key={s.id} on={sort === s.id} onClick={() => setSort(s.id)}>
                 {s.label}
               </Chip>
             ))}
-          </div>
-          <div className="relative sm:w-56">
-            <Search className="pointer-events-none absolute start-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input className="h-8 ps-8 text-sm" placeholder="ابحث عن صنف…" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
         </div>
 

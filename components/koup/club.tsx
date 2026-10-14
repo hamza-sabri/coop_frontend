@@ -45,9 +45,15 @@ export function ClubVisits({ purchases }: { purchases: ShopPurchase[] }) {
           </div>
           <div className="club-visit-items">
             {p.items.map((it, k) => (
-              <span key={k} className="club-chip">
-                {it.name}{Number(it.qty) > 1 ? <b className="num"> ×{it.qty}</b> : null}
-              </span>
+              <div key={k} className="club-item">
+                <span className="club-item-img">
+                  {it.image
+                    ? <img src={it.image} alt="" loading="lazy" />
+                    : <span aria-hidden>☕</span>}
+                </span>
+                <span className="club-item-name">{it.name}</span>
+                {Number(it.qty) > 1 ? <b className="club-item-qty num">×{it.qty}</b> : null}
+              </div>
             ))}
           </div>
           {(p.points_earned > 0 || p.points_spent > 0) && (
