@@ -45,7 +45,12 @@ const nextConfig = {
     // domain — which Safari and in-app browsers otherwise break by blocking
     // the third-party storage the redirect result travels through.
     const fb = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID
-    const auth = fb ? [{ source: "/__/auth/:path*", destination: `https://${fb}.firebaseapp.com/__/auth/:path*` }] : []
+    const auth = fb
+      ? [
+          { source: "/__/auth/:path*", destination: `https://${fb}.firebaseapp.com/__/auth/:path*` },
+          { source: "/__/firebase/:path*", destination: `https://${fb}.firebaseapp.com/__/firebase/:path*` },
+        ]
+      : []
     const target = process.env.DEV_API_PROXY
     if (!target) return auth
     // The trailing slash must be put back EXPLICITLY. Django's URLs all end
