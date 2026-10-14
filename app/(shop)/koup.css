@@ -1214,8 +1214,6 @@ body:has(.koup){overflow:hidden}
 .vcard-cups{font-size:11px;color:var(--app-ink3)}
 
 /* Facebook sign-in — the brand blue, same shape as the Google button */
-.koup .gate-facebook{background:#1877F2;color:#fff;border:0;display:flex;align-items:center;justify-content:center;gap:10px;font-weight:700}
-.koup .gate-facebook:disabled{opacity:.7}
 .koup .gate-inapp{color:var(--app-gold);margin-top:10px}
 
 /* ── visit detail sheet ── */
@@ -1252,3 +1250,28 @@ body:has(.koup){overflow:hidden}
 .vs-total dd{font-family:var(--koup-fs-dis);font-size:22px;font-weight:800;
   background:linear-gradient(180deg,#F7E4C4,var(--app-gold) 60%,#B98942);-webkit-background-clip:text;background-clip:text;color:transparent}
 .vs-earn dd{color:var(--app-mint)}
+
+/* ── sign-in choices v2: side by side, dark glass in the app's palette,
+      each glowing in its own brand colour ── */
+.gate-via{font-size:12px;color:var(--app-ink3);text-align:center;margin:2px 0 10px}
+.koup .gate-actions-2{gap:12px}
+.koup .gate-actions-2 .gate-btn{position:relative;isolation:isolate;
+  flex-direction:column;gap:7px;padding:16px 8px 14px;border-radius:22px;font-size:14.5px;
+  color:#F4EFE6;
+  background:linear-gradient(160deg,rgba(255,255,255,.10),rgba(255,255,255,.03)),
+             linear-gradient(160deg,#25336B,#141C3F 75%);
+  border:1px solid rgba(221,188,138,.28);
+  box-shadow:0 14px 30px -16px rgba(0,0,0,.9),
+             0 0 0 1px rgba(255,255,255,.03) inset,
+             0 0 26px -6px var(--glow);
+  animation:gateglow2 3.2s ease-in-out infinite alternate}
+.koup .gate-actions-2 .gate-btn::before{content:"";position:absolute;inset:-1px;z-index:-1;border-radius:inherit;
+  background:radial-gradient(80% 70% at 50% 0%,var(--glow),transparent 70%);opacity:.35}
+.koup .gate-actions-2 .gate-facebook{--glow:rgba(66,133,244,.75)}
+.koup .gate-actions-2 .gate-google{--glow:rgba(221,188,138,.7)}
+.koup .gate-actions-2 .gate-btn:not(:disabled):hover{border-color:rgba(221,188,138,.55)}
+.koup .gate-actions-2 .gate-btn:disabled{opacity:.6;animation:none}
+@keyframes gateglow2{
+  from{box-shadow:0 14px 30px -16px rgba(0,0,0,.9),0 0 18px -8px var(--glow)}
+  to{box-shadow:0 14px 30px -16px rgba(0,0,0,.9),0 0 34px -4px var(--glow)}}
+.koup[data-lite="true"] .gate-actions-2 .gate-btn{animation:none}
