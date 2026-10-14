@@ -12,6 +12,7 @@ import { TourFromQuery } from "@/components/tour/tour-from-query"
 import { TopBar } from "@/components/top-bar"
 import { PageHeaderProvider } from "@/components/page-header"
 import { OrdersLiveProvider } from "@/components/orders/orders-live"
+import { CustomersLive } from "@/components/customers/customers-live"
 import { SyncModeBanner } from "@/components/offline/sync-mode-banner"
 
 export default function AppLayout({
@@ -51,6 +52,7 @@ export default function AppLayout({
           <OfflineStatus />
           <DemoBanner />
           <TourFromQuery />
+          <CustomersLive />
         </TourProvider>
         </OrdersLiveProvider>
       </LockedFeatureProvider>

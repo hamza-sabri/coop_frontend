@@ -19,6 +19,19 @@ const config = {
 
 export const FIREBASE_ON = Boolean(config.apiKey && config.projectId)
 
+/** Facebook is offered only once it is switched on in Firebase (Authentication
+ *  → Sign-in method → Facebook) and this build arg is set to 1 — a button that
+ *  can only fail is worse than no button. */
+export const FACEBOOK_ON = FIREBASE_ON && process.env.NEXT_PUBLIC_FACEBOOK_LOGIN === "1"
+
+/** Facebook / Instagram / WhatsApp-style in-app browsers. Google refuses to
+ *  sign in inside them ("disallowed_useragent") — the main reason customers
+ *  arriving from a shared link could not get in. Facebook works there. */
+export function inAppBrowser(): boolean {
+  if (typeof navigator === "undefined") return false
+  return /FBAN|FBAV|FB_IAB|Instagram|Line\/|Snapchat|TikTok|; wv\)/i.test(navigator.userAgent)
+}
+
 let _auth: Promise<Auth> | null = null
 
 /** The Auth instance, loaded on first use so the SDK never weighs on a page
@@ -47,10 +60,28 @@ export function firebaseAuth(): Promise<Auth> {
 /** Popup first: the page keeps running and the session simply appears.
  *  Redirect when the browser blocks popups (some in-app browsers do). */
 export async function signInWithGoogle(): Promise<void> {
-  const auth = await firebaseAuth()
-  const { GoogleAuthProvider, signInWithPopup, signInWithRedirect } = await import("firebase/auth")
+  const { GoogleAuthProvider } = await import("firebase/auth")
   const provider = new GoogleAuthProvider()
   provider.setCustomParameters({ prompt: "select_account" })
+  await signInWith(provider)
+}
+
+export async function signInWithFacebook(): Promise<void> {
+  const { FacebookAuthProvider } = await import("firebase/auth")
+  const provider = new FacebookAuthProvider()
+  provider.addScope("email")
+  provider.setCustomParameters({ display: "popup" })
+  await signInWith(provider)
+}
+
+async function signInWith(provider: import("firebase/auth").AuthProvider): Promise<void> {
+  const auth = await firebaseAuth()
+  const { signInWithPopup, signInWithRedirect } = await import("firebase/auth")
+  // Inside an in-app browser a popup opens a dead tab: go straight to redirect.
+  if (inAppBrowser()) {
+    await signInWithRedirect(auth, provider)
+    return
+  }
   try {
     await signInWithPopup(auth, provider)
   } catch (e) {
@@ -75,5 +106,8 @@ export function signInError(e: unknown): string | null {
   if (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request") return null
   if (code === "auth/unauthorized-domain") return "هذا العنوان غير مسموح للدخول بعد — بلّغ المقهى."
   if (code === "auth/network-request-failed") return "ما في إنترنت — جرّب كمان شوي."
+  if (code === "auth/account-exists-with-different-credential")
+    return "إيميلك مسجّل عندنا عبر Google — ادخل بزر Google."
+  if (code === "auth/operation-not-allowed") return "هذه الطريقة غير مفعّلة بعد — جرّب الطريقة الثانية."
   return "ما زبط الدخول. جرّب كمان مرة."
 }

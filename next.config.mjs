@@ -40,15 +40,21 @@ const nextConfig = {
    */
   skipTrailingSlashRedirect: true,
   async rewrites() {
+    // Firebase's sign-in handler served from OUR domain. With authDomain set
+    // to this site, the Google/Facebook redirect never crosses to another
+    // domain — which Safari and in-app browsers otherwise break by blocking
+    // the third-party storage the redirect result travels through.
+    const fb = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID
+    const auth = fb ? [{ source: "/__/auth/:path*", destination: `https://${fb}.firebaseapp.com/__/auth/:path*` }] : []
     const target = process.env.DEV_API_PROXY
-    if (!target) return []
+    if (!target) return auth
     // The trailing slash must be put back EXPLICITLY. Django's URLs all end
     // in one (APPEND_SLASH), and Next normalises it away on the rewrite
     // destination even with skipTrailingSlashRedirect — verified against an
     // echo server: the backend received "/api/v1/auth/login", not
     // "/api/v1/auth/login/". Query strings are appended by Next afterwards,
     // so "?page=1" still arrives intact.
-    return [{ source: "/api/:path*", destination: `${target}/api/:path*/` }]
+    return [...auth, { source: "/api/:path*", destination: `${target}/api/:path*/` }]
   },
   // Produce a self-contained server bundle for a small Docker runtime image.
   output: "standalone",
