@@ -1,5 +1,6 @@
 "use client"
 
+import { useMemo } from "react"
 import { useInfiniteQuery } from "@tanstack/react-query"
 
 type PageBody<T> = {
@@ -33,7 +34,9 @@ export function useInfiniteList<T>(
   fetcher: (params: any) => Promise<ListResponse<T>>,
   params: Record<string, unknown>,
   enabled = true,
-  /** Poll (all loaded pages) every N ms — for screens left open. */
+  /** Poll every N ms — for screens left open. Only while just the first page
+   *  is loaded: re-fetching twenty pages every few seconds for someone deep
+   *  in the history would hammer the server and the main thread. */
   refetchInterval?: number,
 ) {
   const query = useInfiniteQuery({
@@ -42,10 +45,16 @@ export function useInfiniteList<T>(
     initialPageParam: 1 as number,
     getNextPageParam: (last) => nextPageParam(last.data.next),
     enabled,
-    refetchInterval,
+    refetchInterval: refetchInterval
+      ? (q) => ((q.state.data?.pages.length ?? 0) <= 1 ? refetchInterval : false)
+      : undefined,
   })
 
-  const items = query.data?.pages.flatMap((p) => p.data.results ?? []) ?? []
+  // Memoised: a fresh array every render made any effect keyed on `items`
+  // set state → re-render → new array → effect again, forever. That loop
+  // starved the router (links stopped working on the orders page).
+  const pages = query.data?.pages
+  const items = useMemo(() => pages?.flatMap((p) => p.data.results ?? []) ?? [], [pages])
   const count = query.data?.pages[0]?.data.count ?? 0
 
   return { ...query, items, count }

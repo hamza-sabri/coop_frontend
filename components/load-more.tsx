@@ -15,14 +15,18 @@ export function LoadMore({
   onLoad: () => void
 }) {
   const ref = useRef<HTMLDivElement>(null)
+  // The latest callback in a ref: callers pass a new arrow every render, and
+  // rebuilding the observer on each one re-fired it again and again.
+  const onLoadRef = useRef(onLoad)
+  onLoadRef.current = onLoad
 
   const trigger = useCallback(() => {
-    if (hasNext && !isFetchingNext) onLoad()
-  }, [hasNext, isFetchingNext, onLoad])
+    if (hasNext && !isFetchingNext) onLoadRef.current()
+  }, [hasNext, isFetchingNext])
 
   useEffect(() => {
     const el = ref.current
-    if (!el || !hasNext) return
+    if (!el || !hasNext || isFetchingNext) return
     const io = new IntersectionObserver(
       (entries) => {
         if (entries[0]?.isIntersecting) trigger()
@@ -31,7 +35,7 @@ export function LoadMore({
     )
     io.observe(el)
     return () => io.disconnect()
-  }, [hasNext, trigger])
+  }, [hasNext, isFetchingNext, trigger])
 
   if (!hasNext) return null
 

@@ -148,9 +148,14 @@ export default function SalesPage() {
   useEffect(() => {
     if (!results.length) return
     setCashiers((prev) => {
+      let changed = false
       const next = new Map(prev)
-      for (const s of results) if (s.created_by != null && s.created_by_name) next.set(s.created_by, s.created_by_name)
-      return next
+      for (const s of results)
+        if (s.created_by != null && s.created_by_name && next.get(s.created_by) !== s.created_by_name) {
+          next.set(s.created_by, s.created_by_name)
+          changed = true
+        }
+      return changed ? next : prev // same Map → React skips the re-render
     })
   }, [results])
 
