@@ -4,12 +4,13 @@
 import { useEffect, useState } from 'react'
 import { gsap } from 'gsap'
 import {
-  FACEBOOK_ON, completeFacebookReturn, firebaseAuth, inAppBrowser, signInError, signInWithFacebook, signInWithGoogle,
+  FACEBOOK_ON, completeFacebookReturn, firebaseAuth, googleAccountFor, inAppBrowser, signInError, signInWithFacebook, signInWithGoogle,
 } from '@/lib/firebase-web'
 
 export default function FirebaseGate() {
   const [busy, setBusy] = useState<'' | 'google' | 'facebook'>('')
   const [error, setError] = useState<string | null>(null)
+  const [note, setNote] = useState<string | null>(null)
   const [inApp, setInApp] = useState(false)
   useEffect(() => {
     setInApp(inAppBrowser())
@@ -25,11 +26,31 @@ export default function FirebaseGate() {
         const { getRedirectResult } = await import('firebase/auth')
         await getRedirectResult(await firebaseAuth())
       } catch (e) {
+        if (await continueWithGoogle(e, true)) return
         setBusy('')
         setError(signInError(e))
       }
     })()
   }, [])
+
+  /* Facebook said "this email is already a Google account": don't make them
+     read a message and tap again — go straight into Google with their email
+     pre-picked. Facebook gets attached once they are in (KoupAppFirebase). */
+  async function continueWithGoogle(e: unknown, viaRedirect: boolean): Promise<boolean> {
+    const email = googleAccountFor(e)
+    if (email === null) return false
+    setBusy('google')
+    setNote('حسابك مسجّل عبر Google — بنكمّل عبره…')
+    try {
+      await signInWithGoogle(email || undefined, viaRedirect)
+      return true
+    } catch (e2) {
+      setNote(null)
+      setBusy('')
+      setError(signInError(e2))
+      return true
+    }
+  }
 
   useEffect(() => {
     gsap.fromTo('.gate-card',
@@ -46,6 +67,7 @@ export default function FirebaseGate() {
     try {
       await (which === 'facebook' ? signInWithFacebook() : signInWithGoogle())
     } catch (e) {
+      if (which === 'facebook' && (await continueWithGoogle(e, false))) return
       setError(signInError(e))
       // eslint-disable-next-line no-console
       console.error('[koup] sign-in failed:', e)
@@ -89,6 +111,7 @@ export default function FirebaseGate() {
           </button>
         </div>
 
+        {note && !error && <p className="gate-fine gate-inapp">{note}</p>}
         {error && <p className="gate-err">{error}</p>}
 
         {inApp && (

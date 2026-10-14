@@ -59,11 +59,26 @@ export function firebaseAuth(): Promise<Auth> {
 
 /** Popup first: the page keeps running and the session simply appears.
  *  Redirect when the browser blocks popups (some in-app browsers do). */
-export async function signInWithGoogle(): Promise<void> {
-  const { GoogleAuthProvider } = await import("firebase/auth")
+/** `hint`: pre-pick this Google account (used right after Facebook said the
+ *  email is already a Google account). `viaRedirect`: no popup — for calls
+ *  that do not come straight from a tap, where a popup would be blocked. */
+export async function signInWithGoogle(hint?: string, viaRedirect = false): Promise<void> {
+  const { GoogleAuthProvider, signInWithRedirect } = await import("firebase/auth")
   const provider = new GoogleAuthProvider()
-  provider.setCustomParameters({ prompt: "select_account" })
+  provider.setCustomParameters(hint ? { login_hint: hint } : { prompt: "select_account" })
+  if (viaRedirect) {
+    await signInWithRedirect(await firebaseAuth(), provider)
+    return
+  }
   await signInWith(provider)
+}
+
+/** Facebook refused because this email is already a Google account here:
+ *  the email, so we can continue straight into Google. Otherwise null. */
+export function googleAccountFor(e: unknown): string | null {
+  const err = e as { code?: string; customData?: { email?: string } }
+  if (err?.code !== "auth/account-exists-with-different-credential") return null
+  return err.customData?.email || ""
 }
 
 /* ── Facebook on phones ──────────────────────────────────────────────────
@@ -122,7 +137,7 @@ export async function completeFacebookReturn(): Promise<boolean> {
   try {
     await signInWithCredential(auth, FacebookAuthProvider.credential(token))
   } catch (e) {
-    rememberFacebookToLink(e, token)
+    await rememberFacebookToLink(e, token)
     throw e
   }
   return true
@@ -135,21 +150,19 @@ export async function completeFacebookReturn(): Promise<boolean> {
  * that same account — from then on either button opens the same points. */
 const FB_LINK_KEY = "koup_fb_link"
 
-function rememberFacebookToLink(e: unknown, token?: string | null) {
+async function rememberFacebookToLink(e: unknown, token?: string | null) {
   if ((e as { code?: string })?.code !== "auth/account-exists-with-different-credential") return
-  void (async () => {
-    let t = token
-    if (!t) {
-      const { FacebookAuthProvider } = await import("firebase/auth")
-      t = FacebookAuthProvider.credentialFromError(e as never)?.accessToken ?? null
-    }
-    if (!t) return
-    try {
-      localStorage.setItem(FB_LINK_KEY, JSON.stringify({ token: t, at: Date.now() }))
-    } catch {
-      /* ignore */
-    }
-  })()
+  let t = token
+  if (!t) {
+    const { FacebookAuthProvider } = await import("firebase/auth")
+    t = FacebookAuthProvider.credentialFromError(e as never)?.accessToken ?? null
+  }
+  if (!t) return
+  try {
+    localStorage.setItem(FB_LINK_KEY, JSON.stringify({ token: t, at: Date.now() }))
+  } catch {
+    /* ignore */
+  }
 }
 
 /** Called once a user is signed in: attach a Facebook login waiting for them. */
@@ -190,7 +203,7 @@ export async function signInWithFacebook(): Promise<void> {
   try {
     await signInWith(provider)
   } catch (e) {
-    rememberFacebookToLink(e)
+    await rememberFacebookToLink(e)
     throw e
   }
 }
@@ -228,7 +241,7 @@ export function signInError(e: unknown): string | null {
   if (code === "auth/unauthorized-domain") return "هذا العنوان غير مسموح للدخول بعد — بلّغ المقهى."
   if (code === "auth/network-request-failed") return "ما في إنترنت — جرّب كمان شوي."
   if (code === "auth/account-exists-with-different-credential")
-    return "حسابك عندنا مسجّل عبر Google — اضغط Google مرّة وحدة، وبنربط فيسبوك بنفس الحساب."
+    return "حسابك عندنا مسجّل عبر Google — اضغط Google، وبنربط فيسبوك بنفس الحساب."
   if (code === "auth/operation-not-allowed") return "هذه الطريقة غير مفعّلة بعد — جرّب الطريقة الثانية."
   return "ما زبط الدخول. جرّب كمان مرة."
 }
