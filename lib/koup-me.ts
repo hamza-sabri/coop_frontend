@@ -43,6 +43,10 @@ export type ShopPurchase = {
   at: string
   is_return: boolean
   total: string
+  /** Before discounts/points — absent on older servers. */
+  subtotal?: string
+  points_value?: string
+  payment?: 'cash' | 'card' | 'debt'
   points_spent: number
   points_earned: number
   items: { name: string; qty: string; image?: string; price?: string; line_total?: string }[]
