@@ -9,9 +9,9 @@ const json = (method: string, body: unknown): RequestInit => ({
 })
 
 /** Notes and coins, largest first — the keys of a count. */
-export const DENOMINATIONS = ["200", "100", "50", "20", "10", "5", "2", "1", "0.5", "0.1"] as const
+export const DENOMINATIONS = ["200", "100", "50", "20", "10", "5", "2", "1"] as const
 export type Denomination = (typeof DENOMINATIONS)[number]
-/** How many of each: {"200": 3, "0.5": 12}. */
+/** How many of each: {"200": 3, "5": 12}. */
 export type Counts = Partial<Record<Denomination, number>>
 
 export const countsTotal = (c: Counts): number =>
