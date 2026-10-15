@@ -67,6 +67,7 @@ const PRECACHE_ROUTES = [
   "/stock",
   "/expenses",
   "/staff",
+  "/cash-drawer",
   "/reports",
   "/settings",
   "/customers",

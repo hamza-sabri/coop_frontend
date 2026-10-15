@@ -88,6 +88,27 @@ export type CanvasReceiptOptions = {
   phone?: string
   address?: string
   barcode?: boolean
+  /** Letter size multiplier (settings.FONT_SCALE); 1 = the historical size. */
+  scale?: number
+  /** The shop's logo, already loaded — drawn above the name, in black and white. */
+  logo?: HTMLImageElement | null
+}
+
+/**
+ * Load the logo once for a render. The canvas renderer is synchronous, so the
+ * image is fetched here and handed in. A bad or missing image resolves to
+ * null and the receipt prints without it — a logo must never block a sale.
+ */
+export function loadReceiptLogo(src: string | null | undefined): Promise<HTMLImageElement | null> {
+  if (!src || typeof window === "undefined") return Promise.resolve(null)
+  return new Promise((resolve) => {
+    const img = new Image()
+    img.crossOrigin = "anonymous"
+    const t = window.setTimeout(() => resolve(null), 2500)
+    img.onload = () => { window.clearTimeout(t); resolve(img) }
+    img.onerror = () => { window.clearTimeout(t); resolve(null) }
+    img.src = src
+  })
 }
 
 /**
@@ -101,8 +122,9 @@ export function renderReceiptCanvas(
   const W = opts.width
   const pad = Math.round(W * 0.03)
   const inner = W - pad * 2
-  // Scale every size off the roll width so 58mm and 80mm both look right.
-  const u = W / 576
+  // Scale every size off the roll width so 58mm and 80mm both look right,
+  // then by the owner's chosen letter size.
+  const u = (W / 576) * (opts.scale || 1)
   const S = (n: number) => Math.round(n * u)
 
   // Two passes: measure with a throwaway context, then draw at the real
@@ -145,6 +167,13 @@ export function renderReceiptCanvas(
   if (data.cashierName) meta.push(["الكاشير", data.cashierName])
 
   let h = S(64) // breathing room above the name — the cutter leaves the top edge ragged
+  // The logo keeps its shape inside a box; width is capped so a wide wordmark
+  // never touches the cutter's ragged edges.
+  const logoBoxW = Math.round(inner * 0.72)
+  const logoH = opts.logo && opts.logo.naturalWidth > 0
+    ? Math.min(S(150), Math.round((opts.logo.naturalHeight / opts.logo.naturalWidth) * logoBoxW))
+    : 0
+  if (logoH) h += logoH + S(18)
   h += S(46) // store name
   if (opts.phone) h += S(26)
   if (opts.address) h += S(26)
@@ -185,6 +214,25 @@ export function renderReceiptCanvas(
   let y = S(64)
 
   // ── header ──────────────────────────────────────────────────────────
+  if (logoH && opts.logo) {
+    const lw = Math.round((opts.logo.naturalWidth / opts.logo.naturalHeight) * logoH)
+    const lx = Math.round((W - lw) / 2)
+    ctx.drawImage(opts.logo, lx, y - S(30), lw, logoH)
+    // Thermal paper is 1-bit: turn the logo into black and white here, so
+    // what the preview shows is what the printer prints. Transparent and
+    // light pixels become paper; dark ones become ink.
+    const px = ctx.getImageData(lx, y - S(30), lw, logoH)
+    const d = px.data
+    for (let i = 0; i < d.length; i += 4) {
+      const a = d[i + 3] / 255
+      const lum = (0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]) * a + 255 * (1 - a)
+      const v = lum < 150 ? 0 : 255
+      d[i] = d[i + 1] = d[i + 2] = v
+      d[i + 3] = 255
+    }
+    ctx.putImageData(px, lx, y - S(30))
+    y += logoH + S(18)
+  }
   ctx.textAlign = "center"
   ctx.font = `800 ${S(34)}px ${FONT}`
   ctx.fillText(opts.storeName, W / 2, y + S(34))

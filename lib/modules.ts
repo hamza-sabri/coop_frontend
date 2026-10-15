@@ -79,6 +79,17 @@ export function useCanEditPrices(): boolean {
 }
 
 /**
+ * May this account delete (void) a sale? Owners always; an employee only when
+ * the owner turned it on for them on the staff page. The server enforces it too.
+ */
+export function useCanDeleteSales(): boolean {
+  const { user } = useMe()
+  const owner = useOwnerState()
+  if (owner !== "employee") return owner === "owner"
+  return Boolean((user as { can_delete_sales?: boolean } | null)?.can_delete_sales)
+}
+
+/**
  * The same question, with "not known yet" as its own answer.
  *
  * Treating "still loading" as owner fired every owner-only request for an

@@ -12,6 +12,9 @@
  */
 
 export type PaperWidth = "58" | "80"
+/** How big the letters print. "m" is the size every receipt printed until now. */
+export type FontSize = "s" | "m" | "l"
+export const FONT_SCALE: Record<FontSize, number> = { s: 0.88, m: 1, l: 1.16 }
 
 export type PrintSettings = {
   /** Header name; empty = fall back to the tenant's pharmacy_name from /me/. */
@@ -23,6 +26,10 @@ export type PrintSettings = {
   /** Free line under the items (e.g. "شكراً لزيارتكم — سلامتكم تهمّنا"). */
   footer: string
   paper: PaperWidth
+  /** Letter size on the thermal receipt — see FONT_SCALE. */
+  fontSize: FontSize
+  /** Print the uploaded logo at the top of the thermal receipt. */
+  printLogo: boolean
   /** Print a receipt automatically after every completed sale. */
   autoPrint: boolean
   /** Show the sale number as a scannable barcode at the foot of the receipt. */
@@ -62,6 +69,8 @@ export const DEFAULT_PRINT_SETTINGS: PrintSettings = {
   // settings saved by an older build still parse.
   footer: "",
   paper: "80",
+  fontSize: "m",
+  printLogo: true,
   // Off by default — receipts print only when the cashier explicitly asks
   // (reprint from the sale, or turns this on).
   autoPrint: false,

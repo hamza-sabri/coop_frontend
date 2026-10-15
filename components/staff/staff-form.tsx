@@ -38,6 +38,7 @@ type Form = {
   role: StaffRole
   pages: string[]
   prices: boolean
+  deleteSales: boolean
   is_active: boolean
 }
 
@@ -79,6 +80,7 @@ export function StaffForm({
       role: user.role,
       pages: user.allowed_modules?.length ? granted : pages.map((p) => p.key),
       prices: Boolean(user.can_edit_prices),
+      deleteSales: Boolean(user.can_delete_sales),
       is_active: user.is_active,
     })
   }, [open, user, pages])
@@ -107,6 +109,7 @@ export function StaffForm({
         // All ticked = no limit (also covers pages added to the plan later).
         allowed_modules: f.role === "owner" || everything ? [] : f.pages,
         can_edit_prices: f.role === "employee" && f.prices,
+        can_delete_sales: f.role === "employee" && f.deleteSales,
         ...(user ? { is_active: f.is_active } : {}),
         ...(f.password ? { password: f.password } : {}),
       }
@@ -281,6 +284,20 @@ export function StaffForm({
           </div>
         ) : null}
 
+        {f.role === "employee" ? (
+          <div className="flex items-center justify-between gap-3 rounded-xl border p-3">
+            <div>
+              <p className="text-sm font-semibold">يستطيع حذف الفواتير</p>
+              <p className="text-[11px] text-muted-foreground">
+                {f.deleteSales
+                  ? "يلغي فاتورة بالكامل — وتخرج قيمتها من التقارير. يبقى أثرها في السجل."
+                  : "لا يحذف أي فاتورة. يستطيع الإرجاع وتعديل الفاتورة فقط."}
+              </p>
+            </div>
+            <Switch checked={f.deleteSales} onCheckedChange={(v) => set("deleteSales", Boolean(v))} aria-label="يستطيع حذف الفواتير" />
+          </div>
+        ) : null}
+
         {user ? (
           <div className="flex items-center justify-between gap-3 rounded-xl border p-3">
             <div>
@@ -302,5 +319,5 @@ export function StaffForm({
 }
 
 function blank(pages: { key: string }[]): Form {
-  return { display_name: "", username: "", phone: "", password: "", role: "employee", pages: pages.map((p) => p.key), prices: false, is_active: true }
+  return { display_name: "", username: "", phone: "", password: "", role: "employee", pages: pages.map((p) => p.key), prices: false, deleteSales: false, is_active: true }
 }

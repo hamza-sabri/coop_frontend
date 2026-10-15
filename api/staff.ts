@@ -17,6 +17,7 @@ export type StaffUser = {
   role: StaffRole
   allowed_modules: string[]
   can_edit_prices: boolean
+  can_delete_sales: boolean
   is_active: boolean
   is_owner: boolean
   date_joined: string
@@ -32,6 +33,7 @@ export type StaffPayload = Partial<{
   role: StaffRole
   allowed_modules: string[]
   can_edit_prices: boolean
+  can_delete_sales: boolean
   is_active: boolean
   password: string
 }>

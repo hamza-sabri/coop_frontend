@@ -1,15 +1,18 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Printer, ReceiptText } from "lucide-react"
+import { Printer, ReceiptText, Settings2 } from "lucide-react"
 
 import { PrintAgentCard } from "@/components/print/print-agent-card"
+import { PrintSettingsDialog } from "@/components/print/print-settings-dialog"
 import { Choice, SettingRow, SettingsCard } from "@/components/settings/kit"
+import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import {
   DEFAULT_PRINT_SETTINGS,
   loadPrintSettings,
   savePrintSettings,
+  type FontSize,
   type PaperWidth,
   type PrintSettings,
 } from "@/lib/print/settings"
@@ -29,6 +32,7 @@ import { cn } from "@/lib/utils"
 export function PrintSection() {
   const [s, setS] = useState<PrintSettings>(DEFAULT_PRINT_SETTINGS)
   const [ready, setReady] = useState(false)
+  const [designOpen, setDesignOpen] = useState(false)
 
   // localStorage is not available while the page is server-rendered; reading
   // it after mount keeps the first paint identical on both sides.
@@ -69,6 +73,23 @@ export function PrintSection() {
               ]}
             />
           </SettingRow>
+          <SettingRow title="حجم الخط" hint="الكبير أسهل قراءة للزبون ويستهلك ورقاً أكثر.">
+            <Choice<FontSize>
+              value={s.fontSize}
+              onChange={(v) => patch({ fontSize: v })}
+              options={[
+                { value: "s", label: "صغير" },
+                { value: "m", label: "عادي" },
+                { value: "l", label: "كبير" },
+              ]}
+            />
+          </SettingRow>
+          <SettingRow title="الشعار والترويسة والمعاينة" hint="ارفع الشعار واضبط الهاتف والعنوان، وشاهد الفاتورة كما ستخرج من الطابعة.">
+            <Button type="button" variant="outline" size="sm" onClick={() => setDesignOpen(true)}>
+              <Settings2 className="size-4" />
+              تصميم الفاتورة
+            </Button>
+          </SettingRow>
           <SettingRow title="طباعة تلقائية بعد كل بيع" hint="بدونها تُطبع الفاتورة عند الضغط على زر الطابعة فقط.">
             <Switch checked={s.autoPrint} onCheckedChange={(v) => patch({ autoPrint: Boolean(v) })} aria-label="طباعة تلقائية" />
           </SettingRow>
@@ -85,6 +106,15 @@ export function PrintSection() {
       >
         <PrintAgentCard embedded />
       </SettingsCard>
+      {designOpen ? (
+        <PrintSettingsDialog
+          open={designOpen}
+          onOpenChange={(o) => {
+            setDesignOpen(o)
+            if (!o) setS(loadPrintSettings()) // the dialog saves; pick up what it changed
+          }}
+        />
+      ) : null}
     </div>
   )
 }

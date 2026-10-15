@@ -11,6 +11,7 @@ import {
   Package,
   Wallet,
   UserCog,
+  Vault,
   type LucideIcon,
 } from "lucide-react"
 
@@ -112,6 +113,9 @@ export const NAV_ITEMS: NavItem[] = [
   // Who works the till. Owner (and superuser) only; on the phone it lives in
   // the profile menu.
   { href: "/staff", label: "الموظفون", icon: UserCog, ownerOnly: true, desktopOnly: true },
+  // Every opening and closing of the till's drawer: who, with how much, and
+  // the difference. The drawer itself is opened from the till.
+  { href: "/cash-drawer", label: "الصندوق", icon: Vault, module: "pos", ownerOnly: true, desktopOnly: true },
   /* Import is out of the navigation for كوب. It exists to bulk-load a
      catalogue of thousands from a supplier file; a café types its menu once
      and then edits it. The page and its API are untouched — restore this

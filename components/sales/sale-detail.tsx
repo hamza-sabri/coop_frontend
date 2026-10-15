@@ -24,6 +24,7 @@ import { SALE_AFFECTED_KEYS } from "@/lib/sale-queries"
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { payLabel } from "@/lib/payment"
+import { useCanDeleteSales } from "@/lib/modules"
 
 export function SaleDetail({
   sale: given,
@@ -37,6 +38,7 @@ export function SaleDetail({
   onVoid: (s: Sale) => void
 }) {
   const { user } = useMe()
+  const canDelete = useCanDeleteSales()
   const qc = useQueryClient()
   // A return answers with the updated sale; show it without waiting for the
   // list behind the drawer to refetch.
@@ -403,7 +405,7 @@ export function SaleDetail({
               {/* Voiding PATCHes /sales/<id>/. A queued sale has no server id
                   yet, so the call would go out as -1. Fix it at the source in
                   the POS (or wait for the sync) instead. */}
-              <button
+              {canDelete ? <button
                 type="button"
                 disabled={isLocalSale(sale.id)}
                 title={
@@ -419,7 +421,7 @@ export function SaleDetail({
               >
                 <Trash2 className="size-4" />
                 إلغاء البيع
-              </button>
+              </button> : null}
             </div>
           </>
         )}

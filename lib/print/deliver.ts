@@ -17,9 +17,9 @@ import { toast } from "sonner"
 
 import { agentPrint, agentStatus } from "@/lib/print/agent"
 import { canvasToEscPos, toBase64, DOTS } from "@/lib/print/escpos"
-import { renderReceiptCanvas } from "@/lib/print/receipt-canvas"
+import { loadReceiptLogo, renderReceiptCanvas } from "@/lib/print/receipt-canvas"
 import { printReceipt, type PrintOutcome, type ReceiptData } from "@/lib/print/receipt"
-import type { PrintSettings } from "@/lib/print/settings"
+import { FONT_SCALE, type PrintSettings } from "@/lib/print/settings"
 
 export type DeliverResult = {
   outcome: PrintOutcome
@@ -42,6 +42,7 @@ async function viaAgent(
   data: ReceiptData,
   settings: PrintSettings,
   storeName: string,
+  logoUrl = "",
 ): Promise<DeliverResult | null> {
   const status = await agentStatus()
   // A chosen printer overrides "there is no default" — the till may have no
@@ -54,12 +55,15 @@ async function viaAgent(
       : null
   }
   const width = DOTS[settings.paper === "58" ? "58" : "80"]
+  const logo = settings.printLogo ? await loadReceiptLogo(settings.logoDataUrl || logoUrl) : null
   const canvas = renderReceiptCanvas(data, {
     width,
     storeName,
     phone: settings.phone || undefined,
     address: settings.address || undefined,
     barcode: settings.receiptBarcode,
+    scale: FONT_SCALE[settings.fontSize] || 1,
+    logo,
   })
   const ctx = canvas.getContext("2d")
   if (!ctx) return null
@@ -87,7 +91,7 @@ export async function deliverReceipt(
   logoUrl = "",
 ): Promise<DeliverResult> {
   try {
-    const viaLocal = await viaAgent(data, settings, storeName)
+    const viaLocal = await viaAgent(data, settings, storeName, logoUrl)
     if (viaLocal?.outcome === "agent") return viaLocal
     if (viaLocal?.outcome === "unavailable") {
       // The agent is there and says there is no printer. Skip the browser

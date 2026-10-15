@@ -520,3 +520,17 @@ export function printLabels(items: LabelItem[], opts: LabelOptions = {}): void {
 }
 
 export { DEFAULT_PRINT_SETTINGS }
+
+/**
+ * Print any document the same way a receipt goes to the browser's printer:
+ * a hidden frame, the OS dialog (or kiosk printing), or a downloaded file on
+ * a till with no printer. Used by the cash drawer record.
+ */
+export function printDocument(
+  innerHtml: string,
+  styles: string,
+  title: string,
+  deliver: "print" | "download" = "print",
+): Promise<PrintOutcome> {
+  return new Promise((resolve) => printHtml(innerHtml, styles, title, (o) => resolve(o), deliver))
+}

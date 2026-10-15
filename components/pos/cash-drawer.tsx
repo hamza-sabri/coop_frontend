@@ -10,15 +10,19 @@
  *
  * An employee counts BLIND: the expected amount appears only after the count
  * is typed, so the number they enter is what is in their hand. */
-import { useState } from "react"
+import { useEffect, useState } from "react"
+import Link from "next/link"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   ArrowDownToLine,
   ArrowUpFromLine,
   CheckCircle2,
+  CreditCard,
+  History as HistoryIcon,
   Loader2,
   Lock,
   LockOpen,
+  Printer,
   TriangleAlert,
   Banknote,
   Vault,
@@ -27,11 +31,17 @@ import { toast } from "sonner"
 
 import {
   closeCashDrawer,
+  countsTotal,
+  DENOMINATIONS,
   fetchCashDrawer,
   moveCash,
   openCashDrawer,
+  staffNames,
+  type Counts,
   type CashSession,
 } from "@/api/cash-drawer"
+import { useMe } from "@/hooks/use-me"
+import { printCashRecord } from "@/lib/print/cash-record"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -152,13 +162,95 @@ export function CashDrawerSheet({ open, onOpenChange }: { open: boolean; onOpenC
 }
 
 /* ── closed: count in ─────────────────────────────────────────────────── */
+/** Who works here, for "who opened / closed". Cached for the session. */
+export function useStaffNames() {
+  return useQuery({
+    queryKey: ["staff-names"],
+    queryFn: () => staffNames().then((r) => r.data),
+    staleTime: 10 * 60_000,
+  })
+}
+
+/** Pick the person at the counter. Staff share a till and rarely sign out,
+ *  so the signed-in account is only the default. */
+export function WhoPicker({ id, label, value, onChange }: { id: string; label: string; value: number | null; onChange: (v: number | null) => void }) {
+  const { data } = useStaffNames()
+  const rows = data ?? []
+  if (!rows.length) return null
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Label htmlFor={id}>{label}</Label>
+      <select
+        id={id}
+        value={value ?? ""}
+        onChange={(e) => onChange(e.target.value ? Number(e.target.value) : null)}
+        className="h-11 rounded-xl border border-border bg-background px-3 text-sm"
+      >
+        {rows.map((r) => (
+          <option key={r.id} value={r.id}>{r.name}</option>
+        ))}
+      </select>
+    </div>
+  )
+}
+
+/** The count sheet: how many of each note and coin. The total is computed
+ *  and shown; nobody types a sum. */
+export function CountSheet({ counts, onChange, autoFocus }: { counts: Counts; onChange: (c: Counts) => void; autoFocus?: boolean }) {
+  const total = countsTotal(counts)
+  return (
+    <div className="rounded-xl border">
+      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-x-3 border-b bg-muted/40 px-3 py-1.5 text-[11px] font-semibold text-muted-foreground">
+        <span>الفئة</span><span className="text-center">العدد</span><span className="text-end">المبلغ</span>
+      </div>
+      <ul className="divide-y divide-border/60">
+        {DENOMINATIONS.map((d, i) => {
+          const n = Number(counts[d]) || 0
+          const coin = Number(d) <= 10
+          return (
+            <li key={d} className="grid grid-cols-[1fr_auto_1fr] items-center gap-x-3 px-3 py-1">
+              <span className="flex items-center gap-2 text-sm">
+                <span className={cn("inline-grid h-6 min-w-9 place-items-center rounded-md px-1 text-[11px] font-bold tabular-nums", coin ? "rounded-full bg-amber-500/15 text-amber-800 dark:text-amber-300" : "bg-primary/10 text-primary")}>{d}</span>
+                <span className="text-[11px] text-muted-foreground">{coin ? "قطعة" : "ورقة"}</span>
+              </span>
+              <input
+                inputMode="numeric"
+                dir="ltr"
+                aria-label={`عدد فئة ${d}`}
+                autoFocus={autoFocus && i === 0}
+                className="h-9 w-20 rounded-lg border border-border bg-background text-center text-sm font-semibold tabular-nums"
+                value={n ? String(n) : ""}
+                placeholder="0"
+                onChange={(e) => {
+                  const v = parseInt(e.target.value.replace(/[٠-٩]/g, (c) => String(c.charCodeAt(0) - 0x660)).replace(/\D/g, ""), 10)
+                  onChange({ ...counts, [d]: isNaN(v) ? 0 : Math.min(v, 100000) })
+                }}
+              />
+              <span className="text-end text-sm tabular-nums text-muted-foreground">{n ? formatMoney(Number(d) * n) : ""}</span>
+            </li>
+          )
+        })}
+      </ul>
+      <div className="flex items-baseline justify-between border-t bg-muted/30 px-3 py-2">
+        <span className="text-sm font-semibold">المجموع المعدود</span>
+        <span className="font-heading text-xl font-bold tabular-nums text-primary">{formatMoney(total)}</span>
+      </div>
+    </div>
+  )
+}
+
+/* ── closed: count in ─────────────────────────────────────────────────── */
 function OpenForm({ onOpened }: { onOpened: () => void }) {
-  const [amount, setAmount] = useState("")
+  const { user } = useMe()
+  const [counts, setCounts] = useState<Counts>({})
+  const [who, setWho] = useState<number | null>(null)
+  useEffect(() => { if (user?.id && who == null) setWho(Number(user.id)) }, [user, who])
+  const total = countsTotal(counts)
   const go = useMutation({
-    mutationFn: () => openCashDrawer(String(toNumber(amount))),
+    mutationFn: () => openCashDrawer({ counts, opened_by: who }),
     onSuccess: () => {
       toast.success("فُتح الصندوق")
-      setAmount("")
+      setCounts({})
       onOpened()
     },
     onError: (e) => toast.error(errMsg(e, "تعذّر فتح الصندوق")),
@@ -167,15 +259,13 @@ function OpenForm({ onOpened }: { onOpened: () => void }) {
     <div className="space-y-3 rounded-2xl border p-4">
       <div className="flex items-center gap-2 text-sm font-semibold">
         <LockOpen className="size-4 text-primary" />
-        افتح الصندوق
+        افتح الصندوق — عُدّ الفكّة
       </div>
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="cd-open">كم في الصندوق الآن؟ (الفكّة)</Label>
-        <MoneyInput id="cd-open" value={amount} onChange={setAmount} autoFocus />
-      </div>
-      <Button className="bg-brand-gradient w-full" disabled={go.isPending || amount.trim() === ""} onClick={() => go.mutate()}>
+      <CountSheet counts={counts} onChange={setCounts} autoFocus />
+      <WhoPicker id="cd-open-who" label="من يفتح الصندوق؟" value={who} onChange={setWho} />
+      <Button className="bg-brand-gradient w-full" disabled={go.isPending} onClick={() => go.mutate()}>
         {go.isPending ? <Loader2 className="size-4 animate-spin" /> : <LockOpen className="size-4" />}
-        افتح الصندوق بـ {formatMoney(toNumber(amount))}
+        افتح الصندوق بـ {formatMoney(total)}
       </Button>
       <p className="text-[11px] leading-relaxed text-muted-foreground">
         من الآن يحسب النظام وحده: كل بيع نقدي يزيد الصندوق، وكل إرجاع نقدي ينقصه. البيع بالبطاقة لا يدخل الصندوق.
@@ -255,7 +345,7 @@ function OpenDrawer({
   )
 }
 
-function Breakdown({ s }: { s: CashSession }) {
+export function Breakdown({ s }: { s: CashSession }) {
   const f = s.figures!
   const rows: { label: string; sub?: string; v: string; sign: "" | "+" | "−" }[] = [
     { label: "بداية الصندوق", v: f.opening, sign: "" },
@@ -264,6 +354,8 @@ function Breakdown({ s }: { s: CashSession }) {
     { label: "إدخال نقد", v: f.put_in, sign: "+" },
     { label: "إخراج نقد", v: f.took_out, sign: "−" },
   ]
+  const cardRef = toNumber(f.card_refunds ?? "0")
+  const debt = toNumber(f.debt_sales ?? "0")
   return (
     <div className="rounded-2xl border p-4">
       <ul className="space-y-2 text-sm">
@@ -286,11 +378,34 @@ function Breakdown({ s }: { s: CashSession }) {
         <span className="font-semibold">يجب أن يكون في الصندوق</span>
         <span className="font-heading text-2xl font-bold tabular-nums text-primary">{formatMoney(f.expected)}</span>
       </div>
-      {toNumber(f.card_sales) > 0 ? (
-        <p className="mt-2 text-[11px] text-muted-foreground">
-          وبالبطاقة {formatMoney(f.card_sales)} ({formatNumber(f.card_tickets)} فاتورة) — لا تدخل الصندوق.
-        </p>
-      ) : null}
+      <ul className="mt-3 space-y-1.5 border-t border-border/70 pt-3 text-sm">
+        <li className="flex items-baseline justify-between gap-3">
+          <span className="flex items-center gap-1.5"><CreditCard className="size-3.5 text-muted-foreground" /> مبيعات البطاقة <span className="text-[11px] text-muted-foreground">{formatNumber(f.card_tickets)} فاتورة — لا تدخل الصندوق</span></span>
+          <span className="tabular-nums">{formatMoney(f.card_sales)}</span>
+        </li>
+        {cardRef > 0 ? (
+          <li className="flex items-baseline justify-between gap-3"><span>مرتجعات بالبطاقة</span><span className="tabular-nums"><span className="me-1 text-muted-foreground">−</span>{formatMoney(cardRef)}</span></li>
+        ) : null}
+        {debt > 0 ? (
+          <li className="flex items-baseline justify-between gap-3"><span>على الحساب (دين) <span className="text-[11px] text-muted-foreground">{formatNumber(f.debt_tickets ?? 0)} فاتورة</span></span><span className="tabular-nums">{formatMoney(debt)}</span></li>
+        ) : null}
+        {f.total_sales != null ? (
+          <li className="flex items-baseline justify-between gap-3 font-semibold"><span>إجمالي المبيعات <span className="text-[11px] font-normal text-muted-foreground">{formatNumber(f.tickets ?? 0)} فاتورة</span></span><span className="tabular-nums">{formatMoney(f.total_sales)}</span></li>
+        ) : null}
+      </ul>
+    </div>
+  )
+}
+
+/** The card terminal's total against the books — shown after closing. */
+export function CardCheck({ s }: { s: CashSession }) {
+  if (s.card_counted == null || s.card_difference == null) return null
+  const d = toNumber(s.card_difference)
+  const w = differenceWords(d)
+  return (
+    <div className={cn("flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-sm", w.tone === "ok" ? "border-emerald-500/30" : "border-rose-500/30")}>
+      <span className="flex items-center gap-2"><CreditCard className="size-4 text-muted-foreground" /> جهاز البطاقة {formatMoney(s.card_counted)} · النظام {formatMoney(s.figures?.card_expected ?? s.figures?.card_sales ?? "0")}</span>
+      <span className={cn("pill shrink-0", w.tone === "ok" ? "pill-success" : "pill-danger")}>{w.tone === "ok" ? "مطابق" : w.text}</span>
     </div>
   )
 }
@@ -336,20 +451,27 @@ function MoveForm({ direction, onDone, onCancel }: { direction: "in" | "out"; on
 }
 
 function CloseForm({ onCancel, onClosed }: { onCancel: () => void; onClosed: (s: CashSession) => void }) {
-  const [amount, setAmount] = useState("")
+  const { user } = useMe()
+  const [counts, setCounts] = useState<Counts>({})
+  const [card, setCard] = useState("")
+  const [who, setWho] = useState<number | null>(null)
+  useEffect(() => { if (user?.id && who == null) setWho(Number(user.id)) }, [user, who])
   const [note, setNote] = useState("")
   const go = useMutation({
-    mutationFn: () => closeCashDrawer(String(toNumber(amount)), note.trim()),
+    mutationFn: () => closeCashDrawer({ counts, card_counted: card.trim() === "" ? undefined : String(toNumber(card)), closed_by: who, note: note.trim() }),
     onSuccess: (r) => onClosed(r.data),
     onError: (e) => toast.error(errMsg(e, "تعذّر إغلاق الصندوق")),
   })
   return (
     <div className="space-y-3 rounded-2xl border border-primary/30 bg-primary/5 p-4">
       <p className="text-sm font-semibold">عُدّ النقود في الصندوق</p>
+      <CountSheet counts={counts} onChange={setCounts} autoFocus />
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="cd-count">كم عددت؟</Label>
-        <MoneyInput id="cd-count" value={amount} onChange={setAmount} autoFocus />
+        <Label htmlFor="cd-card" className="flex items-center gap-1.5"><CreditCard className="size-3.5" /> مجموع البطاقة من جهاز الدفع</Label>
+        <MoneyInput id="cd-card" value={card} onChange={setCard} />
+        <p className="text-[11px] text-muted-foreground">اطبع تقرير اليوم من جهاز البطاقة واكتب مجموعه — يُقارن بمبيعات البطاقة في النظام.</p>
       </div>
+      <WhoPicker id="cd-close-who" label="من يغلق الصندوق؟" value={who} onChange={setWho} />
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="cd-cnote">
           ملاحظة <span className="text-xs font-normal text-muted-foreground">(اختياري)</span>
@@ -357,9 +479,9 @@ function CloseForm({ onCancel, onClosed }: { onCancel: () => void; onClosed: (s:
         <Input id="cd-cnote" value={note} onChange={(e) => setNote(e.target.value)} />
       </div>
       <div className="flex gap-2">
-        <Button className="bg-brand-gradient flex-1" disabled={amount.trim() === "" || go.isPending} onClick={() => go.mutate()}>
+        <Button className="bg-brand-gradient flex-1" disabled={go.isPending} onClick={() => go.mutate()}>
           {go.isPending ? <Loader2 className="size-4 animate-spin" /> : <Lock className="size-4" />}
-          أغلق الصندوق
+          أغلق الصندوق بـ {formatMoney(countsTotal(counts))}
         </Button>
         <Button variant="outline" className="flex-1" onClick={onCancel} disabled={go.isPending}>
           رجوع
@@ -399,10 +521,17 @@ function Result({ s, onDone }: { s: CashSession; onDone: () => void }) {
           عددت {formatMoney(s.counted_amount)} · المتوقع {formatMoney(s.expected_amount)}
         </p>
       </div>
+      <CardCheck s={s} />
       {s.figures ? <Breakdown s={{ ...s, figures: { ...s.figures, expected: s.expected_amount ?? s.figures.expected } }} /> : null}
-      <Button variant="outline" className="w-full" onClick={onDone}>
-        تم
-      </Button>
+      <div className="grid grid-cols-2 gap-2">
+        <Button variant="outline" className="gap-1.5" onClick={() => void printCashRecord(s.id)}>
+          <Printer className="size-4" />
+          اطبع السجل
+        </Button>
+        <Button variant="outline" onClick={onDone}>
+          تم
+        </Button>
+      </div>
     </>
   )
 }
@@ -411,18 +540,21 @@ function Result({ s, onDone }: { s: CashSession; onDone: () => void }) {
 function History({ rows }: { rows: CashSession[] }) {
   return (
     <div className="rounded-2xl border p-3">
-      <p className="mb-2 text-xs font-semibold text-muted-foreground">آخر الإغلاقات</p>
+      <div className="mb-2 flex items-center justify-between">
+        <p className="text-xs font-semibold text-muted-foreground">آخر الإغلاقات</p>
+        <Link href="/cash-drawer" className="flex items-center gap-1 text-xs font-semibold text-primary"><HistoryIcon className="size-3.5" /> السجل الكامل</Link>
+      </div>
       <ul className="divide-y divide-border/70 text-sm">
         {rows.map((r) => {
           const d = differenceWords(toNumber(r.difference))
           return (
             <li key={r.id} className="flex items-center justify-between gap-3 py-2.5">
-              <span className="min-w-0">
+              <Link href={`/cash-drawer/${r.id}`} className="min-w-0">
                 <span className="block">{when(r.closed_at)}</span>
                 <span className="text-[11px] text-muted-foreground">
                   {time(r.opened_at)} ← {time(r.closed_at)} · {r.closed_by || "—"} · عُدّ {formatMoney(r.counted_amount)}
                 </span>
-              </span>
+              </Link>
               <span
                 className={cn(
                   "pill shrink-0",
