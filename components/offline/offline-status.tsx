@@ -47,7 +47,7 @@ export function OfflineStatus() {
   // the moment the server answers.
   if (online && serverDown) {
     return (
-      <div className="pointer-events-none fixed inset-x-0 bottom-24 z-40 flex justify-center px-3 lg:bottom-4 lg:justify-start lg:ps-6">
+      <div className="pointer-events-none fixed inset-x-0 bottom-[calc(var(--nav-h)+0.75rem)] z-40 flex justify-center px-3 lg:bottom-4 lg:justify-start lg:ps-6">
         <div
           className="pointer-events-auto flex items-center gap-2 rounded-full bg-ink px-4 py-2 text-xs font-semibold text-white shadow-lg ring-1 ring-black/10 animate-in fade-in slide-in-from-bottom-2"
           role="status"
@@ -100,7 +100,7 @@ export function OfflineStatus() {
         : "bg-ink text-white"
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-24 z-40 flex justify-center px-3 lg:bottom-4 lg:justify-start lg:ps-6">
+    <div className="pointer-events-none fixed inset-x-0 bottom-[calc(var(--nav-h)+0.75rem)] z-40 flex justify-center px-3 lg:bottom-4 lg:justify-start lg:ps-6">
       <div
         className={cn(
           "pointer-events-auto flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold shadow-lg ring-1 ring-black/10 animate-in fade-in slide-in-from-bottom-2",

@@ -34,7 +34,7 @@ export function Fab({
       title={label}
       style={{ backgroundImage: BRAND_GRADIENT }}
       className={cn(
-        "fixed bottom-[calc(6.5rem+env(safe-area-inset-bottom))] end-4 z-30 size-14 rounded-full p-0 text-white shadow-xl shadow-primary/35 transition-transform hover:scale-105 active:scale-95",
+        "fixed bottom-[calc(var(--nav-h)+1rem)] end-4 z-30 size-14 rounded-full p-0 text-white shadow-xl shadow-primary/35 transition-transform hover:scale-105 active:scale-95",
         always ? "md:bottom-6" : "md:hidden",
         className,
       )}

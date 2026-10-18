@@ -12,9 +12,15 @@ import { useLockedFeature } from "@/components/locked-feature"
 import { cn } from "@/lib/utils"
 
 /**
- * Floating ink pill bar with a raised lime scan button in the middle — the
- * app's main mobile navigation. Every feature shows; ones this account can't
- * use are locked and open a "contact the owner" dialog.
+ * Ink bar docked to the bottom edge — the app's main mobile navigation. Every
+ * feature shows; ones this account can't use are locked and open a "contact
+ * the owner" dialog.
+ *
+ * Docked, not floating: on Android an installed app reports a tall bottom
+ * safe area (the gesture bar), and a pill lifted by `0.75rem + inset` rose
+ * into the POS cart bar and covered it. The bar now sits on the edge and
+ * fills the safe area with its own colour; its height is `--nav-h`
+ * (globals.css), which everything that floats above it uses.
  */
 export function BottomNav() {
   const pathname = usePathname()
@@ -76,8 +82,12 @@ export function BottomNav() {
   const scannerOn = useScannerEnabled()
 
   return (
-    <nav className="fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-30 md:hidden">
-      <div className="ink-panel flex items-center gap-1 rounded-[24px] px-2 py-1.5 shadow-2xl">
+    <nav data-slot="bottom-nav" className="fixed inset-x-0 bottom-0 z-30 md:hidden">
+      {/* Inline radius/padding: .ink-panel is unlayered CSS and beats utilities. */}
+      <div
+        className="ink-panel flex h-[var(--nav-h)] items-start gap-1 px-2 pt-1.5 shadow-2xl"
+        style={{ borderRadius: "22px 22px 0 0", paddingBottom: "env(safe-area-inset-bottom)" }}
+      >
         {first.map(({ item, locked }) => (
           <Item key={item.href} item={item} locked={locked} />
         ))}

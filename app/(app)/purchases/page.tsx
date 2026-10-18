@@ -1153,7 +1153,7 @@ export default function PurchasesPage() {
             onClick={() => setScanMode("add")}
             aria-label="مسح باركود"
             style={{ backgroundImage: FAB_GRADIENT }}
-            className="fixed bottom-[calc(6.5rem+env(safe-area-inset-bottom))] end-4 z-30 grid size-14 place-items-center rounded-full text-white shadow-xl shadow-primary/35 transition-transform hover:scale-105 active:scale-95 md:bottom-6"
+            className="fixed bottom-[calc(var(--nav-h)+1rem)] end-4 z-30 grid size-14 place-items-center rounded-full text-white shadow-xl shadow-primary/35 transition-transform hover:scale-105 active:scale-95 md:bottom-6"
           >
             <ScanBarcode className="size-6" />
           </button>

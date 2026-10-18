@@ -72,7 +72,7 @@ function SheetContent({
         data-slot="sheet-content"
         data-side={side}
         className={cn(
-          "fixed z-50 flex flex-col gap-4 bg-popover bg-clip-padding text-sm text-popover-foreground shadow-lg transition duration-200 ease-in-out data-ending-style:opacity-0 data-starting-style:opacity-0 data-[side=bottom]:inset-x-0 data-[side=bottom]:bottom-0 data-[side=bottom]:h-auto data-[side=bottom]:border-t data-[side=bottom]:data-ending-style:translate-y-[2.5rem] data-[side=bottom]:data-starting-style:translate-y-[2.5rem] data-[side=left]:inset-y-0 data-[side=left]:left-0 data-[side=left]:h-full data-[side=left]:w-full data-[side=left]:border-r data-[side=left]:data-ending-style:translate-x-[-2.5rem] data-[side=left]:data-starting-style:translate-x-[-2.5rem] data-[side=right]:inset-y-0 data-[side=right]:right-0 data-[side=right]:h-full data-[side=right]:w-full data-[side=right]:border-l data-[side=right]:data-ending-style:translate-x-[2.5rem] data-[side=right]:data-starting-style:translate-x-[2.5rem] data-[side=top]:inset-x-0 data-[side=top]:top-0 data-[side=top]:h-auto data-[side=top]:border-b data-[side=top]:data-ending-style:translate-y-[-2.5rem] data-[side=top]:data-starting-style:translate-y-[-2.5rem]",
+          "fixed z-50 flex flex-col gap-4 bg-popover bg-clip-padding text-sm text-popover-foreground shadow-lg transition duration-200 ease-in-out data-ending-style:opacity-0 data-starting-style:opacity-0 data-[side=bottom]:inset-x-0 data-[side=bottom]:bottom-0 data-[side=bottom]:h-auto data-[side=bottom]:border-t data-[side=bottom]:data-ending-style:translate-y-[2.5rem] data-[side=bottom]:data-starting-style:translate-y-[2.5rem] data-[side=left]:inset-y-0 data-[side=left]:left-0 data-[side=left]:h-full data-[side=left]:w-full data-[side=left]:border-r data-[side=left]:data-ending-style:translate-x-[-2.5rem] data-[side=left]:data-starting-style:translate-x-[-2.5rem] data-[side=left]:pt-[env(safe-area-inset-top)] data-[side=right]:pt-[env(safe-area-inset-top)] data-[side=left]:pb-[env(safe-area-inset-bottom)] data-[side=right]:pb-[env(safe-area-inset-bottom)] data-[side=bottom]:pb-[env(safe-area-inset-bottom)] data-[side=right]:inset-y-0 data-[side=right]:right-0 data-[side=right]:h-full data-[side=right]:w-full data-[side=right]:border-l data-[side=right]:data-ending-style:translate-x-[2.5rem] data-[side=right]:data-starting-style:translate-x-[2.5rem] data-[side=top]:inset-x-0 data-[side=top]:top-0 data-[side=top]:h-auto data-[side=top]:border-b data-[side=top]:data-ending-style:translate-y-[-2.5rem] data-[side=top]:data-starting-style:translate-y-[-2.5rem]",
           (side === "left" || side === "right") && WIDTHS[size],
           className
         )}
@@ -88,13 +88,16 @@ function SheetContent({
                 // LOGICAL, not physical. `right-3` put the close button on the
                 // far side of an RTL panel, across the width of the drawer
                 // from where the eye starts and half under the header art.
-                className="absolute end-3 top-3 z-10 bg-background/70 backdrop-blur-sm hover:bg-background"
-                size="icon-sm"
+                // Installed app (viewport-fit=cover): the panel runs under the
+                // status bar, so top-3 sat in the corner behind the clock and
+                // a 28px target was hard to hit. 40px, inset by the safe area.
+                className="absolute end-3 top-3 z-10 size-10 rounded-full bg-background/80 shadow-sm backdrop-blur-sm hover:bg-background in-data-[side=left]:mt-[env(safe-area-inset-top)] in-data-[side=right]:mt-[env(safe-area-inset-top)] in-data-[side=top]:mt-[env(safe-area-inset-top)]"
+                size="icon"
                 aria-label="إغلاق"
               />
             }
           >
-            <XIcon />
+            <XIcon className="size-5" />
             <span className="sr-only">إغلاق</span>
           </SheetPrimitive.Close>
         )}

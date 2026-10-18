@@ -2167,7 +2167,7 @@ function PosPageInner() {
           </div>
 
           {/* Cart — mobile: compact FAB while empty, full bar once it has items */}
-          <div className="fixed inset-x-3 bottom-24 z-30 lg:hidden">
+          <div className="fixed inset-x-3 bottom-[calc(var(--nav-h)+0.75rem)] z-30 lg:hidden">
             {activeCount === 0 && pos.carts.length === 1 ? (
               <button
                 type="button"

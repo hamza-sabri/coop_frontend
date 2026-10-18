@@ -49,7 +49,7 @@ describe("the close button is where an RTL reader looks", () => {
   it("stays legible over a coloured header", () => {
     // Every drawer header in the app is branded. A bare ghost button on top of
     // bg-brand-soft is nearly invisible.
-    expect(SHEET).toContain("bg-background/70")
+    expect(SHEET).toContain("bg-background/80")
   })
 
   it("is labelled in the user's language", () => {
@@ -91,5 +91,44 @@ describe("كوب's own additions to the contract", () => {
     expect(INVOICE).toContain("<SheetContent")
     expect(INVOICE).not.toContain("<DialogContent")
     expect(INVOICE).toContain('side="left"')
+  })
+})
+
+describe("installed app on a phone (viewport-fit=cover)", () => {
+  const RAW_SHEET = read("components/ui/sheet.tsx")
+  const NAV = stripComments(read("components/bottom-nav.tsx"))
+  const CSS = read("app/globals.css")
+
+  it("the drawer close button is a 40px target clear of the status bar", () => {
+    expect(SHEET).toContain("size-10")
+    expect(SHEET).toContain('<XIcon className="size-5" />')
+    expect(SHEET).toContain("in-data-[side=left]:mt-[env(safe-area-inset-top)]")
+    expect(SHEET).toContain("in-data-[side=right]:mt-[env(safe-area-inset-top)]")
+    expect(RAW_SHEET).not.toContain('size="icon-sm"')
+  })
+
+  it("side drawers start below the status bar", () => {
+    expect(SHEET).toContain("data-[side=left]:pt-[env(safe-area-inset-top)]")
+    expect(SHEET).toContain("data-[side=right]:pt-[env(safe-area-inset-top)]")
+  })
+
+  it("the bottom nav is docked to the edge, not floating over the cart", () => {
+    expect(NAV).toContain("fixed inset-x-0 bottom-0")
+    expect(NAV).not.toContain("bottom-[calc(0.75rem+env(safe-area-inset-bottom))]")
+    expect(CSS).toContain("--nav-h: calc(4rem + env(safe-area-inset-bottom))")
+  })
+
+  it("everything floating above the nav is placed from its height", () => {
+    for (const f of [
+      "app/(app)/pos/page.tsx",
+      "components/fab.tsx",
+      "app/(app)/purchases/page.tsx",
+      "components/offline/offline-status.tsx",
+    ]) {
+      const src = read(f)
+      expect(src, f).toContain("var(--nav-h)")
+      expect(src, f).not.toContain("6.5rem+env(safe-area-inset-bottom)")
+    }
+    expect(read("app/(app)/pos/page.tsx")).not.toContain("fixed inset-x-3 bottom-24")
   })
 })

@@ -132,6 +132,18 @@
   --ring: oklch(0.62 0.086 269.0);
 }
 
+/* Height of the docked mobile bottom nav, safe area included. Anything that
+   floats above the nav (POS cart bar, + buttons, offline notice) sits at
+   calc(var(--nav-h) + gap). No nav from md up, so only the safe area is left. */
+:root {
+  --nav-h: calc(4rem + env(safe-area-inset-bottom));
+}
+@media (min-width: 48rem) {
+  :root {
+    --nav-h: env(safe-area-inset-bottom);
+  }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
