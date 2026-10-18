@@ -113,9 +113,20 @@ describe("installed app on a phone (viewport-fit=cover)", () => {
   })
 
   it("the bottom nav is docked to the edge, not floating over the cart", () => {
-    expect(NAV).toContain("fixed inset-x-0 bottom-0")
+    expect(NAV).toContain('className="bottom-nav md:hidden"')
     expect(NAV).not.toContain("bottom-[calc(0.75rem+env(safe-area-inset-bottom))]")
-    expect(CSS).toContain("--nav-h: calc(4rem + env(safe-area-inset-bottom))")
+  })
+
+  it("follows Chrome's edge-to-edge pattern: fixed size, only `bottom` moves", () => {
+    // Padding by the LIVE inset made the bar float over Android's chin, then
+    // grow tall once the chin slid away.
+    expect(NAV).not.toContain("paddingBottom")
+    expect(CSS).toContain("--sab-max: env(safe-area-max-inset-bottom")
+    expect(CSS).toContain("bottom: calc(env(safe-area-inset-bottom, 0px) - var(--sab-max))")
+    expect(CSS).toContain("padding-bottom: var(--sab-max)")
+    expect(CSS).toContain("--nav-h: calc(var(--nav-bar) + env(safe-area-inset-bottom, 0px))")
+    // the buttons ride into the gesture area by transform, never by layout
+    expect(CSS).toContain("transform: translateY(calc(env(safe-area-inset-bottom, 0px) * 0.5))")
   })
 
   it("everything floating above the nav is placed from its height", () => {

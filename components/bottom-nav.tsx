@@ -34,14 +34,14 @@ export function BottomNav() {
     const active = isActive(pathname, item.href) && !locked
     const Icon = item.icon
     const className = cn(
-      "flex flex-1 flex-col items-center justify-center gap-0.5 rounded-2xl py-1.5 text-[10px] font-medium transition-colors",
+      "flex flex-1 flex-col items-center justify-center gap-0.5 rounded-2xl py-1 text-[10px] font-medium transition-colors",
       active ? "text-lime" : locked ? "text-white/40" : "text-white/55 hover:text-white",
     )
     const inner = (
       <>
         <span
           className={cn(
-            "relative grid size-8 place-items-center rounded-xl transition-colors",
+            "relative grid size-7 place-items-center rounded-xl transition-colors",
             active && "bg-white/10",
           )}
         >
@@ -82,12 +82,11 @@ export function BottomNav() {
   const scannerOn = useScannerEnabled()
 
   return (
-    <nav data-slot="bottom-nav" className="fixed inset-x-0 bottom-0 z-30 md:hidden">
-      {/* Inline radius/padding: .ink-panel is unlayered CSS and beats utilities. */}
-      <div
-        className="ink-panel flex h-[var(--nav-h)] items-start gap-1 px-2 pt-1.5 shadow-2xl"
-        style={{ borderRadius: "22px 22px 0 0", paddingBottom: "env(safe-area-inset-bottom)" }}
-      >
+    // Position, height and the safe-area padding live in globals.css
+    // (.bottom-nav) — see the note there on Android's chin.
+    <nav data-slot="bottom-nav" className="bottom-nav md:hidden">
+      <div className="ink-panel px-2 shadow-2xl">
+        <div className="bottom-nav-row flex items-center gap-1">
         {first.map(({ item, locked }) => (
           <Item key={item.href} item={item} locked={locked} />
         ))}
@@ -99,6 +98,7 @@ export function BottomNav() {
         {last.map(({ item, locked }) => (
           <Item key={item.href} item={item} locked={locked} />
         ))}
+        </div>
       </div>
     </nav>
   )

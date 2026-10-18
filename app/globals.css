@@ -132,16 +132,48 @@
   --ring: oklch(0.62 0.086 269.0);
 }
 
-/* Height of the docked mobile bottom nav, safe area included. Anything that
-   floats above the nav (POS cart bar, + buttons, offline notice) sits at
-   calc(var(--nav-h) + gap). No nav from md up, so only the safe area is left. */
+/* The docked mobile bottom nav — Chrome's edge-to-edge pattern
+   (developer.chrome.com/docs/css-ui/edge-to-edge).
+
+   On Android, Chrome shows a "chin" over the gesture bar that slides away as
+   the page scrolls, and env(safe-area-inset-bottom) moves 0 → max with it.
+   Padding the bar by that live inset made it float above a white strip at
+   first and then grow tall once the chin left. Instead the bar is ALWAYS its
+   full size (bar + the MAX inset) and only its `bottom` moves: with the chin
+   showing, the padding part hides behind the chin; once it is gone, the
+   padding fills the gesture area. Nothing re-lays out while it moves.
+
+   --nav-h = how far the bar's top is from the bottom of the viewport, in
+   either state. Anything floating above the nav (POS cart bar, + buttons,
+   offline notice) sits at calc(var(--nav-h) + gap). */
 :root {
-  --nav-h: calc(4rem + env(safe-area-inset-bottom));
+  --nav-bar: 3.5rem;
+  --sab-max: env(safe-area-max-inset-bottom, env(safe-area-inset-bottom, 0px));
+  --nav-h: calc(var(--nav-bar) + env(safe-area-inset-bottom, 0px));
 }
 @media (min-width: 48rem) {
   :root {
-    --nav-h: env(safe-area-inset-bottom);
+    --nav-h: env(safe-area-inset-bottom, 0px);
   }
+}
+.bottom-nav {
+  position: fixed;
+  inset-inline: 0;
+  z-index: 30;
+  bottom: calc(env(safe-area-inset-bottom, 0px) - var(--sab-max));
+}
+.bottom-nav > .ink-panel {
+  height: calc(var(--nav-bar) + var(--sab-max));
+  padding-bottom: var(--sab-max);
+  border-radius: 22px 22px 0 0;
+}
+/* Once the chin is gone the full inset under the buttons looked like a
+   stretched bar, so the buttons ride down into about half of the gesture
+   area. A transform, not layout: the bar's size never changes. With the chin
+   showing the inset is 0 and the buttons sit right above it. */
+.bottom-nav-row {
+  height: var(--nav-bar);
+  transform: translateY(calc(env(safe-area-inset-bottom, 0px) * 0.5));
 }
 
 @layer base {
