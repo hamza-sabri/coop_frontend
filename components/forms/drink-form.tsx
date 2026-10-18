@@ -22,7 +22,7 @@
    ========================================================================== */
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
-import { ChevronDown, Coffee, Copy, ImagePlus, Loader2, Milk, Plus, RotateCcw, Save, Trash2, X } from "lucide-react"
+import { Camera, ChevronDown, Coffee, Copy, ImagePlus, Loader2, Milk, Plus, RotateCcw, Save, Trash2, X } from "lucide-react"
 import { toast } from "sonner"
 
 import { FormModal } from "@/components/form-modal"
@@ -159,6 +159,10 @@ function DrinkPhoto({
   onClear: () => void
 }) {
   const input = useRef<HTMLInputElement>(null)
+  // Android's photo picker (13+) shows the gallery only, with no camera. A
+  // second input with `capture` opens the camera directly; on a computer
+  // there is no camera to offer, so that button only shows on touch screens.
+  const camera = useRef<HTMLInputElement>(null)
   const [over, setOver] = useState(false)
   const preview = file ? URL.createObjectURL(file) : url
 
@@ -212,6 +216,26 @@ function DrinkPhoto({
           <span className="text-[11px]">اسحب الصورة أو اضغط للاختيار</span>
         </button>
       )}
+      <button
+        type="button"
+        onClick={() => camera.current?.click()}
+        className="absolute bottom-2 end-2 hidden items-center gap-1 rounded-full bg-background/90 px-3 py-1.5 text-xs font-semibold shadow pointer-coarse:flex"
+      >
+        <Camera className="size-3.5" />
+        الكاميرا
+      </button>
+      <input
+        ref={camera}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        hidden
+        onChange={(e) => {
+          const f = e.target.files?.[0]
+          if (f) onPick(f)
+          e.target.value = ""
+        }}
+      />
       <input
         ref={input}
         type="file"
