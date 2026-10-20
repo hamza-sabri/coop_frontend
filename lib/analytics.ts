@@ -48,18 +48,11 @@ export function initAnalytics(): Promise<OverridedMixpanel | null> {
         ],
         // Recordings already come from Clarity (masked there); none here.
         record_sessions_percent: 0,
-        autocapture: {
-          pageview: false,
-          click: true,
-          rage_click: true,
-          dead_click: true,
-          submit: true,
-          input: false,
-          scroll: false,
-          capture_text_content: false,
-          capture_extra_attrs: ["data-track", "data-tour", "aria-label", "title", "role"],
-          block_selectors: ["[data-mp-block]"],
-        },
+        // Mixpanel's own autocapture did its work INSIDE every tap and was
+        // felt on the till (measured ~15–25 ms per tap on a slow phone). Clicks
+        // are recorded by our own listener instead (startClickTracking), after
+        // the screen has updated.
+        autocapture: false,
       })
       // Context known before sign-in finishes, so the first page view of a
       // session is already filed under its store.
@@ -86,9 +79,18 @@ function safe(fn: () => void) {
   }
 }
 
+/** Run after the browser has painted and is idle, never inside a tap. */
+function later(fn: () => void) {
+  if (typeof window === "undefined") return
+  const ric = (window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number })
+    .requestIdleCallback
+  if (ric) ric(fn, { timeout: 2000 })
+  else window.setTimeout(fn, 200)
+}
+
 function withMp(fn: (m: OverridedMixpanel) => void) {
   if (!TOKEN) return
-  if (mp) safe(() => fn(mp!))
+  if (mp) later(() => safe(() => fn(mp!)))
   else {
     if (queue.length < 200) queue.push(fn)
     void initAnalytics()
@@ -165,4 +167,53 @@ export function displayMode(): "installed" | "browser" {
     window.matchMedia?.("(display-mode: standalone)").matches ||
     (window.navigator as Navigator & { standalone?: boolean }).standalone === true
   return standalone ? "installed" : "browser"
+}
+
+// ---------------------------------------------------------------------------
+// Clicks: what staff tap, named by aria-label / data-track / data-tour / title,
+// or a link's route. Never the element's text (it can be a customer's name).
+
+const CLICKABLE = 'button,a[href],[role="tab"],[role="menuitem"],[role="option"],[role="switch"],[data-track]'
+let clicksOn = false
+let lastLabel = ""
+let streak: number[] = []
+
+function clickLabel(el: Element): { label: string; kind: string } {
+  const attr = (n: string) => (el.getAttribute(n) || "").trim()
+  const kind = el.getAttribute("role") || el.tagName.toLowerCase()
+  const named = attr("data-track") || attr("aria-label") || attr("data-tour") || attr("title")
+  if (named) return { label: named.slice(0, 60), kind }
+  if (el instanceof HTMLAnchorElement) {
+    try {
+      return { label: routeTemplate(new URL(el.href).pathname), kind: "link" }
+    } catch {
+      /* fall through */
+    }
+  }
+  return { label: "(unlabelled)", kind }
+}
+
+/** One passive listener for the whole admin. Does nothing until the browser is idle. */
+export function startClickTracking() {
+  if (!TOKEN || clicksOn || typeof document === "undefined") return
+  clicksOn = true
+  document.addEventListener(
+    "click",
+    (e) => {
+      const target = e.target instanceof Element ? e.target.closest(CLICKABLE) : null
+      if (!target || target.closest("[data-mp-block]")) return
+      const { label, kind } = clickLabel(target)
+      // Rage click: the same control 3 times within a second — something
+      // did not respond the way the person expected. Worth a tutorial or a fix.
+      // Not on the till: tapping "+" three times for three lattes is the job.
+      const onTill = window.location.pathname.startsWith("/pos")
+      const now = Date.now()
+      streak = label === lastLabel ? [...streak.filter((t) => now - t < 1000), now] : [now]
+      lastLabel = label
+      const rage = !onTill && streak.length === 3
+      track("Click", { label, kind })
+      if (rage) track("Rage Click", { label, kind })
+    },
+    { capture: true, passive: true },
+  )
 }

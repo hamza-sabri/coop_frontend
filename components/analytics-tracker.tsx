@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation"
 import { useMe } from "@/hooks/use-me"
 import { NAV_ITEMS, isActive } from "@/components/nav-config"
 import { getPharmacySlug } from "@/lib/site"
-import { analyticsEnabled, identify, initAnalytics, trackPage } from "@/lib/analytics"
+import { analyticsEnabled, identify, initAnalytics, startClickTracking, trackPage } from "@/lib/analytics"
 
 /** Readable page names for the dashboards: the nav label where there is one
  *  ("المنيو"), else the first path segment. */
@@ -24,7 +24,9 @@ export function AnalyticsTracker() {
   const lastPath = useRef<string | null>(null)
 
   useEffect(() => {
-    if (analyticsEnabled) void initAnalytics()
+    if (!analyticsEnabled) return
+    void initAnalytics()
+    startClickTracking()
   }, [])
 
   useEffect(() => {

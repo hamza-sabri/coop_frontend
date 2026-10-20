@@ -25,10 +25,10 @@ describe("analytics", () => {
 
   it("never captures element text, the real URL or the IP", () => {
     // A button can hold a customer's name; a URL can hold ?search=<name>.
-    expect(SRC).toContain("capture_text_content: false")
+    expect(SRC).toContain("autocapture: false")
+    expect(SRC).not.toContain("textContent")
     expect(SRC).toContain('"$current_url"')
     expect(SRC).toContain("ip: false")
-    expect(SRC).toContain("input: false")
   })
 
   it("is wired into the build and the admin", () => {
