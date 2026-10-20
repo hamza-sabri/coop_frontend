@@ -13,13 +13,14 @@ import { useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { Eye, MoreVertical, Pencil, Smartphone, Trash2, UserPlus } from "lucide-react"
+import { Eye, MoreVertical, Pencil, Trash2, UserPlus } from "lucide-react"
 
 import { customersTable, type CustomerRow } from "@/api/customer-profile"
 import { customersRetrieve } from "@/api/generated/customers/customers"
 import type { Customer } from "@/api/generated/model"
 import { ConfirmDelete } from "@/components/confirm-delete"
 import { StatusPill, ago } from "@/components/customers/status"
+import { AppBadge, SendAppLinkButton } from "@/components/customers/app-badge"
 import { DataTable, type Column } from "@/components/data-table"
 import { Fab } from "@/components/fab"
 import { ErrorState } from "@/components/states"
@@ -88,14 +89,13 @@ export default function CustomersPage() {
           <div className="min-w-0">
             <p className="flex items-center gap-1.5 truncate font-semibold">
               {c.name}
-              {c.app ? (
-                <span title="سجّل في تطبيق كوب" className="text-muted-foreground">
-                  <Smartphone className="size-3.5" />
-                </span>
-              ) : null}
+              <AppBadge app={c.app} invitedAt={c.app_invited_at} />
             </p>
-            <p className="truncate text-xs text-muted-foreground" dir="ltr">
-              {c.phone || "—"}
+            <p className="flex items-center gap-2 truncate text-xs text-muted-foreground">
+              <span dir="ltr">{c.phone || "—"}</span>
+              <span onClick={(e) => e.stopPropagation()}>
+                <SendAppLinkButton id={c.id} name={c.name} phone={c.phone} app={c.app} invitedAt={c.app_invited_at} />
+              </span>
             </p>
           </div>
         </div>
@@ -237,7 +237,10 @@ export default function CustomersPage() {
             <div className="flex items-center gap-3">
               <Face c={c} />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold">{c.name}</p>
+                <p className="flex items-center gap-1.5 truncate text-sm font-semibold">
+                  {c.name}
+                  <AppBadge app={c.app} invitedAt={c.app_invited_at} />
+                </p>
                 <p className="truncate text-[11px] text-muted-foreground">
                   {formatNumber(c.visits)} زيارة · {c.last_visit ? `آخرها ${ago(c.days_since)}` : "لم يزر بعد"}
                 </p>
@@ -245,6 +248,9 @@ export default function CustomersPage() {
               <div className="shrink-0 text-end">
                 <StatusPill status={c.status} female={c.gender === "female"} />
                 <p className="mt-1 text-[11px] tabular-nums text-muted-foreground">{formatNumber(c.points)} نقطة</p>
+                <span className="mt-1 inline-block" onClick={(e) => e.stopPropagation()}>
+                  <SendAppLinkButton id={c.id} name={c.name} phone={c.phone} app={c.app} invitedAt={c.app_invited_at} />
+                </span>
               </div>
             </div>
           )}

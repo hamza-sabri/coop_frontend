@@ -10,6 +10,7 @@ import { FormModal } from "@/components/form-modal"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { ImageField } from "@/components/image-field"
@@ -65,6 +66,8 @@ export function CustomerForm({
   const [ptsMode, setPtsMode] = useState<"add" | "remove">("add")
   const [ptsAmount, setPtsAmount] = useState("")
   const [ptsNote, setPtsNote] = useState("")
+  /** New customers: text them the app link (one SMS that also signs them in). */
+  const [sendLink, setSendLink] = useState(true)
   const balance = Number((customer as { points?: number } | null | undefined)?.points ?? 0)
   const ptsN = Math.max(0, Math.floor(Number(ptsAmount) || 0))
   const ptsDelta = ptsMode === "add" ? ptsN : -Math.min(ptsN, balance)
@@ -103,6 +106,7 @@ export function CustomerForm({
     setPtsMode("add")
     setPtsAmount("")
     setPtsNote("")
+    setSendLink(true)
   }, [open, customer, reset])
 
   async function onSubmit(v: FormValues) {
@@ -142,9 +146,14 @@ export function CustomerForm({
           status,
           notes: v.notes,
           avatar: avatarFile ? undefined : avatarUrl.trim(),
+          ...(customer ? {} : { send_app_link: sendLink && Boolean(v.phone.trim()) }),
         },
         { avatar_file: avatarFile },
       )
+      const link = (res as unknown as { data?: { app_link?: { sent: boolean; dry_run?: boolean; detail?: string } } })
+        .data?.app_link
+      if (link?.sent) toast.success(link.dry_run ? "رابط التطبيق جاهز (وضع التجربة — لم تُرسل رسالة)" : "أُرسل رابط التطبيق برسالة SMS")
+      else if (link && !link.sent) toast.warning(`أُضيف الزبون، لكن لم تُرسل الرسالة: ${link.detail ?? ""}`)
       if (customer && isOwner && ptsDelta !== 0) {
         try {
           await adjustCustomerPoints(customer.id, ptsDelta, ptsNote.trim() || "تعديل من المالك", uuid())
@@ -226,9 +235,19 @@ export function CustomerForm({
         {errors.phone ? (
           <p className="text-xs text-destructive">{errors.phone.message}</p>
         ) : !customer ? (
-          <p className="text-[11px] text-muted-foreground">بهذا الرقم يدخل الزبون تطبيق كوب لاحقاً وتظهر له نقاطه.</p>
+          <p className="text-[11px] text-muted-foreground">بهذا الرقم يدخل الزبون التطبيق وتظهر له نقاطه.</p>
         ) : null}
       </div>
+
+      {!customer && !offline ? (
+        <label className="flex items-center justify-between gap-3 rounded-xl border px-3 py-2.5" data-track="customer-send-app-link">
+          <span className="text-sm">
+            أرسل له رابط التطبيق برسالة
+            <span className="block text-[11px] text-muted-foreground">رسالة SMS واحدة — يفتح الرابط ويدخل مباشرة بدون رمز</span>
+          </span>
+          <Switch checked={sendLink} onCheckedChange={(v) => setSendLink(Boolean(v))} aria-label="أرسل رابط التطبيق" />
+        </label>
+      ) : null}
 
       {/* Creation stays minimal (name, phone, ذكر/أنثى); the photo and notes
           live in the edit form. Whether a customer is new, a regular or has

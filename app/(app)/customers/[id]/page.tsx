@@ -42,6 +42,7 @@ import { useIsOwner } from "@/lib/modules"
 import { cn } from "@/lib/utils"
 import { pointsValue } from "@/lib/points"
 import { usePointsRate } from "@/hooks/use-points-rate"
+import { AppBadge, SendAppLinkButton } from "@/components/customers/app-badge"
 
 const PAGE_SIZE = 12
 
@@ -270,10 +271,20 @@ function Hero({
               </>
             ) : null}
             <span>{female ? "زبونة" : "زبون"} منذ {formatDate(p?.joined ?? customer?.created_at)}</span>
-            {customer?.signed_up ? (
+            {customer ? (
               <>
                 <span aria-hidden>·</span>
-                <span>على التطبيق</span>
+                <AppBadge
+                  app={Boolean(customer.signed_up)}
+                  invitedAt={(customer as { app_invited_at?: string | null }).app_invited_at}
+                />
+                <SendAppLinkButton
+                  id={customer.id}
+                  name={customer.name}
+                  phone={customer.phone ?? ""}
+                  app={Boolean(customer.signed_up)}
+                  invitedAt={(customer as { app_invited_at?: string | null }).app_invited_at}
+                />
               </>
             ) : null}
           </p>

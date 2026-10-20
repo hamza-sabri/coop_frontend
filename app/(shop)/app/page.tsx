@@ -1,12 +1,8 @@
-import KoupApp from '@/components/KoupApp'
-import PhoneGate from '@/components/koup/PhoneGate'
+import KoupAppPhone from '@/components/koup/KoupAppPhone'
 
-/* Sign-up is by mobile number now: the staff register customers at the till
-   (name + number) and points count there. Google/Facebook sign-in on the web
-   is retired; the كوب app (Flutter, coming soon) will sign customers in with
-   that same number by SMS code and find their points.
-
-   So the web page is the menu behind a card that explains exactly that. */
+/* The customer app: sign in by mobile number (SMS code, or the link the staff
+   texted), then points, visits and profile. The session is per store, so the
+   same page serves every café on the platform. See lib/customer-session.ts. */
 export default function Page() {
-  return <KoupApp auth={{ locked: true, user: null, Gate: PhoneGate }} />
+  return <KoupAppPhone />
 }

@@ -35,6 +35,8 @@ export type CustomerRow = {
   gender: "male" | "female"
   /** Signed up in the app. */
   app: boolean
+  /** Last time the app link was texted to them (null = never). */
+  app_invited_at?: string | null
   visits: number
   visits_30d: number
   last_visit: string | null
@@ -49,3 +51,11 @@ export type CustomerRow = {
 /** Every customer with visits and status — the customers table. */
 export const customersTable = () =>
   customFetch<{ data: { results: CustomerRow[]; count: number }; status: number }>(`/api/v1/customers/table/`)
+
+export type SendAppLinkResult = { sent: boolean; dry_run?: boolean; invited_at?: string }
+
+/** Text the customer the app link — one SMS that also signs them in. */
+export const sendAppLink = (id: number) =>
+  customFetch<{ data: SendAppLinkResult; status: number }>(`/api/v1/customers/${id}/send-app-link/`, {
+    method: "POST",
+  })
