@@ -56,6 +56,9 @@ function tone(key: string): [string, string] {
 function toItem(r: ApiItem): Item {
   const price = Number(r.price)
   return {
+    // Without the id the server cannot price the order and refuses it
+    // ("الطلب قديم") — only the bundled offline menu should lack one.
+    id: r.id,
     c: r.category || "all",
     ar: r.name, en: r.name, he: r.name,
     dar: r.description, den: r.description, dhe: r.description,

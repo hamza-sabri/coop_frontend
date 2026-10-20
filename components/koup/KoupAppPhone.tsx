@@ -10,7 +10,9 @@ import PhoneSignIn from '@/components/koup/PhoneSignIn'
 import InstallPrompt from '@/components/koup/InstallPrompt'
 import HandoffCode from '@/components/koup/HandoffCode'
 import { clearShopMeCache, useShopMe } from '@/lib/koup-me'
-import { clearSession, loadSession, logoutSession, type CustomerSession } from '@/lib/customer-session'
+import { clearSession, loadSession, logoutSession, storeSlug, type CustomerSession } from '@/lib/customer-session'
+import { useKoupOrders } from '@/lib/koup-orders'
+import { publicOrdering } from '@/api/public'
 
 const API = process.env.NEXT_PUBLIC_API_BASE_URL ?? ''
 
@@ -37,6 +39,21 @@ export default function KoupAppPhone() {
   const uid = session ? `${session.store}:${session.customer.id}` : undefined
   const getToken = useCallback(async () => session?.token ?? null, [session])
   const { me, refresh: refreshMe } = useShopMe(uid, session ? getToken : undefined)
+
+  /* The menu is always there to browse. Ordering only while the shop takes
+     online orders — asked fresh on every visit (the switch is server-side),
+     and "closed" when the answer cannot be had: never take an order nobody
+     is watching for. */
+  const [ordering, setOrdering] = useState(false)
+  useEffect(() => {
+    let alive = true
+    publicOrdering(session?.store || storeSlug())
+      .then(r => { if (alive) setOrdering(Boolean(r.open)) })
+      .catch(() => { if (alive) setOrdering(false) })
+    return () => { alive = false }
+  }, [session?.store])
+  const { orders, live: liveOrder, past: pastOrders, place: placeOrder, refresh: refreshOrders } =
+    useKoupOrders(ordering ? uid : undefined, session ? getToken : undefined)
 
   /* A session the server no longer accepts (signed out elsewhere, expired,
      revoked) must drop back to the door instead of showing stale numbers. */
@@ -84,6 +101,8 @@ export default function KoupAppPhone() {
         refreshMe,
         hasPhone: true,
         club: { saveProfile, signOut, email: null },
+        menu: { canOrder: ordering && Boolean(session) },
+        ...(ordering ? { orders, liveOrder, pastOrders, placeOrder, refreshOrders } : {}),
       }}
     />
   )

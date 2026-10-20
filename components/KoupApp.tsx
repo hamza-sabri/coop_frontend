@@ -284,9 +284,12 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
      configured: with no keys the app simply runs open, which is what keeps
      local development working before the keys land. */
   const { locked: authLocked, user, Gate, openProfile, Account, Install, me, refreshMe, hasPhone, savePhone,
-          liveOrder, pastOrders, placeOrder, refreshOrders, club } = auth
-  /* The web page: points, visits and profile only. */
+          liveOrder, pastOrders, placeOrder, refreshOrders, club, menu } = auth
+  /* The web page: points, visits and profile — plus the menu when switched
+     on, and the basket only while the shop takes online orders. */
   const isClub = Boolean(club)
+  const showMenu = !isClub || Boolean(menu)
+  const canOrder = !isClub || Boolean(menu?.canOrder && placeOrder)
   const valueIls = me?.value_ils ?? '0'
 
   /* The real numbers. `me` is null while signed out, and briefly on a cold
@@ -660,7 +663,7 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
   function addToCart() {
     if (!sheetItem) return
     const base = nm(sheetItem, lang)
-    const pid = (sheetItem as any).id as number | undefined
+    const pid = sheetItem.id
 
     setLines(prev => {
       const next = prev.slice()
@@ -1495,7 +1498,7 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
               ))}
 
               {/* No options at all — one note for the drink. */}
-              {(sheetItem.v?.length ?? 0) === 0 && (
+              {canOrder && (sheetItem.v?.length ?? 0) === 0 && (
                 <label className="notefield">
                   <span>{t('it.note', 'ملاحظة (اختياري)')}</span>
                   <input type="text" value={picks[0]?.note ?? ''}
@@ -1504,6 +1507,14 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
                 </label>
               )}
 
+              {!canOrder ? (
+                <div className="sheet-foot">
+                  <p style={{ flex: 1, fontSize: 13, color: 'var(--app-ink3)', lineHeight: 1.6 }}>
+                    {t('it.counterOnly', 'الطلب من التطبيق قريباً — اطلبه من الكاونتر')}
+                  </p>
+                  <span className="price num" style={{ fontWeight: 700 }}>₪{itemTotal}</span>
+                </div>
+              ) : (
               <div className="sheet-foot">
                 <div className="qty">
                   <button onClick={() => { SFX.tap(); setQty(q => Math.max(1, q - 1)) }}>−</button>
@@ -1525,6 +1536,7 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
                   {!needsPick && <> · <span className="price">₪{itemTotal}</span></>}
                 </button>
               </div>
+              )}
             </>)}
           </div>
         </div>
@@ -1628,9 +1640,33 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
             <span>{t('nav.home', 'نقاطي')}</span>
           </button>
           <button className="tab" aria-current={screen === 'wallet'} onClick={() => go('wallet')}>
-            <Icon d={P.bag} />
+            <Icon d="M12 7v5l3 2M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Z" />
             <span>{t('club.navVisits', 'زياراتي')}</span>
           </button>
+          {showMenu && (
+            <button className="tab tab-new press"
+              aria-current={screen === 'menu'}
+              aria-label={canOrder ? t('nav.new', 'اطلب') : t('menu.h', 'المنيو')}
+              onClick={() => { SFX.tap(); haptic(12); newOrder() }}>
+              <span className="newring" aria-hidden />
+              <span className="newdot">
+                <svg viewBox="0 0 24 24" aria-hidden><path d="M12 5v14M5 12h14" /></svg>
+              </span>
+              <span>{canOrder ? t('nav.new', 'اطلب') : t('menu.h', 'المنيو')}</span>
+            </button>
+          )}
+          {canOrder && (
+            <button className="tab"
+              aria-current={screen === 'cart' || screen === 'track'}
+              onClick={() => go('cart')}>
+              <span className="tabic" key={cartBump}
+                data-jump={cartBump > 0 ? '1' : undefined}>
+                <Icon d={P.bag} />
+                {cartCount > 0 && <span className="tabcount num">{cartCount}</span>}
+              </span>
+              <span>{t('nav.orders', 'طلباتي')}</span>
+            </button>
+          )}
           <button className="tab" aria-current={screen === 'profile'} onClick={() => go('profile')}>
             <Icon d="M12 12a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9Zm-8 9a8 8 0 0 1 16 0" />
             <span>{t('club.navMe', 'حسابي')}</span>

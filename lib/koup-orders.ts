@@ -130,7 +130,13 @@ export function useKoupOrders(
         client_uuid,
       }),
     })
-    if (!r.ok) throw new Error(await r.text().catch(() => "order failed"))
+    if (!r.ok) {
+      // Show the server's words, not its JSON: {"items": "…"} → "…".
+      const body = await r.json().catch(() => null) as Record<string, unknown> | null
+      const first = (v: unknown): string =>
+        typeof v === "string" ? v : Array.isArray(v) ? first(v[0]) : v && typeof v === "object" ? first(Object.values(v)[0]) : ""
+      throw new Error((body && (first(body.detail) || first(body))) || "ما زبط الطلب — جرّب كمان مرة")
+    }
     const order = (await r.json()) as Order
     setOrders(prev => {
       const next = [order, ...prev.filter(o => o.id !== order.id)]

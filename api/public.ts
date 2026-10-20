@@ -22,8 +22,9 @@ export async function publicStats(): Promise<PublicStats> {
  * ordering off takes effect on the next page load rather than after the
  * menu's five-minute cache expires.
  */
-export async function publicOrdering(): Promise<{ open: boolean }> {
-  const res = await fetch(`${API_BASE}/api/v1/public/ordering/`, {
+export async function publicOrdering(store?: string): Promise<{ open: boolean }> {
+  const q = store ? `?store=${encodeURIComponent(store)}` : ""
+  const res = await fetch(`${API_BASE}/api/v1/public/ordering/${q}`, {
     headers: { Accept: "application/json" },
     cache: "no-store",
   })

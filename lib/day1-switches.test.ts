@@ -34,15 +34,17 @@ describe("online ordering is switched off end to end", () => {
     expect(src).toContain("enabled: ordersOn")
   })
 
-  it("the customer web page shows no cart at all (points, visits, profile)", () => {
-    // Sign-in by phone, then the club screens. No order props are passed, so
-    // nothing can be ordered from the web page until ordering is built for it.
+  it("the customer web page takes orders only while the server says ordering is open", () => {
+    // Sign-in by phone, then the club screens plus a browse-only menu. The
+    // order props are passed ONLY when GET /public/ordering/ answers open, and
+    // an unreachable server counts as closed.
     const page = code(read("app/(shop)/app/page.tsx"))
     expect(page).toContain("<KoupAppPhone />")
     const app = code(read("components/koup/KoupAppPhone.tsx"))
     expect(app).toContain("Gate: PhoneSignIn")
     expect(app).toContain("club: {")
-    expect(app).not.toContain("placeOrder")
+    expect(app).toContain("...(ordering ? { orders, liveOrder, pastOrders, placeOrder, refreshOrders } : {})")
+    expect(app).toContain(".catch(() => { if (alive) setOrdering(false) })")
   })
 
   it("the gate treats an unreachable server as closed", () => {

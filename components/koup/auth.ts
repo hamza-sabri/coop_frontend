@@ -42,6 +42,10 @@ export type KoupAuth = {
     },
   ) => Promise<Order | null>
   refreshOrders?: () => Promise<void> | void
+  /** The phone app (club mode) with the menu switched on. `canOrder` adds
+   *  the basket and checkout — only while the shop takes online orders
+   *  (GET /public/ordering/); otherwise the menu is browse-only. */
+  menu?: { canOrder: boolean }
   /** The web door (Firebase): points, visits and profile only — no menu, no
    *  ordering; those live in the Flutter app. */
   club?: {

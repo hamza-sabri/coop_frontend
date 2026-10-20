@@ -2,6 +2,8 @@
    `b` is the point price (≈ ₪ × 3.33) and is what the customer actually shops by. */
 export type Item = { c:string; ar:string; en:string; he:string; dar:string; den:string; dhe:string;
                      p:number; b:number; g:[string,string]; t:string[]; image?:string;
+                     /** The product's id on the server — orders are priced by it. */
+                     id?:number;
                      /** Options this drink is actually sold in, from the API. */
                      v?:{ id:number; label:string; price:number }[] }
 export type Cat  = { k:string; ar:string; en:string; he:string }
