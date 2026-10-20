@@ -97,7 +97,7 @@ async function post<T>(path: string, body: unknown, token?: string): Promise<T> 
 /** Local form 05XXXXXXXX, or null. Accepts +970 / +972 / spaces / dashes. */
 export function normalisePhone(raw: string): string | null {
   const digits = raw.replace(/[^\d+]/g, "").replace(/^\+/, "")
-  const local = digits.replace(/^(?:00)?9(?:70|72)/, "0").replace(/^(5\d{8})$/, "0$1")
+  const local = digits.replace(/^(?:00)?9(?:70|72)0?/, "0").replace(/^(5\d{8})$/, "0$1")
   return /^05\d{8}$/.test(local) ? local : null
 }
 

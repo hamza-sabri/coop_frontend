@@ -8,18 +8,14 @@ if (dsn) {
   Sentry.init({
     dsn,
     environment: process.env.NEXT_PUBLIC_SENTRY_ENVIRONMENT || "production",
-    // Keep the free tier healthy: sample traces, don't record every session.
-    tracesSampleRate: 0.1,
-    replaysSessionSampleRate: 0,
-    // Record a replay only when something actually breaks — that's the one
-    // we'd want to watch.
-    replaysOnErrorSampleRate: 1.0,
-    // A store's data is sensitive: never ship PII, and mask everything in
-    // replays (text + inputs + media).
+    // Errors only. No performance tracing and NO replay: Sentry's replay
+    // records every DOM change into a buffer all session long (even when it
+    // only uploads on error) and tracing wraps every fetch and navigation —
+    // together they made every page feel slow on the shop's devices.
+    // Clarity already gives masked recordings. (Leave tracesSampleRate out
+    // entirely: even 0 switches Sentry's tracing integration on.)
+    // A store's data is sensitive: never ship PII.
     sendDefaultPii: false,
-    integrations: [
-      Sentry.replayIntegration({ maskAllText: true, blockAllMedia: true }),
-    ],
     // Noise we can't act on: browser extensions, aborted requests, and the
     // offline-mode failures the app already handles gracefully.
     ignoreErrors: [

@@ -8,6 +8,9 @@ describe("customer phone sign-in", () => {
   it("accepts the ways people type a mobile number", () => {
     expect(normalisePhone("0599123456")).toBe("0599123456")
     expect(normalisePhone("+970 599 123 456")).toBe("0599123456")
+    expect(normalisePhone("972597968056")).toBe("0597968056")
+    expect(normalisePhone("9720597968056")).toBe("0597968056")
+    expect(normalisePhone("+970 0597968056")).toBe("0597968056")
     expect(normalisePhone("00972-52-123-4567")).toBe("0521234567")
     expect(normalisePhone("599123456")).toBe("0599123456")
     expect(normalisePhone("12345")).toBeNull()

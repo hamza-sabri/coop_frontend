@@ -17,7 +17,11 @@ import type { OverridedMixpanel } from "mixpanel-browser"
 
 import { getPharmacySlug } from "@/lib/site"
 
-const TOKEN = process.env.NEXT_PUBLIC_MIXPANEL_TOKEN ?? ""
+// Switched OFF (Oct 2026): the app felt laggy and the owner prefers speed over
+// usage stats. With this true nothing below runs: no script is downloaded, no
+// listener is added, every call is a no-op. Set to false to turn it back on.
+const KILL_SWITCH = false
+const TOKEN = KILL_SWITCH ? "" : (process.env.NEXT_PUBLIC_MIXPANEL_TOKEN ?? "")
 
 let mp: OverridedMixpanel | null = null
 let starting: Promise<OverridedMixpanel | null> | null = null
