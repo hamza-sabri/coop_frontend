@@ -42,7 +42,7 @@ import { useIsOwner } from "@/lib/modules"
 import { cn } from "@/lib/utils"
 import { pointsValue } from "@/lib/points"
 import { usePointsRate } from "@/hooks/use-points-rate"
-import { AppBadge, SendAppLinkButton } from "@/components/customers/app-badge"
+import { AppBadge, AppQrButton, SendAppLinkButton } from "@/components/customers/app-badge"
 
 const PAGE_SIZE = 12
 
@@ -285,6 +285,7 @@ function Hero({
                   app={Boolean(customer.signed_up)}
                   invitedAt={(customer as { app_invited_at?: string | null }).app_invited_at}
                 />
+                <AppQrButton id={customer.id} name={customer.name} app={Boolean(customer.signed_up)} />
               </>
             ) : null}
           </p>

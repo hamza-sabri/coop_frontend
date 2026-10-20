@@ -59,3 +59,10 @@ export const sendAppLink = (id: number) =>
   customFetch<{ data: SendAppLinkResult; status: number }>(`/api/v1/customers/${id}/send-app-link/`, {
     method: "POST",
   })
+
+/** A 5-minute sign-in QR for the customer screen — no SMS. */
+export const appQr = (id: number) =>
+  customFetch<{ data: { url: string; qr: string; expires_in: number }; status: number }>(
+    `/api/v1/customers/${id}/app-qr/`,
+    { method: "POST" },
+  )

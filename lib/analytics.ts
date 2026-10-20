@@ -30,11 +30,16 @@ export function initAnalytics(): Promise<OverridedMixpanel | null> {
   if (!TOKEN || typeof window === "undefined") return Promise.resolve(null)
   if (mp) return Promise.resolve(mp)
   if (starting) return starting
-  starting = import("mixpanel-browser")
+  // Nothing analytics-related runs until the page has loaded and the browser
+  // is idle: first paint, images and the till always come first.
+  starting = whenIdle()
+    .then(() => import("mixpanel-browser"))
     .then(({ default: mixpanel }) => {
       mixpanel.init(TOKEN, {
         // Our own "Page Viewed" carries a route template instead of a URL.
         track_pageview: false,
+        // Fewer, bigger uploads: one request every 15 s instead of every 5 s.
+        batch_flush_interval_ms: 15000,
         persistence: "localStorage",
         ip: false,
         // The real URL and referrers can carry search terms and names.
@@ -77,6 +82,18 @@ function safe(fn: () => void) {
   } catch {
     /* analytics must never break the app */
   }
+}
+
+function whenIdle(): Promise<void> {
+  return new Promise((resolve) => {
+    const go = () => {
+      const ric = (window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number })
+        .requestIdleCallback
+      window.setTimeout(() => (ric ? ric(() => resolve(), { timeout: 5000 }) : resolve()), 3000)
+    }
+    if (document.readyState === "complete") go()
+    else window.addEventListener("load", go, { once: true })
+  })
 }
 
 /** Run after the browser has painted and is idle, never inside a tap. */
@@ -200,6 +217,9 @@ export function startClickTracking() {
   document.addEventListener(
     "click",
     (e) => {
+      // The till taps all day and its sales are tracked as named events;
+      // recording every tap there is cost with no new information.
+      if (window.location.pathname.startsWith("/pos")) return
       const target = e.target instanceof Element ? e.target.closest(CLICKABLE) : null
       if (!target || target.closest("[data-mp-block]")) return
       const { label, kind } = clickLabel(target)

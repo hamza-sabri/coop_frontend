@@ -20,7 +20,7 @@ import { customersRetrieve } from "@/api/generated/customers/customers"
 import type { Customer } from "@/api/generated/model"
 import { ConfirmDelete } from "@/components/confirm-delete"
 import { StatusPill, ago } from "@/components/customers/status"
-import { AppBadge, SendAppLinkButton } from "@/components/customers/app-badge"
+import { AppBadge, AppQrButton, SendAppLinkButton } from "@/components/customers/app-badge"
 import { DataTable, type Column } from "@/components/data-table"
 import { Fab } from "@/components/fab"
 import { ErrorState } from "@/components/states"
@@ -95,6 +95,9 @@ export default function CustomersPage() {
               <span dir="ltr">{c.phone || "—"}</span>
               <span onClick={(e) => e.stopPropagation()}>
                 <SendAppLinkButton id={c.id} name={c.name} phone={c.phone} app={c.app} invitedAt={c.app_invited_at} />
+              </span>
+              <span onClick={(e) => e.stopPropagation()}>
+                <AppQrButton id={c.id} name={c.name} app={c.app} />
               </span>
             </p>
           </div>
@@ -248,8 +251,9 @@ export default function CustomersPage() {
               <div className="shrink-0 text-end">
                 <StatusPill status={c.status} female={c.gender === "female"} />
                 <p className="mt-1 text-[11px] tabular-nums text-muted-foreground">{formatNumber(c.points)} نقطة</p>
-                <span className="mt-1 inline-block" onClick={(e) => e.stopPropagation()}>
+                <span className="mt-1 inline-flex gap-1" onClick={(e) => e.stopPropagation()}>
                   <SendAppLinkButton id={c.id} name={c.name} phone={c.phone} app={c.app} invitedAt={c.app_invited_at} />
+                  <AppQrButton id={c.id} name={c.name} app={c.app} />
                 </span>
               </div>
             </div>
