@@ -14,6 +14,8 @@ if (dsn) {
     // together they made every page feel slow on the shop's devices.
     // Clarity already gives masked recordings. (Leave tracesSampleRate out
     // entirely: even 0 switches Sentry's tracing integration on.)
+    // Sentry adds performance tracing by default; drop it — errors only.
+    integrations: (defaults) => defaults.filter((i) => i.name !== "BrowserTracing"),
     // A store's data is sensitive: never ship PII.
     sendDefaultPii: false,
     // Noise we can't act on: browser extensions, aborted requests, and the

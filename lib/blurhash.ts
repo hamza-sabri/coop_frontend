@@ -102,7 +102,9 @@ export function placeholderFor(hash: string | null): string | null {
   if (hit !== undefined) return hit
   let url: string | null = null
   try {
-    const W = 32, H = 32
+    // 16px is plenty: the browser smooths it when stretched, and it is a
+    // quarter of the work of 32px.
+    const W = 16, H = 16
     const px = decode(hash, W, H)
     if (px) {
       const canvas = document.createElement("canvas")

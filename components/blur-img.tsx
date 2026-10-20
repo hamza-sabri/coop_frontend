@@ -39,6 +39,7 @@ export const BlurImg = forwardRef<HTMLImageElement, React.ImgHTMLAttributes<HTML
     return (
       // eslint-disable-next-line @next/next/no-img-element, jsx-a11y/alt-text
       <img
+        decoding="async"
         {...props}
         ref={(el) => {
           own.current = el

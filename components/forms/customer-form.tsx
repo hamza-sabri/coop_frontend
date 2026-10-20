@@ -32,6 +32,8 @@ const GENDERS: { value: GenderEnum; label: string }[] = [
 ]
 
 
+type AppLinkResult = { sent: boolean; dry_run?: boolean; detail?: string }
+
 export function CustomerForm({
   open,
   onOpenChange,
@@ -109,19 +111,29 @@ export function CustomerForm({
     setSendLink(true)
   }, [open, customer, reset])
 
+  function linkToast(link?: AppLinkResult) {
+    if (link?.sent) toast.success(link.dry_run ? "رابط التطبيق جاهز (وضع التجربة — لم تُرسل رسالة)" : "أُرسل رابط التطبيق برسالة SMS")
+    else if (link && !link.sent) toast.warning(`أُضيف الزبون، لكن لم تُرسل الرسالة: ${link.detail ?? ""}`)
+  }
+
   async function onSubmit(v: FormValues) {
     if (offline && !customer && !avatarFile) {
       try {
         const res = await sendOrQueue<Customer>(
           "customer",
           ENDPOINTS.customers,
-          { name: v.name.trim(), phone: v.phone.trim(), gender, gender_set: genderSet, status, notes: v.notes },
+          {
+            name: v.name.trim(), phone: v.phone.trim(), gender, gender_set: genderSet, status, notes: v.notes,
+            // Offline: queued with the customer and sent when it reaches the server.
+            send_app_link: sendLink && Boolean(v.phone.trim()),
+          },
           `زبون: ${v.name.trim()}`,
         )
         qc.invalidateQueries({ queryKey: ["customers"] })
         qc.invalidateQueries({ queryKey: ["customers-quick"] })
         if (res.status === "sent") {
           toast.success("تمت إضافة الزبون")
+          linkToast((res.data as unknown as { app_link?: AppLinkResult }).app_link)
           onSaved?.(res.data)
         } else {
           toast.success("حُفظ الزبون على الجهاز — يُرفع عند عودة الاتصال")
@@ -150,10 +162,7 @@ export function CustomerForm({
         },
         { avatar_file: avatarFile },
       )
-      const link = (res as unknown as { data?: { app_link?: { sent: boolean; dry_run?: boolean; detail?: string } } })
-        .data?.app_link
-      if (link?.sent) toast.success(link.dry_run ? "رابط التطبيق جاهز (وضع التجربة — لم تُرسل رسالة)" : "أُرسل رابط التطبيق برسالة SMS")
-      else if (link && !link.sent) toast.warning(`أُضيف الزبون، لكن لم تُرسل الرسالة: ${link.detail ?? ""}`)
+      linkToast((res as unknown as { data?: { app_link?: AppLinkResult } }).data?.app_link)
       if (customer && isOwner && ptsDelta !== 0) {
         try {
           await adjustCustomerPoints(customer.id, ptsDelta, ptsNote.trim() || "تعديل من المالك", uuid())
@@ -239,7 +248,7 @@ export function CustomerForm({
         ) : null}
       </div>
 
-      {!customer && !offline ? (
+      {!customer ? (
         <label className="flex items-center justify-between gap-3 rounded-xl border px-3 py-2.5" data-track="customer-send-app-link">
           <span className="text-sm">
             أرسل له رابط التطبيق برسالة
