@@ -35,6 +35,7 @@ import { SegmentedTabs, type SegmentedTab } from "@/components/segmented-tabs"
 import { Skeleton } from "@/components/ui/skeleton"
 import { hasModule, useModules, useOwnerState } from "@/lib/modules"
 import { businessToday } from "@/lib/period"
+import { track } from "@/lib/analytics"
 
 const TABS: (SegmentedTab & { pnl?: boolean })[] = [
   { id: "overview", label: "نظرة عامة" },
@@ -62,6 +63,11 @@ export default function ReportsPage() {
     if (t && TABS.some((x) => x.id === t)) setTab(t)
   }, [])
   const active = tabs.some((t) => t.id === tab) ? tab : tabs[0].id
+
+  // Which reports are actually read (product analytics, no figures sent).
+  useEffect(() => {
+    if (ownerState === "owner") track("Report Opened", { report: active })
+  }, [active, ownerState])
 
   function pick(id: string) {
     setTab(id)

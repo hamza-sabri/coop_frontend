@@ -47,6 +47,7 @@ import type { ReceiptData } from "@/lib/print/receipt"
 import { invalidateSaleData } from "@/lib/sale-queries"
 import { cn } from "@/lib/utils"
 import { hasModule, useModules } from "@/lib/modules"
+import { track } from "@/lib/analytics"
 
 /** The board, left to right. The last two are today's finished work: they sit
  *  ON the board rather than on a history page because "did #12 go out?" is a
@@ -131,6 +132,7 @@ function LiveBoard() {
     setBusy(o.id)
     try {
       await orderAdvance(o.id, status)
+      track("App Order Moved", { from: o.status, to: status })
       refresh()
       // Collecting an order rings it up as a sale and moves points; leaving
       // `collected` voids that sale and takes the points back. Either way the

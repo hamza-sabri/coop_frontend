@@ -109,6 +109,7 @@ import {
 } from "@/components/ui/table"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { CashDrawerButton } from "@/components/pos/cash-drawer"
+import { track } from "@/lib/analytics"
 
 type Pos = ReturnType<typeof usePosCarts>
 
@@ -331,6 +332,13 @@ function useCheckout(pos: Pos, onDone?: () => void) {
       }
     },
     onSuccess: ({ res, snapshot, forcePrint, edited }) => {
+      track(edited ? "Sale Edited" : snapshot.isReturn ? "Return Completed" : "Sale Completed", {
+        payment: snapshot.paymentMethod,
+        lines: snapshot.items.length,
+        has_customer: Boolean(snapshot.customerName),
+        queued_offline: res.status !== "synced",
+        printed: forcePrint || loadPrintSettings().autoPrint,
+      })
       const settings = loadPrintSettings()
       const wantPrint = forcePrint || settings.autoPrint
       // One toast per checkout, keyed so the printing result can be written

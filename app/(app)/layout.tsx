@@ -14,6 +14,7 @@ import { PageHeaderProvider } from "@/components/page-header"
 import { OrdersLiveProvider } from "@/components/orders/orders-live"
 import { CustomersLive } from "@/components/customers/customers-live"
 import { SyncModeBanner } from "@/components/offline/sync-mode-banner"
+import { AnalyticsTracker } from "@/components/analytics-tracker"
 
 export default function AppLayout({
   children,
@@ -53,6 +54,7 @@ export default function AppLayout({
           <DemoBanner />
           <TourFromQuery />
           <CustomersLive />
+          <AnalyticsTracker />
         </TourProvider>
         </OrdersLiveProvider>
       </LockedFeatureProvider>

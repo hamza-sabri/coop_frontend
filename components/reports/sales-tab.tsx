@@ -34,6 +34,7 @@ import { cn } from "@/lib/utils"
 
 import { LockedReportsTeaser } from "@/components/reports/reports-teaser"
 import { Skeleton } from "@/components/ui/skeleton"
+import { track } from "@/lib/analytics"
 
 function KpiCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
@@ -155,6 +156,7 @@ export function SalesTab({ days, unlocked }: { days: number; unlocked: boolean }
     setExporting(true)
     try {
       await downloadSalesReport(days)
+      track("Report Exported", { report: "sales", days })
       toast.success("تم تنزيل تقرير المبيعات")
     } catch {
       toast.error("تعذر تنزيل التقرير")

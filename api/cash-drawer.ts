@@ -1,5 +1,6 @@
 /* The till's cash drawer — see apps/store/cash_drawer.py. */
 import { customFetch } from "@/api/http"
+import { track } from "@/lib/analytics"
 
 type Env<T> = { data: T; status: number }
 const json = (method: string, body: unknown): RequestInit => ({
@@ -76,16 +77,26 @@ export type CashDrawerState = { open: CashSession | null; history: CashSession[]
 
 export const fetchCashDrawer = () => customFetch<Env<CashDrawerState>>(`/api/v1/cash-drawer/`)
 export const openCashDrawer = (body: { counts?: Counts; opening_amount?: string; opened_by?: number | null }) =>
-  customFetch<Env<CashSession>>(`/api/v1/cash-drawer/open/`, json("POST", body))
+  customFetch<Env<CashSession>>(`/api/v1/cash-drawer/open/`, json("POST", body)).then((r) => {
+    track("Cash Drawer Opened", { counted_by_notes: Boolean(body.counts) })
+    return r
+  })
 export const moveCash = (amount: string, direction: "in" | "out", note: string) =>
-  customFetch<Env<CashSession>>(`/api/v1/cash-drawer/move/`, json("POST", { amount, direction, note }))
+  customFetch<Env<CashSession>>(`/api/v1/cash-drawer/move/`, json("POST", { amount, direction, note })).then((r) => {
+    track("Cash Moved", { direction })
+    return r
+  })
 export const closeCashDrawer = (body: {
   counts?: Counts
   counted_amount?: string
   card_counted?: string
   closed_by?: number | null
   note: string
-}) => customFetch<Env<CashSession>>(`/api/v1/cash-drawer/close/`, json("POST", body))
+}) =>
+  customFetch<Env<CashSession>>(`/api/v1/cash-drawer/close/`, json("POST", body)).then((r) => {
+    track("Cash Drawer Closed", { counted_by_notes: Boolean(body.counts), card_counted: Boolean(body.card_counted) })
+    return r
+  })
 export const cashDrawerHistory = (page = 1) =>
   customFetch<Env<{ count: number; page: number; page_size: number; results: CashSession[] }>>(
     `/api/v1/cash-drawer/history/?page=${page}`,

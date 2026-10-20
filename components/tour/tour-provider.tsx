@@ -16,6 +16,7 @@ import { useQueryClient } from "@tanstack/react-query"
 import { ArrowLeft, ArrowRight, Check, FlaskConical, X } from "lucide-react"
 
 import { getTour, type Tour, type TourStep } from "@/lib/tour/tours"
+import { track } from "@/lib/analytics"
 import { startTourDemo, endTourDemo, markTourExit } from "@/lib/tour/demo"
 import { setGuideLive } from "@/lib/tour/guide-live"
 import { isGuestDemo } from "@/lib/demo/guest"
@@ -188,6 +189,7 @@ export function TourProvider({ children }: { children: ReactNode }) {
     (id: string) => {
       const t = getTour(id)
       if (!t) return
+      track("Tutorial Started", { tour: id, mode: t.mode ?? "demo" })
       if (t.mode === "live") {
         // The real screens, read-only: every write is refused while it runs.
         setGuideLive(true)

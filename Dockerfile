@@ -111,6 +111,12 @@ ENV NEXT_PUBLIC_SENTRY_ENVIRONMENT=$NEXT_PUBLIC_SENTRY_ENVIRONMENT
 ARG NEXT_PUBLIC_CLARITY_ID=
 ENV NEXT_PUBLIC_CLARITY_ID=$NEXT_PUBLIC_CLARITY_ID
 
+# Mixpanel PROJECT token — public by design (it ships in the browser bundle).
+# Next inlines NEXT_PUBLIC_* at build time, so without this ARG a token set in
+# Dokploy's build args is silently dropped and no analytics are sent.
+ARG NEXT_PUBLIC_MIXPANEL_TOKEN=
+ENV NEXT_PUBLIC_MIXPANEL_TOKEN=$NEXT_PUBLIC_MIXPANEL_TOKEN
+
 # Source-map upload. Deliberately NOT defaulted like the two above: unlike a
 # client DSN this is a real credential that can write to the Sentry org, so it
 # must not live in git. It has to come from Dokploy's BUILD ARGS field (the

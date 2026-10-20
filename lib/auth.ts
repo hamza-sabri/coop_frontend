@@ -5,6 +5,7 @@ import type { User } from "@/api/generated/model"
 import { clearOfflineCaches } from "@/lib/offline/catalog-cache"
 import { getPharmacySlug } from "@/lib/site"
 import { setTokens, clearTokens, getRefreshToken } from "@/lib/tokens"
+import { resetAnalytics } from "@/lib/analytics"
 
 export type SessionUser = User & {
   store_slug?: string
@@ -49,6 +50,7 @@ export async function logout(): Promise<void> {
     // Ignore network/blacklist errors — we clear locally regardless.
   } finally {
     clearTokens()
+    resetAnalytics()
     await clearOfflineCaches()
   }
 }

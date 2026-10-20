@@ -55,6 +55,7 @@ import {
 import { getRecipe, listItems, saveRecipes, type InventoryItem } from "@/api/inventory"
 import { SegmentedTabs } from "@/components/segmented-tabs"
 import { cn } from "@/lib/utils"
+import { track } from "@/lib/analytics"
 import type { Product } from "@/api/generated/model"
 
 type Kind = "size" | "flavour" | "pack"
@@ -185,7 +186,10 @@ function DrinkPhoto({
         const f = Array.from(e.dataTransfer.files).find((x) =>
           x.type.startsWith("image/"),
         )
-        if (f) onPick(f)
+        if (f) {
+          track("Photo Added", { source: "drop" })
+          onPick(f)
+        }
       }}
       className={cn(
         "relative grid aspect-square w-full place-items-center overflow-hidden rounded-3xl border-2 border-dashed bg-muted/40 transition",
@@ -232,7 +236,10 @@ function DrinkPhoto({
         hidden
         onChange={(e) => {
           const f = e.target.files?.[0]
-          if (f) onPick(f)
+          if (f) {
+            track("Photo Added", { source: "camera" })
+            onPick(f)
+          }
           e.target.value = ""
         }}
       />
@@ -243,7 +250,10 @@ function DrinkPhoto({
         hidden
         onChange={(e) => {
           const f = e.target.files?.[0]
-          if (f) onPick(f)
+          if (f) {
+            track("Photo Added", { source: "gallery" })
+            onPick(f)
+          }
           e.target.value = ""
         }}
       />
