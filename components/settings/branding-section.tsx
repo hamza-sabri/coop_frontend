@@ -12,6 +12,7 @@ import { SettingsCard } from "@/components/settings/kit"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { BlurImg } from "@/components/blur-img"
 
 const LS_KEY = "pharma_branding_v1"
 
@@ -76,7 +77,7 @@ export function BrandingSection() {
           >
             {shownLogo ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={shownLogo} alt="" className="size-full object-contain" />
+              <BlurImg src={shownLogo} alt="" className="size-full object-contain" />
             ) : (
               <BrandMark className="size-10 opacity-60" />
             )}
@@ -114,7 +115,7 @@ export function BrandingSection() {
           <div className="mx-auto mb-2 grid size-12 place-items-center overflow-hidden">
             {shownLogo ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={shownLogo} alt="" className="size-full object-contain grayscale" />
+              <BlurImg src={shownLogo} alt="" className="size-full object-contain grayscale" />
             ) : (
               <BrandMark className="size-9 opacity-70" />
             )}

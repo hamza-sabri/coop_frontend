@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
+import { BlurImg } from "@/components/blur-img"
 
 /** One photo in the picker. A `file` = new upload; an `existingId` = a photo
  *  already saved on the product (gallery). Plain `url` with neither = a
@@ -175,7 +176,7 @@ export function MedicationImages({
                   )}
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={p.url} alt="" loading="lazy" decoding="async" className="size-full object-cover" />
+                  <BlurImg src={p.url} alt="" loading="lazy" decoding="async" className="size-full object-cover" />
                   <button
                     type="button"
                     aria-label="اجعلها الصورة الرئيسية"

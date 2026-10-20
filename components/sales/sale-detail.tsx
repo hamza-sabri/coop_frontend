@@ -25,6 +25,7 @@ import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { payLabel } from "@/lib/payment"
 import { useCanDeleteSales } from "@/lib/modules"
+import { BlurImg } from "@/components/blur-img"
 
 export function SaleDetail({
   sale: given,
@@ -132,7 +133,7 @@ export function SaleDetail({
                 <div className="flex items-center gap-3">
                   <span className="bg-brand-gradient grid size-12 shrink-0 place-items-center overflow-hidden rounded-full text-lg font-bold text-white ring-2 ring-white/20">
                     {(sale as { customer_avatar?: string }).customer_avatar ? (
-                      <img
+                      <BlurImg
                         src={(sale as { customer_avatar?: string }).customer_avatar}
                         alt=""
                         className="size-full object-cover"

@@ -37,6 +37,7 @@ import { useCanEditPrices, useIsOwner } from "@/lib/modules"
 import { ENDPOINTS, remove } from "@/lib/mutate"
 import { cn } from "@/lib/utils"
 import { matches } from "@/lib/search"
+import { BlurImg } from "@/components/blur-img"
 
 const NO_CATEGORY = "بلا تصنيف"
 
@@ -288,7 +289,7 @@ function MenuCard({
       <div className="relative aspect-[4/3] overflow-hidden bg-brand-soft">
         {p.image ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img
+          <BlurImg
             src={p.image}
             alt=""
             loading="lazy"

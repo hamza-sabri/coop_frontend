@@ -13,6 +13,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { KoupAuth } from '@/components/koup/auth'
 import { gsap } from 'gsap'
 import { Cup } from '@/lib/cup'
+import { cssBackgroundWithBlur } from '@/lib/blurhash'
 import { SFX, haptic } from '@/lib/sfx'
 import { readPrefs, writePrefs } from '@/lib/koup-prefs'
 import { usePullToRefresh } from '@/lib/use-pull-to-refresh'
@@ -119,7 +120,7 @@ function ProductCard({ m, i, lang, onOpen }:
   return (
     <article className="pcard" onClick={onOpen} data-img={img ? '1' : '0'}
       style={{ ['--c' as any]: m.g[1], ['--c0' as any]: m.g[0], ['--i' as any]: i,
-               ...(img ? { ['--img' as any]: `url(${img})` } : {}) }}>
+               ...(img ? { ['--img' as any]: cssBackgroundWithBlur(img) } : {}) }}>
       <div className="pcard-bg" />
       <div className="pcard-glow" />
       {/* A specular sweep tied to scroll position: the card catches the light

@@ -17,6 +17,7 @@ import { formatMoney, formatNumber, toNumber } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { Bars } from "@/components/charts"
 import { matches } from "@/lib/search"
+import { BlurImg } from "@/components/blur-img"
 
 type Sort = "qty" | "profit" | "margin" | "dead"
 
@@ -204,7 +205,7 @@ export function ItemsTab({ q, onOpenItem }: { q: PnlQuery; onOpenItem: (id: numb
 function Thumb({ src }: { src: string }) {
   return src ? (
     // eslint-disable-next-line @next/next/no-img-element
-    <img src={src} alt="" className="size-9 shrink-0 rounded-lg bg-muted object-cover" />
+    <BlurImg src={src} alt="" className="size-9 shrink-0 rounded-lg bg-muted object-cover" />
   ) : (
     <span className="size-9 shrink-0 rounded-lg bg-muted" />
   )

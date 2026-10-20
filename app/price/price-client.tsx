@@ -17,6 +17,7 @@ import { PriceQrDialog } from "@/components/reports/price-qr-card"
 import { ProductShareButton } from "@/components/price/product-share"
 import { BottomNav } from "@/components/bottom-nav"
 import { LockedFeatureProvider } from "@/components/locked-feature"
+import { BlurImg } from "@/components/blur-img"
 
 type PriceResult = {
   found: boolean
@@ -359,7 +360,7 @@ export default function PriceClient() {
         <div className="flex items-center gap-2 rounded-full bg-black/45 py-1.5 pe-3 ps-1.5 text-white backdrop-blur">
           {branding?.logo ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={branding.logo} alt="" className="size-7 rounded-full bg-white object-contain p-0.5" />
+            <BlurImg src={branding.logo} alt="" className="size-7 rounded-full bg-white object-contain p-0.5" />
           ) : (
             <span className="grid size-7 place-items-center rounded-full bg-white">
               <BrandMark className="size-5" />
@@ -464,7 +465,7 @@ export default function PriceClient() {
                       <div className="grid w-full shrink-0 snap-center place-items-center p-6">
                         {branding?.logo ? (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={branding.logo} alt="" className="max-h-full max-w-[60%] object-contain opacity-90" />
+                          <BlurImg src={branding.logo} alt="" className="max-h-full max-w-[60%] object-contain opacity-90" />
                         ) : (
                           <BrandMark className="size-28 opacity-80" />
                         )}
@@ -480,7 +481,7 @@ export default function PriceClient() {
                         >
                           {m.type === "image" ? (
                             // eslint-disable-next-line @next/next/no-img-element
-                            <img src={m.url} alt="" className="h-full w-full object-contain" />
+                            <BlurImg src={m.url} alt="" className="h-full w-full object-contain" />
                           ) : (
                             <VideoPlayer url={m.url} fit="cover" className="h-full w-full" />
                           )}
@@ -607,7 +608,7 @@ export default function PriceClient() {
                     >
                       {s.image ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={s.image} alt="" className="size-12 shrink-0 rounded-2xl border object-cover" />
+                        <BlurImg src={s.image} alt="" className="size-12 shrink-0 rounded-2xl border object-cover" />
                       ) : (
                         <span className="grid size-12 shrink-0 place-items-center rounded-2xl bg-muted">
                           <Package className="size-5 text-muted-foreground" />

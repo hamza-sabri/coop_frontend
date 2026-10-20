@@ -5,6 +5,7 @@ import { useState } from "react"
 import { useBranding } from "@/hooks/use-branding"
 import { DEFAULT_ICON_192 } from "@/lib/branding"
 import { cn } from "@/lib/utils"
+import { BlurImg } from "@/components/blur-img"
 
 /**
  * The app icon — the tenant store's own logo when it has one, else the
@@ -18,7 +19,7 @@ export function BrandMark({ className }: { className?: string }) {
   const custom = !broken && Boolean(logo)
   return (
     // eslint-disable-next-line @next/next/no-img-element
-    <img
+    <BlurImg
       src={custom ? logo : DEFAULT_ICON_192}
       alt=""
       aria-hidden="true"

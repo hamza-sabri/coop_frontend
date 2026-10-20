@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import { BlurImg } from "@/components/blur-img"
 
 /**
  * A single image field that accepts EITHER a URL or an uploaded file.
@@ -49,7 +50,7 @@ export function ImageField({
         >
           {preview ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={preview} alt="" className="size-full object-cover" />
+            <BlurImg src={preview} alt="" className="size-full object-cover" />
           ) : (
             <ImagePlus className="size-5" />
           )}

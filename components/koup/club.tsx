@@ -10,6 +10,7 @@ import { createPortal } from 'react-dom'
 import { gsap } from 'gsap'
 import type { ShopMe, ShopPurchase } from '@/lib/koup-me'
 import { SFX, haptic } from '@/lib/sfx'
+import { BlurImg } from "@/components/blur-img"
 
 const fmtDay = (iso: string) =>
   new Date(iso).toLocaleDateString('ar', { weekday: 'long', day: 'numeric', month: 'long' })
@@ -108,7 +109,7 @@ function VisitCard({ p, i, onOpen }: { p: ShopPurchase; i: number; onOpen: () =>
           <div className="vcard-thumbs">
             {rest.slice(0, 4).map((it, k) => (
               <span key={k} className="vcard-thumb" title={it.name}>
-                {it.image ? <img src={it.image} alt={it.name} loading="lazy" /> : '☕'}
+                {it.image ? <BlurImg src={it.image} alt={it.name} loading="lazy" /> : '☕'}
               </span>
             ))}
             {rest.length > 4 && <span className="vcard-thumb vcard-more num">+{rest.length - 4}</span>}
@@ -174,7 +175,7 @@ function VisitSheet({ p, onClose }: { p: ShopPurchase; onClose: () => void }) {
           {p.items.map((it, k) => (
             <li key={k} className="vs-line">
               <span className="vs-img">
-                {it.image ? <img src={it.image} alt="" loading="lazy" /> : '☕'}
+                {it.image ? <BlurImg src={it.image} alt="" loading="lazy" /> : '☕'}
               </span>
               <span className="vs-name">
                 <b>{it.name}</b>
@@ -281,7 +282,7 @@ export function ClubProfile({
       <div className="club-id">
         <div className="club-avatar">
           {avatar
-            ? <img src={avatar} alt="" referrerPolicy="no-referrer" />
+            ? <BlurImg src={avatar} alt="" referrerPolicy="no-referrer" />
             : <span>{(name || fallbackName || 'ك')[0]}</span>}
         </div>
         <div className="club-id-t">

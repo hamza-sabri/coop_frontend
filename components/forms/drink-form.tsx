@@ -57,6 +57,7 @@ import { SegmentedTabs } from "@/components/segmented-tabs"
 import { cn } from "@/lib/utils"
 import { track } from "@/lib/analytics"
 import type { Product } from "@/api/generated/model"
+import { BlurImg } from "@/components/blur-img"
 
 type Kind = "size" | "flavour" | "pack"
 type PriceMode = "abs" | "delta"
@@ -199,7 +200,7 @@ function DrinkPhoto({
       {preview ? (
         <>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={preview} alt="" className="size-full object-cover" />
+          <BlurImg src={preview} alt="" className="size-full object-cover" />
           <button
             type="button"
             onClick={onClear}

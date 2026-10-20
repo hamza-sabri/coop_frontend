@@ -110,6 +110,7 @@ import {
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { CashDrawerButton } from "@/components/pos/cash-drawer"
 import { track } from "@/lib/analytics"
+import { BlurImg } from "@/components/blur-img"
 
 type Pos = ReturnType<typeof usePosCarts>
 
@@ -1499,7 +1500,7 @@ function ProductTile({
       <Card className="card-interactive relative flex aspect-[4/5] h-full flex-col justify-end gap-0 overflow-hidden p-0 transition group-active:scale-[0.97]">
         {img ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img
+          <BlurImg
             src={img}
             alt=""
             loading="lazy"
@@ -2277,7 +2278,7 @@ function PosPageInner() {
             <aside className="relative hidden flex-col justify-end overflow-hidden bg-muted/40 md:flex">
               {variantPicker?.med.image ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img
+                <BlurImg
                   src={(variantPicker.med as { image?: string }).image}
                   alt=""
                   className="absolute inset-0 size-full object-cover"
