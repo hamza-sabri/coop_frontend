@@ -4,11 +4,11 @@
 import { customFetch } from "@/api/http"
 
 export type AppSound = "coop" | "chime" | "bell" | "off"
-export type AppSettings = { sound: AppSound; sounds: AppSound[] }
+export type AppSettings = { sound: AppSound; pour: boolean; sounds: AppSound[] }
 
 export const getAppSettings = () => customFetch<{ data: AppSettings }>(`/api/v1/store/app-settings/`)
 
-export const saveAppSettings = (body: Partial<Pick<AppSettings, "sound">>) =>
+export const saveAppSettings = (body: Partial<Pick<AppSettings, "sound" | "pour">>) =>
   customFetch<{ data: AppSettings }>(`/api/v1/store/app-settings/`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },

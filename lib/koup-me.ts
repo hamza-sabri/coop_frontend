@@ -54,6 +54,8 @@ export type ShopPurchase = {
 
 export type ShopMe = {
   synced: boolean
+  /** The shop's app switches (owner settings). */
+  app?: { sound?: string; pour?: boolean }
   name?: string
   profile?: ShopProfile
   purchases?: ShopPurchase[]

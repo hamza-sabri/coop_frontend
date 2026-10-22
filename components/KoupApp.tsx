@@ -232,6 +232,8 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
      the same hydration reason as the language above. */
   const [sound, setSound] = useState(true)
   useEffect(() => { setSound(SFX.enabled()) }, [])
+  const [pour, setPour] = useState(true)
+  useEffect(() => { setPour(readPrefs().pour !== false) }, [])
   const [splashUp, setSplashUp] = useState(true)
   const [topBar, setTopBar] = useState(false)
   // The gate waits for the opening to finish. Blurring the app while the cup
@@ -476,8 +478,11 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
       introRef.current = true
       setSplashUp(false); setIntroDone(true)
       mount()
-      if (readPrefs().seenIntro === true) {
-        // Seen the pour before: hand over a full cup and the real balance.
+      /* The pour plays on EVERY launch now (it used to be first-run only, which
+         is why it seemed to work "sometimes"). The customer can switch it off
+         in settings, and the owner can switch it off for everyone. */
+      const p = readPrefs()
+      if (p.pour === false || p.shopPour === false) {
         restState()
       } else {
         writePrefs({ seenIntro: true })
@@ -571,6 +576,11 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
 
   /* The drawn cup fills to the customer's REAL balance. beansRef started at
      the 248 literal, so the cup poured to a stranger's number. */
+  // Remember the shop's pour switch for the next launch's opening.
+  useEffect(() => {
+    if (typeof me?.app?.pour === 'boolean') writePrefs({ shopPour: me.app.pour })
+  }, [me?.app?.pour])
+
   useEffect(() => {
     if (!me) return
     beansRef.current = me.beans
@@ -891,6 +901,14 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
                 <button className="setswitch" aria-pressed={sound}
                   onClick={() => { setSound(SFX.toggle()); SFX.tap() }}>
                   {sound ? t('set.on', 'مفتوح') : t('set.off', 'مكتوم')}
+                </button>
+              </div>
+
+              <div className="setrow">
+                <span>{t('set.pour', 'حركة الكوب عند الفتح')}</span>
+                <button className="setswitch" aria-pressed={pour}
+                  onClick={() => { const v = !pour; setPour(v); writePrefs({ pour: v }); SFX.tap() }}>
+                  {pour ? t('set.on', 'مفتوح') : t('set.offPlain', 'مطفي')}
                 </button>
               </div>
 

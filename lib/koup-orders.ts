@@ -44,6 +44,16 @@ export type Order = {
 /** Anything not in this set is finished business — history, not a live order. */
 export const LIVE_STATUSES = new Set(["placed", "accepted", "preparing", "ready"])
 
+/** Live = still moving AND from today's service. An order accepted days ago
+ *  and never marked collected is history, not "on its way" — otherwise it
+ *  sits on top of home forever and keeps the app polling. */
+const STALE_MS = 12 * 60 * 60 * 1000
+export function isLiveOrder(o: Pick<Order, "status" | "created_at">, now = Date.now()): boolean {
+  if (!LIVE_STATUSES.has(o.status)) return false
+  const at = Date.parse(o.created_at)
+  return Number.isNaN(at) || now - at < STALE_MS
+}
+
 function readCache(uid: string): Order[] {
   try {
     const raw = localStorage.getItem(CACHE)
@@ -95,7 +105,7 @@ export function useKoupOrders(
      then. A finished list does not change on its own, and a café's wifi is
      not worth spending on a request that can only return the same thing. */
   useEffect(() => {
-    if (!orders.some(o => LIVE_STATUSES.has(o.status))) return
+    if (!orders.some(o => isLiveOrder(o))) return
     const id = window.setInterval(() => { void refresh() }, 20_000)
     return () => window.clearInterval(id)
   }, [orders, refresh])
@@ -149,8 +159,8 @@ export function useKoupOrders(
     return order
   }, [uid, getToken])
 
-  const live = orders.find(o => LIVE_STATUSES.has(o.status)) ?? null
-  const past = orders.filter(o => !LIVE_STATUSES.has(o.status))
+  const live = orders.find(o => isLiveOrder(o)) ?? null
+  const past = orders.filter(o => !isLiveOrder(o))
 
   return { orders, live, past, loading, refresh, place }
 }
