@@ -36,8 +36,9 @@ export function StaffPushCard({ compact = false }: { compact?: boolean }) {
         <Button
           size="sm"
           onClick={async () => {
-            const ok = await enable()
-            toast[ok ? "success" : "warning"](ok ? "تمام — رح يوصلك تنبيه مع كل طلب جديد" : "ما زبط التفعيل")
+            const r = await enable()
+            if (r.ok) toast.success("تمام — رح يوصلك تنبيه مع كل طلب جديد")
+            else toast.error(r.error || "ما زبط التفعيل", { duration: 12000 })
           }}
         >
           فعّل

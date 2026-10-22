@@ -15,11 +15,12 @@ const API = process.env.NEXT_PUBLIC_API_BASE_URL ?? ""
 
 export type PushState = "unsupported" | "denied" | "off" | "on" | "needs-install"
 
-function b64ToBytes(b64: string): Uint8Array {
+function b64ToBytes(raw: string): Uint8Array {
+  const b64 = raw.trim().replace(/^["']|["']$/g, "")
   const pad = "=".repeat((4 - (b64.length % 4)) % 4)
-  const raw = atob((b64 + pad).replace(/-/g, "+").replace(/_/g, "/"))
-  const out = new Uint8Array(raw.length)
-  for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i)
+  const bin = atob((b64 + pad).replace(/-/g, "+").replace(/_/g, "/"))
+  const out = new Uint8Array(bin.length)
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i)
   return out
 }
 
@@ -40,11 +41,15 @@ function standalone(): boolean {
   }
 }
 
-async function registration(): Promise<ServiceWorkerRegistration | null> {
+async function registration(wait = 0): Promise<ServiceWorkerRegistration | null> {
   try {
-    // getRegistration, not .ready: .ready never settles where no worker is
-    // registered (development), and a tap must never hang on it.
-    return (await navigator.serviceWorker.getRegistration()) ?? null
+    // getRegistration first: .ready never settles where no worker is
+    // registered (development), and a tap must never hang on it. Subscribing
+    // needs an ACTIVE worker, so a tap waits a little for one that's installing.
+    const r = await navigator.serviceWorker.getRegistration()
+    if (r?.active || !wait) return r ?? null
+    const timeout = new Promise<null>((ok) => setTimeout(() => ok(null), wait))
+    return await Promise.race([navigator.serviceWorker.ready, timeout])
   } catch {
     return null
   }
@@ -95,13 +100,20 @@ export function useKoupPush(token: string | null | undefined) {
     try {
       const perm = await Notification.requestPermission()
       if (perm !== "granted") { setState(perm === "denied" ? "denied" : "off"); return false }
-      const reg = await registration()
+      const reg = await registration(8000)
       if (!reg) return false
+      const want = b64ToBytes(key)
       let sub = await reg.pushManager.getSubscription()
+      // A subscription made with an older key can't receive our pushes: replace it.
+      const have = sub?.options?.applicationServerKey
+      if (sub && have && !sameBytes(new Uint8Array(have), want)) {
+        await sub.unsubscribe().catch(() => {})
+        sub = null
+      }
       if (!sub) {
         sub = await reg.pushManager.subscribe({
           userVisibleOnly: true,
-          applicationServerKey: b64ToBytes(key) as unknown as BufferSource,
+          applicationServerKey: want as unknown as BufferSource,
         })
       }
       const ok = await send(token, sub)
@@ -114,6 +126,12 @@ export function useKoupPush(token: string | null | undefined) {
   }, [key, token])
 
   return { state, enable, sound }
+}
+
+function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
+  if (a.length !== b.length) return false
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false
+  return true
 }
 
 async function send(token: string, sub: PushSubscription): Promise<boolean> {
