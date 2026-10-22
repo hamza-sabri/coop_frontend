@@ -4,14 +4,53 @@
 
    A café counter is loud, and the old cue — two soft notes, once — was missed
    whenever nobody was looking at the screen. This one is a real sound file
-   (public/sounds/order-alarm.wav: a bright ring, then a pause) played at full
+   (public/sounds/alarm-*.{mp3,wav}, picked per device in Settings) played at full
    volume ON A LOOP until someone taps "seen" or the order is accepted.
 
    Its own mute switch (not the till's scan-beep mute): silencing the scanner
    must never silence orders. */
 
 const MUTE_KEY = "sijilli.alarm.muted"
-const SRC = "/sounds/order-alarm.wav"
+const SOUND_KEY = "sijilli.alarm.sound"
+
+/** The ringtones a counter can pick (public/sounds/alarm-<id>.wav). Per
+ *  device, like the mute: the counter tablet and a phone can differ. */
+export const ALARM_SOUNDS = [
+  // "Clear announce tones" (Mixkit, free licence), made louder — the default.
+  { id: "announce", label: "تنبيه الإعلان", file: "/sounds/alarm-announce.mp3" },
+  { id: "ring", label: "رنين", file: "/sounds/alarm-ring.wav" },
+  { id: "bell", label: "جرس الكاونتر", file: "/sounds/alarm-bell.wav" },
+  { id: "kitchen", label: "صفارة مطبخ", file: "/sounds/alarm-kitchen.wav" },
+  { id: "marimba", label: "نغمة", file: "/sounds/alarm-marimba.wav" },
+  { id: "siren", label: "إنذار", file: "/sounds/alarm-siren.wav" },
+] as const
+export type AlarmSound = (typeof ALARM_SOUNDS)[number]["id"]
+
+export function alarmSound(): AlarmSound {
+  try {
+    const v = window.localStorage.getItem(SOUND_KEY)
+    if (ALARM_SOUNDS.some((x) => x.id === v)) return v as AlarmSound
+  } catch {
+    /* default */
+  }
+  return "announce"
+}
+
+export function setAlarmSound(id: AlarmSound) {
+  try {
+    window.localStorage.setItem(SOUND_KEY, id)
+  } catch {
+    /* private mode */
+  }
+  const wasRinging = ringing && audio && !audio.paused
+  if (audio) {
+    audio.pause()
+    audio = null
+  }
+  if (wasRinging) void startAlarm()
+}
+
+const src = () => ALARM_SOUNDS.find((x) => x.id === alarmSound())?.file ?? ALARM_SOUNDS[0].file
 
 let audio: HTMLAudioElement | null = null
 let ringing = false
@@ -22,7 +61,7 @@ function el(): HTMLAudioElement | null {
   if (typeof window === "undefined" || typeof Audio === "undefined") return null
   if (!audio) {
     try {
-      audio = new Audio(SRC)
+      audio = new Audio(src())
       audio.preload = "auto"
       audio.loop = true
       audio.volume = 1

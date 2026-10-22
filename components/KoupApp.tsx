@@ -174,6 +174,7 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
   /* The basket bar on the menu: closed (a strip) or open (the basket). */
   const [barOpen, setBarOpen] = useState(false)
   const [cat, setCat] = useState('all')
+  const [query, setQuery] = useState('')
   const [view, setView] = useState<'grid' | 'carpet'>('grid')
   const [sheetItem, setSheetItem] = useState<Item | null>(null)
   /* Per-line note — "بدون سكر", "تيك أواي". Cleared with the sheet. */
@@ -831,7 +832,12 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
   const beanDiscount = Math.round(Math.min(beansSpent, maxSpend) / POINTS_PER_ILS)
   const cartTotal = Math.max(0, cartSub - beanDiscount)
 
-  const list = MENU.filter(m => cat === 'all' || m.c === cat)
+  /* Typing searches the whole menu (whatever category chip is lit), by name
+     and description, forgiving the usual Arabic spelling variants. */
+  const q = norm(query)
+  const list = MENU.filter(m => q
+    ? [m.ar, m.en, m.he, m.dar, m.den, m.dhe].some(x => norm(x).includes(q))
+    : (cat === 'all' || m.c === cat))
 
   return (
     <div className="koup" dir={rtl ? 'rtl' : 'ltr'} data-lang={lang} ref={rootRef}
@@ -1175,10 +1181,24 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
               <h2>{t('menu.h', 'المنيو')}</h2>
               <p>{t('menu.sub', 'كل صنف بسعرين: شيكل أو نقاط')}</p>
             </div></div>
-            <div className="searchbar">
+            <label className="searchbar">
               <Icon d="M11 4.6a6.4 6.4 0 1 0 0 12.8 6.4 6.4 0 0 0 0-12.8Zm9 15.4-4.4-4.4" s={17} />
-              <span>{t('menu.search', 'دوّر على مشروب أو صنف…')}</span>
-            </div>
+              <input
+                type="search"
+                inputMode="search"
+                enterKeyHint="search"
+                autoComplete="off"
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                placeholder={t('menu.search', 'دوّر على مشروب أو صنف…')}
+                aria-label={t('menu.search', 'دوّر على مشروب أو صنف…')}
+              />
+              {query && (
+                <button type="button" className="searchclear" aria-label={t('menu.clear', 'امسح')}
+                  onClick={() => setQuery('')}>×</button>
+              )}
+            </label>
             <div className="cats">
               {CATS.map(c => (
                 <button key={c.k} className="cat press" aria-pressed={cat === c.k}
@@ -1205,6 +1225,11 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
                   onOpen={() => { SFX.tap(); setSheetItem(m) }} />
               ))}
             </div>
+            {q && list.length === 0 && (
+              <p className="club-empty" style={{ marginTop: 6 }}>
+                {t('menu.none', 'ما لقينا شي بهالاسم — جرّب كلمة ثانية')}
+              </p>
+            )}
           </div>
         )}
 
@@ -1787,6 +1812,7 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
             error={sendError} orderType={orderType} setOrderType={setOrderType}
             tableNo={tableNo} setTableNo={setTableNo}
             onMore={() => go('cart')}
+            flash={cartBump}
             onSend={() => {
               if (!lines.length || sending) return
               if (!hasPhone) { setPhoneErr(null); setPhoneStep(true); return }
@@ -1922,7 +1948,7 @@ type BarLine = { key: string; name: string; unit_price: number; qty: number; not
 
 function CartBar({
   open, setOpen, lines, setLines, total, count, t, sending, online, error,
-  orderType, setOrderType, tableNo, setTableNo, onMore, onSend,
+  orderType, setOrderType, tableNo, setTableNo, onMore, onSend, flash,
 }: {
   open: boolean
   setOpen: (v: boolean) => void
@@ -1940,64 +1966,117 @@ function CartBar({
   setTableNo: (v: string) => void
   onMore: () => void
   onSend: () => void
+  /** Bumped on every add: the bar says "added" for a moment. */
+  flash: number
 }) {
+  const [added, setAdded] = useState(false)
+  useEffect(() => {
+    if (!flash) return
+    setAdded(true)
+    const id = window.setTimeout(() => setAdded(false), 1600)
+    return () => window.clearTimeout(id)
+  }, [flash])
   const bump = (key: string, d: number) => {
     SFX.tap()
     setLines(p => p.map(x => x.key === key ? { ...x, qty: Math.max(1, Math.min(20, x.qty + d)) } : x))
   }
+  const money = `₪${total.toFixed(total % 1 ? 2 : 0)}`
   return (
     <>
-      {open && <div className="cartbar-scrim" onClick={() => setOpen(false)} />}
-      <div className={`cartbar ${open ? 'on' : ''}`}>
-        <button className="cartbar-head press" onClick={() => { SFX.tap(); setOpen(!open) }}
-          aria-expanded={open}>
-          <span className="cartbar-n num">{count}</span>
-          <span className="cartbar-t">{open ? t('bar.close', 'سلّتك') : t('bar.open', 'شوف السلة')}</span>
-          <span className="cartbar-p num">₪{total.toFixed(total % 1 ? 2 : 0)}</span>
-          <span className="cartbar-chev" aria-hidden>{open ? '▾' : '▴'}</span>
+      {/* Closed: one big, obvious button — "your basket (3) · ₪78". */}
+      {!open && (
+        <button className={`basketbtn press ${added ? 'added' : ''}`} key={flash}
+          onClick={() => { SFX.tap(); setOpen(true) }}>
+          <span className="basketbtn-n num">{count}</span>
+          <span className="basketbtn-t">
+            {added ? t('bar.added', 'انضاف للسلة ✓') : t('bar.open', 'السلة — راجع وأرسل الطلب')}
+          </span>
+          <span className="basketbtn-p num">{money}</span>
         </button>
-        {open && (
-          <div className="cartbar-body">
-            {lines.map(l => (
-              <div className="line line-edit" key={l.key}>
-                <div className="lineqty">
-                  <button aria-label="−" onClick={() => bump(l.key, -1)}>−</button>
-                  <span className="num">{l.qty}</span>
-                  <button aria-label="+" onClick={() => bump(l.key, +1)}>+</button>
-                </div>
-                <div className="t"><h4>{l.name}</h4>{l.note ? <p>{l.note}</p> : null}</div>
-                <span className="p num">₪{(l.unit_price * l.qty).toFixed(2)}</span>
-                <button className="lx press" aria-label={t('cart.remove', 'احذف')}
-                  onClick={() => { SFX.tap(); setLines(p => p.filter(x => x.key !== l.key)) }}>×</button>
-              </div>
-            ))}
-            <div className="otypes otypes-sm">
-              {([['pickup', P.store, 'استلام'], ['dinein', P.table, 'على الطاولة']] as const).map(([k, d, ar]) => (
-                <button key={k} className="otype" aria-pressed={orderType === k}
-                  onClick={() => { SFX.tap(); setOrderType(k) }}>
-                  <Icon d={d} s={16} /><span>{t(`cart.${k}`, ar)}</span>
-                </button>
-              ))}
+      )}
+
+      {/* Open: the basket as its own sheet — items, how you want it, send. */}
+      {open && (
+        <div className="basket" role="dialog" aria-modal="true">
+          <div className="basket-scrim" onClick={() => setOpen(false)} />
+          <div className="basket-body">
+            <div className="basket-head">
+              <h3>{t('cart.h', 'سلّتك')} <span className="num">({count})</span></h3>
+              <button className="basket-x press" aria-label={t('set.close', 'سكّر')}
+                onClick={() => setOpen(false)}>×</button>
             </div>
-            {orderType === 'dinein' && (
-              <label className="notefield">
-                <span>{t('cart.table', 'رقم الطاولة')}</span>
-                <input type="text" value={tableNo} maxLength={32}
-                  placeholder={t('cart.tablePh', 'مثلاً ٣، أو برّا')}
-                  onChange={e => setTableNo(e.target.value)} />
-              </label>
-            )}
-            {error && <p className="cartbar-err">{error}</p>}
-            <button className="cta press" disabled={!online || !lines.length || sending} onClick={onSend}>
-              <span>{sending ? t('cart.sending', 'عم نبعت…') : t('cart.confirm', 'أكّد الطلب')}</span>
-              {' · '}<span className="price">₪{total.toFixed(total % 1 ? 2 : 0)}</span>
-            </button>
-            <button className="btn-ghost press cartbar-more" onClick={onMore}>
-              {t('bar.more', 'ملاحظة، أو الدفع بالنقاط…')}
-            </button>
+            <div className="basket-lines">
+              {lines.map(l => (
+                <div className="bline" key={l.key}>
+                  <div className="bline-t">
+                    <b>{l.name}</b>
+                    {l.note ? <span>{l.note}</span> : null}
+                    <span className="num">₪{l.unit_price.toFixed(l.unit_price % 1 ? 2 : 0)} {t('bar.each', 'للواحد')}</span>
+                  </div>
+                  <div className="bline-qty">
+                    <button aria-label="−" onClick={() => l.qty > 1 ? bump(l.key, -1)
+                      : (SFX.tap(), setLines(p => p.filter(x => x.key !== l.key)))}>
+                      {l.qty > 1 ? '−' : '🗑'}
+                    </button>
+                    <span className="num">{l.qty}</span>
+                    <button aria-label="+" onClick={() => bump(l.key, +1)}>+</button>
+                  </div>
+                  <span className="bline-p num">₪{(l.unit_price * l.qty).toFixed(2)}</span>
+                </div>
+              ))}
+              <button className="basket-addmore press" onClick={() => setOpen(false)}>
+                + {t('bar.addmore', 'أضف أصناف ثانية')}
+              </button>
+            </div>
+            <div className="basket-foot">
+              <div className="otypes otypes-sm">
+                {([['pickup', P.store, 'استلام من الكاونتر'], ['dinein', P.table, 'على الطاولة']] as const).map(([k, d, ar]) => (
+                  <button key={k} className="otype" aria-pressed={orderType === k}
+                    onClick={() => { SFX.tap(); setOrderType(k) }}>
+                    <Icon d={d} s={16} /><span>{t(`cart.${k}`, ar)}</span>
+                  </button>
+                ))}
+              </div>
+              {orderType === 'dinein' && (
+                <label className="notefield">
+                  <span>{t('cart.table', 'رقم الطاولة')}</span>
+                  <input type="text" value={tableNo} maxLength={32}
+                    placeholder={t('cart.tablePh', 'مثلاً ٣، أو برّا')}
+                    onChange={e => setTableNo(e.target.value)} />
+                </label>
+              )}
+              <div className="basket-total">
+                <span>{t('cart.total', 'الإجمالي')}</span>
+                <b className="num">{money}</b>
+              </div>
+              {error && <p className="cartbar-err">{error}</p>}
+              <button className="cta press basket-send" disabled={!online || !lines.length || sending} onClick={onSend}>
+                {sending ? t('cart.sending', 'عم نبعت…') : `${t('bar.send', 'أرسل الطلب')} · ${money}`}
+              </button>
+              <p className="basket-note">{t('cart.cash', 'الدفع عند الاستلام')}</p>
+              <button className="basket-more" onClick={onMore}>
+                {t('bar.more', 'إضافة ملاحظة أو الدفع بالنقاط')}
+              </button>
+            </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </>
   )
+}
+
+/* Search text in a comparable shape: lower case, no diacritics or tatweel,
+   and one spelling for the letters people type interchangeably
+   (أ إ آ ← ا، ة ← ه، ى ← ي، ؤ ← و، ئ ← ي). */
+function norm(text: string | undefined | null): string {
+  return (text ?? '')
+    .toLowerCase()
+    .replace(/[\u064B-\u065F\u0670\u0640]/g, '')
+    .replace(/[أإآ]/g, 'ا')
+    .replace(/ة/g, 'ه')
+    .replace(/ى/g, 'ي')
+    .replace(/ؤ/g, 'و')
+    .replace(/ئ/g, 'ي')
+    .replace(/\s+/g, ' ')
+    .trim()
 }

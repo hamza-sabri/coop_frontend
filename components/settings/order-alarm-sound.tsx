@@ -8,11 +8,15 @@ import { toast } from "sonner"
 
 import { Choice } from "@/components/settings/kit"
 import { Button } from "@/components/ui/button"
-import { alarmMuted, setAlarmMuted, testAlarm } from "@/lib/order-alarm"
+import { ALARM_SOUNDS, alarmMuted, alarmSound, setAlarmMuted, setAlarmSound, testAlarm, type AlarmSound } from "@/lib/order-alarm"
 
 export function OrderAlarmSound({ className }: { className?: string }) {
   const [muted, setMutedState] = useState(false)
-  useEffect(() => setMutedState(alarmMuted()), [])
+  const [sound, setSoundState] = useState<AlarmSound>("announce")
+  useEffect(() => {
+    setMutedState(alarmMuted())
+    setSoundState(alarmSound())
+  }, [])
   const test = () =>
     void testAlarm().then((ok) => {
       if (!ok) toast.warning("المتصفح منع الصوت — اضغط على الصفحة ثم جرّب")
@@ -37,6 +41,28 @@ export function OrderAlarmSound({ className }: { className?: string }) {
           <Play className="size-3.5" />
           جرّب
         </Button>
+      </div>
+      {/* The ringtone: tap one to hear it and keep it. */}
+      <div className="mt-3 flex flex-wrap gap-1.5" role="radiogroup" aria-label="نغمة الجرس">
+        {ALARM_SOUNDS.map((s) => (
+          <button
+            key={s.id}
+            type="button"
+            role="radio"
+            aria-checked={sound === s.id}
+            onClick={() => {
+              setAlarmSound(s.id)
+              setSoundState(s.id)
+              test()
+            }}
+            className={
+              "rounded-xl border px-3 py-1.5 text-xs font-semibold transition " +
+              (sound === s.id ? "border-primary bg-primary text-primary-foreground" : "border-border bg-muted/40 text-muted-foreground hover:text-foreground")
+            }
+          >
+            {s.label}
+          </button>
+        ))}
       </div>
     </div>
   )

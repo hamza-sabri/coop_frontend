@@ -285,6 +285,19 @@ body:has(.koup){overflow:hidden}
 .searchbar{display:flex;align-items:center;gap:9px;background:rgba(0,0,0,.26);border:1px solid var(--app-line);
   border-radius:18px;padding:12px 15px;color:var(--app-ink3);font-size:13.5px;margin-bottom:14px;
   box-shadow:inset 0 2px 5px rgba(0,0,0,.5)}
+/* A real field now. 16px so iPhone does not zoom the page when it is tapped. */
+.searchbar{cursor:text}
+.searchbar svg{flex:none}
+.searchbar input{flex:1;min-width:0;width:100%;margin:0;padding:0;height:auto;background:none;border:0;
+  border-radius:0;box-shadow:none;outline:none;color:var(--app-ink);
+  font:inherit;font-size:16px;line-height:1.4;-webkit-appearance:none;appearance:none}
+.koup .searchbar input:focus,.koup .searchbar input:focus-visible{outline:none;box-shadow:none;border:0}
+.searchbar:focus-within{border-color:rgba(221,188,138,.55)}
+.searchbar input::placeholder{color:var(--app-ink3)}
+.searchbar input::-webkit-search-cancel-button{display:none}
+.searchbar .searchclear{flex:none;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;
+  font-size:16px;line-height:1;color:var(--app-ink2);background:rgba(255,255,255,.08)}
+.koup .searchbar input{user-select:text;-webkit-user-select:text}
 .cats{display:flex;gap:8px;overflow-x:auto;margin-inline:-18px;padding:2px 18px 13px;scrollbar-width:none}
 .cats::-webkit-scrollbar{display:none}
 .cat{padding:9px 16px;border-radius:999px;font-size:13px;white-space:nowrap;flex:none;
@@ -1335,3 +1348,59 @@ body:has(.koup){overflow:hidden}
 @media (min-width:1100px){
   .pgrid{grid-template-columns:repeat(auto-fill,minmax(210px,1fr))}
 }
+
+/* ── basket: a clear button, then its own sheet ───────────────────────────── */
+.koup .basketbtn{position:absolute;inset-inline:12px;bottom:calc(100px + env(safe-area-inset-bottom));z-index:55;
+  display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:20px;text-align:start;
+  color:#241804;font-weight:700;font-size:15px;
+  background:linear-gradient(158deg,#F7E4C4,var(--app-gold) 52%,#B98942);
+  box-shadow:0 14px 30px -10px rgba(0,0,0,.8), inset 0 1px 0 rgba(255,255,255,.5);
+  animation:basketin .35s var(--spring) both}
+.koup .basketbtn-n{min-width:28px;height:28px;border-radius:14px;display:grid;place-items:center;
+  background:#241804;color:var(--app-gold);font-size:13px;font-weight:800}
+.koup .basketbtn-t{flex:1}
+.koup .basketbtn-p{font-weight:800;font-size:16px}
+.koup .basketbtn.added{animation:basketpop .5s var(--spring) both}
+@keyframes basketin{from{transform:translateY(20px);opacity:0}to{transform:none;opacity:1}}
+@keyframes basketpop{0%{transform:scale(1)}35%{transform:scale(1.05)}100%{transform:scale(1)}}
+
+.koup .basket{position:absolute;inset:0;z-index:75}
+.koup .basket-scrim{position:absolute;inset:0;background:rgba(5,8,20,.74)}
+.koup .basket-body{position:absolute;inset-inline:0;bottom:0;max-height:88%;display:flex;flex-direction:column;
+  background:linear-gradient(180deg,var(--app-surf2),var(--app-surf) 40%);border-radius:30px 30px 0 0;
+  border-top:1px solid rgba(255,255,255,.11);box-shadow:0 -20px 50px -18px rgba(0,0,0,.85);
+  padding:14px 18px calc(16px + env(safe-area-inset-bottom));animation:basketup .3s var(--enter) both}
+@keyframes basketup{from{transform:translateY(40%);opacity:.4}to{transform:none;opacity:1}}
+.koup .basket-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.koup .basket-head h3{font-size:19px;font-weight:700}
+.koup .basket-x{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font-size:22px;
+  background:rgba(255,255,255,.08);color:var(--app-ink2)}
+.koup .basket-lines{overflow-y:auto;flex:1;min-height:0;scrollbar-width:none}
+.koup .basket-lines::-webkit-scrollbar{display:none}
+.koup .bline{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--app-line)}
+.koup .bline-t{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.koup .bline-t b{font-size:14.5px;font-weight:600}
+.koup .bline-t span{font-size:12px;color:var(--app-ink3)}
+.koup .bline-qty{display:flex;align-items:center;gap:4px;background:rgba(0,0,0,.25);border:1px solid var(--app-line);
+  border-radius:14px;padding:3px}
+.koup .bline-qty button{width:34px;height:34px;border-radius:11px;font-size:18px;font-weight:700;
+  background:rgba(255,255,255,.07)}
+.koup .bline-qty span{min-width:22px;text-align:center;font-weight:700}
+.koup .bline-p{min-width:62px;text-align:end;font-weight:700;font-size:14px}
+.koup .basket-addmore{width:100%;margin:10px 0 4px;padding:11px;border-radius:14px;font-weight:600;font-size:13.5px;
+  color:var(--app-gold);border:1px dashed rgba(221,188,138,.45)}
+.koup .basket-foot{padding-top:10px;border-top:1px solid var(--app-line)}
+.koup .basket-total{display:flex;justify-content:space-between;align-items:baseline;margin:12px 2px 4px;font-size:15px}
+.koup .basket-total b{font-size:20px;font-weight:800;color:var(--app-gold)}
+.koup .basket-send{width:100%;margin-top:10px;font-size:16px}
+.koup .basket-note{text-align:center;font-size:11.5px;color:var(--app-ink3);margin-top:8px}
+.koup .basket-more{display:block;margin:4px auto 0;font-size:12.5px;color:var(--app-ink2);text-decoration:underline;padding:4px}
+.koup .koup-inner:has(.basketbtn) .app-scroll{padding-bottom:calc(170px + env(safe-area-inset-bottom))}
+@media (min-width:768px){
+  .koup .basketbtn,.koup .basket-body{max-width:560px;margin-inline:auto}
+  .koup .basketbtn{inset-inline:0}
+}
+
+.koup .basket-send{color:#241804;background:linear-gradient(158deg,#F7E4C4,var(--app-gold) 52%,#B98942);
+  border:0;font-weight:800;box-shadow:0 12px 26px -12px rgba(0,0,0,.8)}
+.koup .basket-send:disabled{opacity:.5}
