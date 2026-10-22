@@ -54,6 +54,8 @@ export type KoupAuth = {
     saveProfile: (data: Partial<{ name: string; gender: string; phone: string; birth_date: string }>)
       => Promise<{ ok: boolean; error?: string; field?: string }>
     signOut: () => Promise<void>
+    /** Delete this customer's account; resolves true when done. */
+    deleteAccount?: () => Promise<boolean>
     email?: string | null
   }
 }

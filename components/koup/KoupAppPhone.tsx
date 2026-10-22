@@ -107,6 +107,25 @@ export default function KoupAppPhone() {
     await logoutSession()
   }, [])
 
+  /* Delete the account: the server erases the person and kills every
+     session; here the local copy goes too. */
+  const deleteAccount = useCallback(async () => {
+    if (!session) return false
+    try {
+      const r = await fetch(`${API}/api/v1/shop/me/delete/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.token}` },
+        body: JSON.stringify({ confirm: true }),
+      })
+      if (!r.ok) return false
+      clearShopMeCache()
+      clearSession()
+      return true
+    } catch {
+      return false
+    }
+  }, [session])
+
   const profile = me?.profile
   return (
     <KoupApp
@@ -121,7 +140,7 @@ export default function KoupAppPhone() {
         me,
         refreshMe,
         hasPhone: true,
-        club: { saveProfile, signOut, email: null },
+        club: { saveProfile, signOut, deleteAccount, email: null },
         menu: { canOrder: ordering && Boolean(session) },
         orders, liveOrder, pastOrders, refreshOrders,
         ...(ordering ? { placeOrder } : {}),

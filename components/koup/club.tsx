@@ -215,7 +215,7 @@ type Save = (d: Partial<{ name: string; gender: string; phone: string; birth_dat
   => Promise<{ ok: boolean; error?: string; field?: string }>
 
 export function ClubProfile({
-  me, email, fallbackName, fallbackAvatar, save, onSettings, onSignOut,
+  me, email, fallbackName, fallbackAvatar, save, onSettings, onSignOut, onDelete,
 }: {
   me: ShopMe | null
   email: string
@@ -224,6 +224,8 @@ export function ClubProfile({
   save: Save
   onSettings: () => void
   onSignOut: () => Promise<void>
+  /** Delete the account (App Store / Play rule; offered on the web too). */
+  onDelete?: () => Promise<boolean>
 }) {
   const p = me?.profile
   const [name, setName] = useState('')
@@ -344,6 +346,19 @@ export function ClubProfile({
           تسجيل الخروج
         </button>
       </div>
+      {onDelete && (
+        <button
+          className="club-delete"
+          onClick={async () => {
+            SFX.tap()
+            if (!window.confirm('حذف حسابك نهائياً؟ تُمسح بياناتك ونقاطك ولا يمكن التراجع.')) return
+            const ok = await onDelete()
+            if (!ok) window.alert('ما زبط الحذف — جرّب كمان شوي.')
+          }}
+        >
+          حذف حسابي
+        </button>
+      )}
     </div>
   )
 }

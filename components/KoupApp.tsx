@@ -1584,6 +1584,9 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
               save={club.saveProfile}
               onSettings={() => setSettingsOpen(true)}
               onSignOut={async () => { await club.signOut(); go('home') }}
+              onDelete={club.deleteAccount
+                ? async () => { const ok = await club.deleteAccount!(); if (ok) go('home'); return ok }
+                : undefined}
             />
           </div>
         )}
