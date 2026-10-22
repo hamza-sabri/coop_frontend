@@ -2014,9 +2014,10 @@ function CartBar({
                     <span className="num">₪{l.unit_price.toFixed(l.unit_price % 1 ? 2 : 0)} {t('bar.each', 'للواحد')}</span>
                   </div>
                   <div className="bline-qty">
+                    {/* − at 1 takes the drink out of the basket. */}
                     <button aria-label="−" onClick={() => l.qty > 1 ? bump(l.key, -1)
                       : (SFX.tap(), setLines(p => p.filter(x => x.key !== l.key)))}>
-                      {l.qty > 1 ? '−' : '🗑'}
+                      −
                     </button>
                     <span className="num">{l.qty}</span>
                     <button aria-label="+" onClick={() => bump(l.key, +1)}>+</button>

@@ -403,6 +403,9 @@ self.addEventListener("push", (event) => {
         body: msg.body || "",
         tag: msg.tag || "sijilli",
         renotify: true,
+        // Staff "new order" pushes stay on screen until tapped and buzz long.
+        requireInteraction: Boolean(msg.requireInteraction),
+        vibrate: Array.isArray(msg.vibrate) ? msg.vibrate : [200, 100, 200],
         icon: "/koup/icon-192.png",
         badge: "/koup/icon-192.png",
         data: { url: msg.url || "/app", orderId },

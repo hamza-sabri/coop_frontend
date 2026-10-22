@@ -3,15 +3,15 @@
 /* الأوقات — when the shop is busy, said the way you would say it out loud;
  *
  *   "أزحم وقت: ٥ المساء. أهدأ وقت: ١ بعد منتصف الليل. أفضل يوم: الجمعة."
- *   Then one bar per hour, opening to close — tap an hour to see what sold
- *   in it — and one bar per day of the week.
+ *   Then a line across the day, opening to close — hover an hour for its
+ *   count and its takings — and one bar per day of the week.
  *
  * No grid of numbers to decode: the hour × category table was correct and
  * nobody could read it. The detail is still there, one tap away. */
 import { useMemo } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { Moon, Sun, Trophy } from "lucide-react"
-import { Bars, hourShort, hourSpoken } from "@/components/charts"
+import { AreaTrend, Bars, hourShort, hourSpoken } from "@/components/charts"
 
 import { fetchTimes, type PnlQuery } from "@/api/finance"
 import { Empty, Failed, Panel, TabSkeleton } from "@/components/reports/kit"
@@ -65,9 +65,15 @@ export function TimesTab({ q }: { q: PnlQuery }) {
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Panel title="الزحمة خلال اليوم" hint={peakCats ? `في الذروة يُطلب أكثر: ${peakCats}` : "كم طلباً في كل ساعة"}>
-          <Bars
+          {/* A line across the day; hovering an hour gives its count and its takings. */}
+          <AreaTrend
             height={260}
-            data={hours.map((h) => ({ label: hourShort(h.hour), title: hourSpoken(h.hour), value: Math.round(h.cups) }))}
+            data={hours.map((h) => ({
+              label: hourShort(h.hour),
+              title: hourSpoken(h.hour),
+              value: Math.round(h.cups),
+              lines: [`${formatMoney(h.money)} مبيعات`],
+            }))}
             format={(v) => `${formatNumber(v)} طلب`}
           />
         </Panel>

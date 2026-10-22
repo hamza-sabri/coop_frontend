@@ -11,4 +11,8 @@ describe("customer form: app link switch", () => {
   it("is sent on both the online and the queued path", () => {
     expect(src.match(/send_app_link: sendLink && Boolean\(v\.phone\.trim\(\)\)/g)?.length).toBe(2)
   })
+  it("is off by default, every time the form opens", () => {
+    expect(src).toContain("useState(false)")
+    expect(src).not.toContain("setSendLink(true)")
+  })
 })

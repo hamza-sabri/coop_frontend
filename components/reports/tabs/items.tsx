@@ -15,7 +15,8 @@ import { Empty, Failed, Panel, Stat, TabSkeleton } from "@/components/reports/ki
 import { Input } from "@/components/ui/input"
 import { formatMoney, formatNumber, toNumber } from "@/lib/format"
 import { cn } from "@/lib/utils"
-import { Bars } from "@/components/charts"
+import { Bars, Donut, SLICE_COLORS } from "@/components/charts"
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet"
 import { matches } from "@/lib/search"
 import { BlurImg } from "@/components/blur-img"
 
@@ -51,6 +52,8 @@ function Trend({ now, before }: { now: number; before: number }) {
 export function ItemsTab({ q, onOpenItem }: { q: PnlQuery; onOpenItem: (id: number, name: string) => void }) {
   const [sort, setSort] = useState<Sort>("qty")
   const [search, setSearch] = useState("")
+  /* The category whose drinks are open in the drawer (from the donut). */
+  const [openCat, setOpenCat] = useState<string | null>(null)
   const { data, isLoading } = useQuery({
     queryKey: ["reports", "items", q.period, q.date],
     queryFn: () => fetchItems(q).then((r) => r.data),
@@ -74,15 +77,23 @@ export function ItemsTab({ q, onOpenItem }: { q: PnlQuery; onOpenItem: (id: numb
   const dead = all.filter((i) => toNumber(i.qty) === 0 && i.is_active).length
   const noCost = all.filter((i) => i.is_active && toNumber(i.cost) <= 0).length
   const maxQty = Math.max(1, ...rows.map((r) => toNumber(r.qty)))
-  const byCat = Object.entries(
-    sold.reduce<Record<string, number>>((m, i) => {
-      const k = i.category || "بلا تصنيف"
-      m[k] = (m[k] ?? 0) + toNumber(i.qty)
+  /* Sales (₪) per category, biggest first — the donut and its legend. */
+  const catOf = (i: ItemRow) => i.category || "بلا تصنيف"
+  const cats = Object.values(
+    sold.reduce<Record<string, { label: string; value: number; qty: number }>>((m, i) => {
+      const k = catOf(i)
+      m[k] ??= { label: k, value: 0, qty: 0 }
+      m[k].value += toNumber(i.revenue)
+      m[k].qty += toNumber(i.qty)
       return m
     }, {}),
-  )
-    .sort((a, b) => b[1] - a[1])
-    .map(([label, value]) => ({ label, value }))
+  ).sort((a, b) => b.value - a.value)
+  const catTotal = cats.reduce((n, c) => n + c.value, 0)
+  const catItems = openCat == null ? [] : sold
+    .filter((i) => catOf(i) === openCat)
+    .sort((a, b) => toNumber(b.qty) - toNumber(a.qty) || toNumber(b.revenue) - toNumber(a.revenue))
+  const catMax = Math.max(1, ...catItems.map((i) => toNumber(i.qty)))
+  const opened = cats.find((c) => c.label === openCat)
 
   return (
     <div className="space-y-4">
@@ -124,9 +135,35 @@ export function ItemsTab({ q, onOpenItem }: { q: PnlQuery; onOpenItem: (id: numb
             <Empty>لا مبيعات في هذه الفترة</Empty>
           )}
         </Panel>
-        <Panel className="lg:col-span-2" title="حسب التصنيف" hint="كم مرة طُلب كل نوع">
-          {byCat.length ? (
-            <Bars height={240} showValues data={byCat} format={(v) => `${formatNumber(Math.round(v))} مرة`} />
+        <Panel className="lg:col-span-2" title="المبيعات حسب التصنيف" hint="اضغط على أي تصنيف لترى مشروباته">
+          {cats.length ? (
+            <div className="grid items-center gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:grid-cols-1 2xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+              <Donut
+                height={210}
+                data={cats.map((c) => ({ label: c.label, value: c.value }))}
+                format={(v) => formatMoney(v)}
+                center={{ value: formatMoney(catTotal), label: "المبيعات" }}
+                onSelect={(i) => setOpenCat(cats[i]?.label ?? null)}
+              />
+              <ul className="space-y-0.5">
+                {cats.map((c, i) => (
+                  <li key={c.label}>
+                    <button
+                      type="button"
+                      onClick={() => setOpenCat(c.label)}
+                      className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-start text-sm transition hover:bg-muted/60"
+                    >
+                      <span className="size-2.5 shrink-0 rounded-full" style={{ background: SLICE_COLORS[i % SLICE_COLORS.length] }} />
+                      <span className="min-w-0 flex-1 truncate">{c.label}</span>
+                      <span className="text-[11px] tabular-nums text-muted-foreground">
+                        {catTotal ? `${Math.round((c.value / catTotal) * 100)}%` : ""}
+                      </span>
+                      <span className="w-20 text-end font-semibold tabular-nums">{formatMoney(c.value)}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
           ) : (
             <Empty>—</Empty>
           )}
@@ -195,6 +232,48 @@ export function ItemsTab({ q, onOpenItem }: { q: PnlQuery; onOpenItem: (id: numb
           </>
         )}
       </Panel>
+      {/* One category, its drinks from most to least ordered. */}
+      <Sheet open={openCat != null} onOpenChange={(o) => !o && setOpenCat(null)}>
+        <SheetContent side="left" size="lg" className="flex flex-col gap-0 p-0">
+          <div className="border-b px-5 pb-3 pt-5">
+            <SheetTitle className="font-heading text-lg">{openCat}</SheetTitle>
+            {opened ? (
+              <p className="mt-1 text-xs text-muted-foreground">
+                {formatNumber(Math.round(opened.qty))} مرة · مبيعات {formatMoney(opened.value)}
+                {catTotal ? ` · ${Math.round((opened.value / catTotal) * 100)}% من المبيعات` : ""}
+              </p>
+            ) : null}
+          </div>
+          <ul className="flex-1 divide-y divide-border/60 overflow-y-auto">
+            {catItems.map((i, n) => {
+              const qty = toNumber(i.qty)
+              return (
+                <li key={i.product_id}>
+                  <button
+                    type="button"
+                    onClick={() => { setOpenCat(null); onOpenItem(i.product_id, i.name) }}
+                    className="flex w-full items-center gap-3 px-5 py-3 text-start transition hover:bg-muted/40"
+                  >
+                    <span className="w-5 text-center text-xs tabular-nums text-muted-foreground">{n + 1}</span>
+                    <Thumb src={i.image} />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold">{i.name}</p>
+                      <div className="mt-1 h-1.5 w-full max-w-48 overflow-hidden rounded-full bg-muted">
+                        <div className="h-full rounded-full bg-primary" style={{ width: `${(qty / catMax) * 100}%` }} />
+                      </div>
+                    </div>
+                    <div className="shrink-0 text-end">
+                      <p className="text-sm font-bold tabular-nums">{formatNumber(Math.round(qty))} مرة</p>
+                      <p className="text-[11px] tabular-nums text-muted-foreground">{formatMoney(i.revenue)}</p>
+                    </div>
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+        </SheetContent>
+      </Sheet>
+
       <p className="text-[11px] text-muted-foreground">
         الإيراد هنا بسعر البند على الفاتورة؛ خصم الفاتورة والنقاط يظهران في تبويب الأرباح. صنف بلا تكلفة لا يُحسب له ربح.
       </p>

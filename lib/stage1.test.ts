@@ -31,4 +31,12 @@ describe("stage 1 wiring", () => {
     expect(home).toBeLessThan(menu)
     expect(menu).toBeLessThan(me)
   })
+  it("the basket never shows a bin icon — minus removes at one", () => {
+    expect(read("components/KoupApp.tsx")).not.toContain("🗑")
+  })
+  it("employees can get new orders on a locked phone", () => {
+    expect(read("lib/staff-push.ts")).toContain("/api/v1/store/staff-push/")
+    expect(read("app/(app)/live/page.tsx")).toContain("<StaffPushCard />")
+    expect(read("public/sw.js")).toContain("requireInteraction: Boolean(msg.requireInteraction)")
+  })
 })

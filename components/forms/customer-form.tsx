@@ -68,8 +68,10 @@ export function CustomerForm({
   const [ptsMode, setPtsMode] = useState<"add" | "remove">("add")
   const [ptsAmount, setPtsAmount] = useState("")
   const [ptsNote, setPtsNote] = useState("")
-  /** New customers: text them the app link (one SMS that also signs them in). */
-  const [sendLink, setSendLink] = useState(true)
+  /** New customers: text them the app link (one SMS that also signs them in).
+   *  OFF by default (POS and customers page alike): an SMS costs money and the
+   *  cashier switches it on for the customers who want the app. */
+  const [sendLink, setSendLink] = useState(false)
   const balance = Number((customer as { points?: number } | null | undefined)?.points ?? 0)
   const ptsN = Math.max(0, Math.floor(Number(ptsAmount) || 0))
   const ptsDelta = ptsMode === "add" ? ptsN : -Math.min(ptsN, balance)
@@ -108,7 +110,7 @@ export function CustomerForm({
     setPtsMode("add")
     setPtsAmount("")
     setPtsNote("")
-    setSendLink(true)
+    setSendLink(false)
   }, [open, customer, reset])
 
   function linkToast(link?: AppLinkResult) {

@@ -2,10 +2,14 @@
 
 /* The two charts the app uses (DESIGN.md §4): vertical bars and a filled
  * area. Time runs left → right; the best bar is solid, the rest muted; the
- * tooltip says the value in words. Nothing else — no pies, no grids. */
+ * tooltip says the value in words. One exception, asked for by the owner: a
+ * donut for "share of sales by category", where the parts-of-a-whole IS the
+ * question — and every slice opens what is inside it. */
 import {
   Area as RArea,
   AreaChart,
+  Pie,
+  PieChart,
   Bar,
   BarChart,
   CartesianGrid,
@@ -19,7 +23,29 @@ import {
 
 import { cn } from "@/lib/utils"
 
-export type Point = { label: string; value: number; /** Tooltip title; defaults to label. */ title?: string }
+export type Point = {
+  label: string
+  value: number
+  /** Tooltip title; defaults to label. */
+  title?: string
+  /** Extra tooltip lines under the value (e.g. "₪1,240 مبيعات"). */
+  lines?: string[]
+}
+
+/** The tooltip box itself, for charts whose points carry extra lines. */
+function TipBox({ active, payload, format }: { active?: boolean; payload?: { payload?: Point; value?: unknown }[]; format: (v: number) => string }) {
+  const p = payload?.[0]?.payload
+  if (!active || !p) return null
+  return (
+    <div style={TIP.contentStyle} className="px-3 py-2">
+      <p className="mb-1 font-semibold">{p.title ?? p.label}</p>
+      <p className="tabular-nums">{format(Number(p.value))}</p>
+      {(p.lines ?? []).map((l) => (
+        <p key={l} className="tabular-nums text-muted-foreground">{l}</p>
+      ))}
+    </div>
+  )
+}
 
 const AXIS = { fontSize: 11, tickLine: false, axisLine: false, stroke: "var(--muted-foreground)" } as const
 const TIP = {
@@ -112,13 +138,17 @@ export function AreaTrend({
           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
           <XAxis dataKey="label" {...AXIS} interval="preserveStartEnd" minTickGap={10} />
           <YAxis {...AXIS} width={40} tickFormatter={(v) => compact(Number(v))} />
-          <Tooltip
-            {...TIP}
-            cursor={{ stroke: "var(--border)" }}
-            labelFormatter={(_, p) => (p?.[0]?.payload?.title as string) ?? (p?.[0]?.payload?.label as string) ?? ""}
-            formatter={(v) => [format(Number(v)), ""]}
-            separator=""
-          />
+          {data.some((d) => d.lines?.length) ? (
+            <Tooltip cursor={{ stroke: "var(--border)" }} content={<TipBox format={format} />} />
+          ) : (
+            <Tooltip
+              {...TIP}
+              cursor={{ stroke: "var(--border)" }}
+              labelFormatter={(_, p) => (p?.[0]?.payload?.title as string) ?? (p?.[0]?.payload?.label as string) ?? ""}
+              formatter={(v) => [format(Number(v)), ""]}
+              separator=""
+            />
+          )}
           <RArea
             type="monotone"
             dataKey="value"
@@ -175,4 +205,65 @@ export function dayAxis(iso: string, many: boolean): string {
 /** The tooltip title: "الخميس 1 أكتوبر". */
 export function daySpoken(iso: string): string {
   return `${weekdayOf(iso)} ${Number(iso.slice(8, 10))} ${MONTHS[Number(iso.slice(5, 7)) - 1]}`
+}
+
+/** Slices that tell apart next to each other, in the app's palette first. */
+export const SLICE_COLORS = [
+  "var(--chart-1)", "var(--chart-4)", "var(--chart-5)", "var(--chart-3)",
+  "oklch(0.65 0.17 25)", "oklch(0.6 0.15 300)", "oklch(0.7 0.12 195)", "oklch(0.68 0.06 260)",
+]
+
+/** A donut: parts of a whole. `onSelect` gets the clicked slice's index. */
+export function Donut({
+  data,
+  format,
+  height = 240,
+  center,
+  onSelect,
+}: {
+  data: Point[]
+  format: (v: number) => string
+  height?: number
+  /** Big text in the hole (the total). */
+  center?: { value: string; label: string }
+  onSelect?: (index: number) => void
+}) {
+  return (
+    <div className="relative w-full" style={{ height }} dir="ltr">
+      <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 260, height }}>
+        <PieChart>
+          <Tooltip
+            {...TIP}
+            formatter={(v, _n, p) => [format(Number(v)), (p?.payload as Point | undefined)?.title ?? (p?.payload as Point | undefined)?.label ?? ""]}
+            separator=" · "
+          />
+          <Pie
+            data={data}
+            dataKey="value"
+            nameKey="label"
+            innerRadius="58%"
+            outerRadius="92%"
+            paddingAngle={data.length > 1 ? 1.5 : 0}
+            stroke="var(--card)"
+            strokeWidth={2}
+            animationDuration={700}
+            onClick={(_d, i) => onSelect?.(i)}
+            className={onSelect ? "cursor-pointer" : undefined}
+          >
+            {data.map((_, i) => (
+              <Cell key={i} fill={SLICE_COLORS[i % SLICE_COLORS.length]} />
+            ))}
+          </Pie>
+        </PieChart>
+      </ResponsiveContainer>
+      {center ? (
+        <div className="pointer-events-none absolute inset-0 grid place-items-center text-center" dir="rtl">
+          <div>
+            <p className="font-heading text-lg font-bold tabular-nums leading-tight">{center.value}</p>
+            <p className="text-[11px] text-muted-foreground">{center.label}</p>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  )
 }

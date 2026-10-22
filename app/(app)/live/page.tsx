@@ -33,6 +33,7 @@ import {
 
 import { orderAdvance, ordersList, STATUS_LABEL, ALL_STATUSES, type Order, type OrderStatus } from "@/api/orders"
 import { useInfiniteList } from "@/hooks/use-infinite-list"
+import { StaffPushCard } from "@/components/orders/staff-push-card"
 import { businessToday } from "@/lib/period"
 import { useLiveOrders } from "@/components/orders/orders-live"
 import { PageHeader } from "@/components/page-header"
@@ -383,6 +384,8 @@ function LiveBoard() {
           يعملان — لتفعيل التنبيهات، اسمح بها من إعدادات الموقع في المتصفح.
         </p>
       )}
+
+      <StaffPushCard />
 
       {muted && (
         <p className="rounded-2xl border border-destructive/40 bg-destructive/5 px-4 py-2.5 text-sm font-semibold text-destructive">
