@@ -377,3 +377,59 @@ async function trimPictures() {
     trimming = false
   }
 }
+
+/* ── Web Push (customer app) ────────────────────────────────────────────────
+   The API sends {title, body, tag, url, sound, data} for each order move
+   (apps/store/webpush.py). Shown as a notification; one per order (`tag`), so
+   "ready" replaces "accepted" instead of stacking. Open windows of the app are
+   told too, so they refresh the order at once and play the shop's sound. */
+self.addEventListener("push", (event) => {
+  let msg = {}
+  try {
+    msg = event.data ? event.data.json() : {}
+  } catch {
+    msg = { title: event.data ? event.data.text() : "" }
+  }
+  const title = msg.title || "تحديث على طلبك"
+  const orderId = (msg.data && msg.data.order_id) || null
+  event.waitUntil(
+    (async () => {
+      const wins = await self.clients.matchAll({ type: "window", includeUncontrolled: true })
+      for (const w of wins) w.postMessage({ type: "sijilli:push", orderId, sound: msg.sound || "" })
+      // A visible app already shows the change (and plays the sound); the
+      // notification is for the phone in a pocket — but browsers require one
+      // for every push, so it is always shown.
+      await self.registration.showNotification(title, {
+        body: msg.body || "",
+        tag: msg.tag || "sijilli",
+        renotify: true,
+        icon: "/koup/icon-192.png",
+        badge: "/koup/icon-192.png",
+        data: { url: msg.url || "/app", orderId },
+      })
+    })(),
+  )
+})
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close()
+  const url = (event.notification.data && event.notification.data.url) || "/app"
+  event.waitUntil(
+    (async () => {
+      const target = new URL(url, self.location.origin)
+      const wins = await self.clients.matchAll({ type: "window", includeUncontrolled: true })
+      for (const w of wins) {
+        if (new URL(w.url).pathname === target.pathname) {
+          await w.focus()
+          try {
+            await w.navigate(target.href)
+          } catch {
+            w.postMessage({ type: "sijilli:push", orderId: event.notification.data && event.notification.data.orderId })
+          }
+          return
+        }
+      }
+      await self.clients.openWindow(target.href)
+    })(),
+  )
+})

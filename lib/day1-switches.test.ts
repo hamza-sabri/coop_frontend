@@ -36,14 +36,16 @@ describe("online ordering is switched off end to end", () => {
 
   it("the customer web page takes orders only while the server says ordering is open", () => {
     // Sign-in by phone, then the club screens plus a browse-only menu. The
-    // order props are passed ONLY when GET /public/ordering/ answers open, and
-    // an unreachable server counts as closed.
+    // placeOrder is passed ONLY when GET /public/ordering/ answers open, and
+    // an unreachable server counts as closed. The customer's own orders are
+    // always shown (switching ordering off must not empty طلباتي).
     const page = code(read("app/(shop)/app/page.tsx"))
     expect(page).toContain("<KoupAppPhone />")
     const app = code(read("components/koup/KoupAppPhone.tsx"))
     expect(app).toContain("Gate: PhoneSignIn")
     expect(app).toContain("club: {")
-    expect(app).toContain("...(ordering ? { orders, liveOrder, pastOrders, placeOrder, refreshOrders } : {})")
+    expect(app).toContain("...(ordering ? { placeOrder } : {})")
+    expect(app).toContain("useKoupOrders(uid, session ? getToken : undefined)")
     expect(app).toContain(".catch(() => { if (alive) setOrdering(false) })")
   })
 

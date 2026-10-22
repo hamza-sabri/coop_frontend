@@ -5,7 +5,9 @@ export type Item = { c:string; ar:string; en:string; he:string; dar:string; den:
                      /** The product's id on the server — orders are priced by it. */
                      id?:number;
                      /** Options this drink is actually sold in, from the API. */
-                     v?:{ id:number; label:string; price:number }[] }
+                     v?:{ id:number; label:string; price:number }[];
+                     /** Every picture of the drink (main first, then up to five more). */
+                     gallery?:string[] }
 export type Cat  = { k:string; ar:string; en:string; he:string }
 
 export const MENU: Item[] = [

@@ -4,7 +4,7 @@
    The same screens as before — points, visits, profile — now with a real
    sign-in behind them that works for any café on the platform: the session
    names its own store, so the server answers with THIS shop's customer. */
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import KoupApp from '@/components/KoupApp'
 import PhoneSignIn from '@/components/koup/PhoneSignIn'
 import InstallPrompt from '@/components/koup/InstallPrompt'
@@ -13,6 +13,9 @@ import { clearShopMeCache, useShopMe } from '@/lib/koup-me'
 import { clearSession, loadSession, logoutSession, storeSlug, type CustomerSession } from '@/lib/customer-session'
 import { useKoupOrders } from '@/lib/koup-orders'
 import { publicOrdering } from '@/api/public'
+import { useKoupPush, useSwMessages } from '@/lib/koup-push'
+import { playAppSound } from '@/api/app-settings'
+import { haptic } from '@/lib/sfx'
 
 const API = process.env.NEXT_PUBLIC_API_BASE_URL ?? ''
 
@@ -52,8 +55,26 @@ export default function KoupAppPhone() {
       .catch(() => { if (alive) setOrdering(false) })
     return () => { alive = false }
   }, [session?.store])
+  /* A customer's orders are theirs to see whether or not the shop is taking
+     new ones right now — switching ordering off must never empty طلباتي. */
   const { orders, live: liveOrder, past: pastOrders, place: placeOrder, refresh: refreshOrders } =
-    useKoupOrders(ordering ? uid : undefined, session ? getToken : undefined)
+    useKoupOrders(uid, session ? getToken : undefined)
+
+  /* Lock-screen updates, and the shop's own sound in the app. */
+  const push = useKoupPush(session?.token)
+  useSwMessages(useCallback(() => { void refreshOrders() }, [refreshOrders]))
+
+  /* An order moved (seen by a push or by the poll): play the shop's sound
+     once. Not on first load — only a change counts. */
+  const lastStatus = useRef<Map<number, string> | null>(null)
+  useEffect(() => {
+    const now = new Map(orders.map(o => [o.id, o.status] as [number, string]))
+    const before = lastStatus.current
+    lastStatus.current = now
+    if (!before) return
+    const moved = orders.some(o => before.has(o.id) && before.get(o.id) !== o.status)
+    if (moved) { playAppSound(push.sound); haptic([20, 60, 20]) }
+  }, [orders, push.sound])
 
   /* A session the server no longer accepts (signed out elsewhere, expired,
      revoked) must drop back to the door instead of showing stale numbers. */
@@ -102,7 +123,9 @@ export default function KoupAppPhone() {
         hasPhone: true,
         club: { saveProfile, signOut, email: null },
         menu: { canOrder: ordering && Boolean(session) },
-        ...(ordering ? { orders, liveOrder, pastOrders, placeOrder, refreshOrders } : {}),
+        orders, liveOrder, pastOrders, refreshOrders,
+        ...(ordering ? { placeOrder } : {}),
+        push: session && push.state !== 'unsupported' ? { state: push.state, enable: push.enable } : undefined,
       }}
     />
   )

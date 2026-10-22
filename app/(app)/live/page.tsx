@@ -31,7 +31,9 @@ import {
   X,
 } from "lucide-react"
 
-import { orderAdvance, type Order, type OrderStatus } from "@/api/orders"
+import { orderAdvance, ordersList, STATUS_LABEL, ALL_STATUSES, type Order, type OrderStatus } from "@/api/orders"
+import { useInfiniteList } from "@/hooks/use-infinite-list"
+import { businessToday } from "@/lib/period"
 import { useLiveOrders } from "@/components/orders/orders-live"
 import { PageHeader } from "@/components/page-header"
 import { EmptyState } from "@/components/states"
@@ -40,7 +42,7 @@ import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useMe, displayName } from "@/hooks/use-me"
 import { formatMoney, formatNumber, toNumber } from "@/lib/format"
-import { isMuted, setMuted, playNewOrder } from "@/lib/beep"
+import { alarmMuted, setAlarmMuted, testAlarm } from "@/lib/order-alarm"
 import { deliverAndToast } from "@/lib/print/deliver"
 import { loadPrintSettings } from "@/lib/print/settings"
 import type { ReceiptData } from "@/lib/print/receipt"
@@ -99,11 +101,143 @@ export default function LiveOrdersPage() {
       </div>
     )
   }
-  return <LiveBoard />
+  return <LivePage />
+}
+
+/* Two views of the same orders: the board (now) and the history (any day). */
+function LivePage() {
+  const [tab, setTab] = useState<"board" | "history">("board")
+  // A phone left on the counter must not go to sleep with an order coming.
+  useWakeLock(tab === "board")
+  return (
+    <div className="space-y-4">
+      <div className="flex gap-1 rounded-2xl bg-muted/60 p-1 text-sm font-semibold sm:w-fit" role="tablist">
+        {([["board", "اللوحة"], ["history", "السجل"]] as const).map(([k, label]) => (
+          <button
+            key={k}
+            role="tab"
+            aria-selected={tab === k}
+            onClick={() => setTab(k)}
+            className={cn(
+              "flex-1 rounded-xl px-4 py-1.5 transition sm:flex-none",
+              tab === k ? "bg-card shadow-sm" : "text-muted-foreground",
+            )}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {tab === "board" ? <LiveBoard /> : <OrdersHistory />}
+    </div>
+  )
+}
+
+function useWakeLock(on: boolean) {
+  useEffect(() => {
+    if (!on || typeof navigator === "undefined" || !("wakeLock" in navigator)) return
+    type Lock = { release: () => Promise<void> }
+    let lock: Lock | null = null
+    let alive = true
+    const take = async () => {
+      try {
+        const l = await (navigator as unknown as { wakeLock: { request: (t: "screen") => Promise<Lock> } })
+          .wakeLock.request("screen")
+        if (alive) lock = l
+        else void l.release()
+      } catch {
+        /* battery saver or no permission: the screen may sleep */
+      }
+    }
+    void take()
+    // The lock is dropped whenever the tab is hidden; take it again on return.
+    const back = () => {
+      if (document.visibilityState === "visible") void take()
+    }
+    document.addEventListener("visibilitychange", back)
+    return () => {
+      alive = false
+      document.removeEventListener("visibilitychange", back)
+      void lock?.release()
+    }
+  }, [on])
+}
+
+function OrdersHistory() {
+  const [from, setFrom] = useState(() => businessToday())
+  const [to, setTo] = useState(() => businessToday())
+  const [status, setStatus] = useState<OrderStatus | "">("")
+  const params = { day_from: from, day_to: to, status, page_size: 50 }
+  const { items, isLoading, fetchNextPage, hasNextPage, isFetchingNextPage } =
+    useInfiniteList<Order>(["orders", "history"], ordersList, params, Boolean(from && to))
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-end gap-2 text-sm">
+        <label className="flex flex-col gap-1">
+          <span className="text-xs text-muted-foreground">من</span>
+          <input type="date" value={from} max={to} onChange={(e) => setFrom(e.target.value)}
+            className="rounded-xl border bg-card px-3 py-1.5" />
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-xs text-muted-foreground">إلى</span>
+          <input type="date" value={to} min={from} onChange={(e) => setTo(e.target.value)}
+            className="rounded-xl border bg-card px-3 py-1.5" />
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-xs text-muted-foreground">الحالة</span>
+          <select value={status} onChange={(e) => setStatus(e.target.value as OrderStatus | "")}
+            className="rounded-xl border bg-card px-3 py-1.5">
+            <option value="">الكل</option>
+            {ALL_STATUSES.map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
+          </select>
+        </label>
+      </div>
+
+      {isLoading ? (
+        <Skeleton className="h-40 rounded-3xl" />
+      ) : items.length === 0 ? (
+        <EmptyState art={<NoDataArt />} title="ما في طلبات بهالفترة" description="غيّر التاريخ أو الحالة." />
+      ) : (
+        <ul className="divide-y rounded-3xl border bg-card">
+          {items.map((o) => (
+            <li key={o.id} className="flex flex-wrap items-baseline gap-x-3 gap-y-1 px-4 py-3 text-sm">
+              <b className="font-heading">#{o.id}</b>
+              <span className="text-muted-foreground">{o.customer_name || "زبون"}</span>
+              <FulfilmentPill o={o} />
+              <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold">{STATUS_LABEL[o.status]}</span>
+              <span className="min-w-0 flex-1 truncate text-[13px]">
+                {(o.items ?? []).map((it) => `${Math.round(Number(it.quantity))}× ${it.name}`).join("، ")}
+              </span>
+              <span className="tabular-nums text-xs text-muted-foreground">
+                {new Date(o.created_at).toLocaleString("ar", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+              </span>
+              <span className="font-heading font-bold">{formatMoney(Number(o.cash_total ?? o.total))}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {hasNextPage ? (
+        <Button variant="secondary" className="w-full" disabled={isFetchingNextPage} onClick={() => void fetchNextPage()}>
+          {isFetchingNextPage ? <Loader2 className="size-4 animate-spin" /> : null}
+          المزيد
+        </Button>
+      ) : null}
+    </div>
+  )
+}
+
+function FulfilmentPill({ o }: { o: Order }) {
+  if (o.fulfilment === "dinein") {
+    return (
+      <span className="rounded-full bg-primary/12 px-2 py-0.5 text-[11px] font-bold text-primary">
+        طاولة{o.table_number ? ` ${o.table_number}` : ""}
+      </span>
+    )
+  }
+  return <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">استلام</span>
 }
 
 function LiveBoard() {
-  const { orders, recent, open, isLoading, refresh, enableDesktopAlerts, desktopAlerts } =
+  const { orders, recent, open, isLoading, refresh, enableDesktopAlerts, desktopAlerts, unseen, acknowledge } =
     useLiveOrders()
   // One list for the whole board: the four live columns and the two finished
   // ones read from the same array, so a card that moves between them is the
@@ -126,7 +260,7 @@ function LiveBoard() {
 
   // localStorage does not exist on the server, and reading it during render
   // would hydrate the wrong icon.
-  useEffect(() => setMutedState(isMuted()), [])
+  useEffect(() => setMutedState(alarmMuted()), [])
 
   async function move(o: Order, status: OrderStatus) {
     setBusy(o.id)
@@ -216,15 +350,20 @@ function LiveBoard() {
               aria-pressed={!muted}
               onClick={() => {
                 const next = !muted
-                setMuted(next)
+                setAlarmMuted(next)
                 setMutedState(next)
-                // Preview the REAL alert, not a single blip — the point of
-                // un-muting is to know what you are agreeing to hear.
-                if (!next) playNewOrder()
+                // Preview the REAL alarm — the point of un-muting is to know
+                // what you are agreeing to hear.
+                if (!next) void testAlarm()
               }}
-              title={muted ? "الصوت مكتوم" : "الصوت مفعّل"}
+              title={muted ? "جرس الطلبات مكتوم" : "جرس الطلبات مفعّل"}
             >
               {muted ? <VolumeX className="size-4" /> : <Volume2 className="size-4" />}
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => void testAlarm().then((ok) => {
+              if (!ok) toast.warning("المتصفح منع الصوت — اضغط على الصفحة ثم جرّب")
+            })}>
+              جرّب الجرس
             </Button>
             <Button variant="secondary" size="sm" onClick={refresh}>
               <RefreshCw className="size-4" />
@@ -245,13 +384,26 @@ function LiveBoard() {
         </p>
       )}
 
-      {isLoading && open === 0 ? (
+      {muted && (
+        <p className="rounded-2xl border border-destructive/40 bg-destructive/5 px-4 py-2.5 text-sm font-semibold text-destructive">
+          جرس الطلبات مكتوم على هذا الجهاز — لن تسمع الطلبات الجديدة.
+        </p>
+      )}
+
+      {unseen.length > 0 && (
+        <Button className="w-full" size="lg" variant="destructive" onClick={acknowledge}>
+          <Bell className="size-4" />
+          {unseen.length === 1 ? "طلب جديد — شفته" : `${formatNumber(unseen.length)} طلبات جديدة — شفتها`}
+        </Button>
+      )}
+
+      {isLoading && open === 0 && recent.length === 0 ? (
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           {[0, 1, 2, 3].map((i) => (
             <Skeleton key={i} className="h-40 rounded-3xl" />
           ))}
         </div>
-      ) : open === 0 ? (
+      ) : open === 0 && recent.length === 0 ? (
         <EmptyState
           art={<NoDataArt />}
           title="ما في طلبات مفتوحة"
@@ -369,6 +521,10 @@ function LiveBoard() {
                           >
                             {w.label}
                           </span>
+                        </div>
+
+                        <div className="mt-1.5">
+                          <FulfilmentPill o={o} />
                         </div>
 
                         <ul className="mt-2 space-y-0.5 text-[13px]">

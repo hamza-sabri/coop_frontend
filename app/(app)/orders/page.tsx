@@ -133,6 +133,7 @@ export default function SalesPage() {
   const summary = useQuery({
     queryKey: ["sales", "summary", params],
     queryFn: () => salesSummary(params).then((r) => r.data),
+    enabled: isOwner,
     refetchInterval: LIVE_MS,
     placeholderData: (p) => p,
   })
@@ -288,7 +289,8 @@ export default function SalesPage() {
     >
       <Enter i={0} className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
         <p className="font-heading text-2xl font-bold tabular-nums">
-          {summary.data ? `${formatNumber(summary.data.count)} فاتورة` : "…"}
+          {/* How many invoices, like what they took, is the owner's figure. */}
+          {!isOwner ? "الفواتير" : summary.data?.count != null ? `${formatNumber(summary.data.count)} فاتورة` : "…"}
         </p>
         {isOwner && summary.data?.total != null ? (
           <p className="text-lg font-semibold tabular-nums text-muted-foreground">· {formatMoney(summary.data.total)}</p>

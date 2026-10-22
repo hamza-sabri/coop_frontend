@@ -28,12 +28,13 @@ import {
   useRef,
   useState,
 } from "react"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 
 import { ordersLive, type LiveOrders, type Order } from "@/api/orders"
-import { isMuted, playNewOrder, unlockAudio } from "@/lib/beep"
-import { hasModule, useModules } from "@/lib/modules"
+import { unlockAudio } from "@/lib/beep"
+import { alarmMuted, startAlarm, stopAlarm } from "@/lib/order-alarm"
+import { hasModule, useModules, useOwnerState } from "@/lib/modules"
 
 export const LIVE_ORDERS_KEY = ["orders", "live"] as const
 
@@ -52,6 +53,10 @@ type Ctx = {
   /** Ask the browser for desktop notifications. Must be called from a click. */
   enableDesktopAlerts: () => Promise<boolean>
   desktopAlerts: "granted" | "denied" | "default" | "unsupported"
+  /** New orders nobody has acknowledged yet — the alarm rings while any exist. */
+  unseen: Order[]
+  /** "Seen": stop the alarm for every order waiting now. */
+  acknowledge: () => void
 }
 
 const OrdersLiveContext = createContext<Ctx | null>(null)
@@ -70,6 +75,8 @@ export function useLiveOrders(): Ctx {
       refresh: () => {},
       enableDesktopAlerts: async () => false,
       desktopAlerts: "unsupported",
+      unseen: [],
+      acknowledge: () => {},
     }
   )
 }
@@ -96,6 +103,10 @@ export function OrdersLiveProvider({ children }: { children: React.ReactNode }) 
   // a nav item, wrong for a poller that would fire before the answer lands.
   const { modules, isLoading: modulesLoading } = useModules()
   const ordersOn = !modulesLoading && hasModule(modules, "online_orders")
+  /* Who is alerted: employees — the people at the counter. Owners and
+     platform superusers still see the badge and the board, but are not rung
+     or bannered (an owner's phone at home must not start ringing). */
+  const alertMe = useOwnerState() === "employee"
 
   const { data, isLoading } = useQuery({
     queryKey: LIVE_ORDERS_KEY,
@@ -143,13 +154,8 @@ export function OrdersLiveProvider({ children }: { children: React.ReactNode }) 
     seen.current = ids
     if (fresh.length === 0) return
 
-    // Once. However many arrived together, and however long they sit there
-    // afterwards. A sound that repeats is a sound people learn to resent, and
-    // the standing state has three quieter carriers already: the badge, the
-    // tab title, and a red column at the head of the board.
-    if (!isMuted()) playNewOrder()
-
-    if (permission() === "granted") {
+    // The alarm itself (ringing until "seen") is driven by `unseen` below.
+    if (alertMe && permission() === "granted") {
       try {
         const one = fresh[0]
         const n = new Notification(
@@ -180,7 +186,7 @@ export function OrdersLiveProvider({ children }: { children: React.ReactNode }) 
         /* Safari throws on the constructor in some contexts; not fatal */
       }
     }
-  }, [data, orders])
+  }, [data, orders, alertMe])
 
   // The tab title. A backgrounded tab is the normal state of the admin on a
   // counter laptop that is also someone's browser.
@@ -212,6 +218,26 @@ export function OrdersLiveProvider({ children }: { children: React.ReactNode }) 
     }
   }, [])
 
+  /* The alarm. It rings — loud, on a loop — while any order is still
+     "placed" and nobody has tapped "seen" for it. Accepting the order stops
+     it too. This replaced a single soft chime that a busy counter missed. */
+  const [acked, setAcked] = useState<Set<number>>(() => new Set())
+  const unseen = alertMe ? orders.filter((o) => o.status === "placed" && !acked.has(o.id)) : []
+  const unseenKey = unseen.map((o) => o.id).join(",")
+  useEffect(() => {
+    if (unseenKey && !alarmMuted()) void startAlarm()
+    else stopAlarm()
+  }, [unseenKey])
+  useEffect(() => () => stopAlarm(), [])
+  const acknowledge = useCallback(() => {
+    setAcked((prev) => {
+      const next = new Set(prev)
+      for (const o of orders) if (o.status === "placed") next.add(o.id)
+      return next
+    })
+    stopAlarm()
+  }, [orders])
+
   const refresh = useCallback(() => {
     void qc.invalidateQueries({ queryKey: LIVE_ORDERS_KEY })
   }, [qc])
@@ -234,9 +260,45 @@ export function OrdersLiveProvider({ children }: { children: React.ReactNode }) 
         refresh,
         enableDesktopAlerts,
         desktopAlerts,
+        unseen,
+        acknowledge,
       }}
     >
       {children}
+      <OrderAlarmBanner unseen={unseen} onSeen={acknowledge} />
     </OrdersLiveContext.Provider>
+  )
+}
+
+
+/* Across the top of every admin page while an order is waiting unseen. One
+   tap anywhere on it is "seen": the ring stops, and the board opens. */
+function OrderAlarmBanner({ unseen, onSeen }: { unseen: Order[]; onSeen: () => void }) {
+  const pathname = usePathname()
+  const router = useRouter()
+  if (!unseen.length) return null
+  const one = unseen[0]
+  const label =
+    unseen.length === 1
+      ? `طلب جديد #${one.id}${one.customer_name ? ` · ${one.customer_name}` : ""}${
+          one.fulfilment === "dinein" && one.table_number ? ` · طاولة ${one.table_number}` : ""
+        }`
+      : `${unseen.length} طلبات جديدة`
+  return (
+    <button
+      type="button"
+      dir="rtl"
+      onClick={() => {
+        onSeen()
+        if (pathname !== "/live") router.push("/live")
+      }}
+      className="fixed inset-x-0 top-0 z-[100] flex animate-pulse items-center justify-center gap-3 bg-red-600 px-4 py-4 text-lg font-bold text-white shadow-lg"
+      style={{ paddingTop: "max(1rem, env(safe-area-inset-top))" }}
+      aria-live="assertive"
+    >
+      <span aria-hidden>🔔</span>
+      <span>{label}</span>
+      <span className="rounded-full bg-white/20 px-3 py-1 text-sm">اضغط — تم</span>
+    </button>
   )
 }

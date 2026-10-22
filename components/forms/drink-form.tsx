@@ -149,6 +149,65 @@ function MarginPill({ price, cost }: { price: number; cost: number }) {
 
 /* ── the picture ─────────────────────────────────────────────────────────── */
 
+/** The gallery: up to five more pictures (backend MAX_GALLERY = 5). */
+const GALLERY_MAX = 5
+type GalleryPhoto = { key: string; url: string; id?: number; file?: File }
+
+function DrinkGallery({
+  photos,
+  onAdd,
+  onRemove,
+}: {
+  photos: GalleryPhoto[]
+  onAdd: (files: File[]) => void
+  onRemove: (key: string) => void
+}) {
+  const input = useRef<HTMLInputElement>(null)
+  const room = GALLERY_MAX - photos.length
+  return (
+    <div className="space-y-1.5">
+      <p className="text-xs text-muted-foreground">صور إضافية ({photos.length}/{GALLERY_MAX})</p>
+      <div className="grid grid-cols-3 gap-1.5">
+        {photos.map((p) => (
+          <div key={p.key} className="relative aspect-square overflow-hidden rounded-xl border">
+            <BlurImg src={p.url} alt="" loading="lazy" className="size-full object-cover" />
+            <button
+              type="button"
+              aria-label="حذف الصورة"
+              onClick={() => onRemove(p.key)}
+              className="absolute end-1 top-1 grid size-5 place-items-center rounded-full bg-black/50 text-white"
+            >
+              <X className="size-3" />
+            </button>
+          </div>
+        ))}
+        {room > 0 && (
+          <button
+            type="button"
+            onClick={() => input.current?.click()}
+            className="grid aspect-square place-items-center rounded-xl border-2 border-dashed text-muted-foreground hover:border-primary/50"
+            aria-label="أضف صوراً"
+          >
+            <ImagePlus className="size-5" />
+          </button>
+        )}
+      </div>
+      <input
+        ref={input}
+        type="file"
+        accept="image/*"
+        multiple
+        hidden
+        onChange={(e) => {
+          const files = Array.from(e.target.files ?? []).filter((f) => f.type.startsWith("image/")).slice(0, room)
+          if (files.length) onAdd(files)
+          e.target.value = ""
+        }}
+      />
+    </div>
+  )
+}
+
 function DrinkPhoto({
   url,
   file,
@@ -644,6 +703,9 @@ export function DrinkForm({
   const [available, setAvailable] = useState(true)
   const [imageUrl, setImageUrl] = useState("")
   const [imageFile, setImageFile] = useState<File | null>(null)
+  /* Up to five more pictures beside the main one (the menu's gallery). */
+  const [gallery, setGallery] = useState<GalleryPhoto[]>([])
+  const galleryRemoved = useRef<number[]>([])
   const [options, setOptions] = useState<Option[]>([])
   const [saving, setSaving] = useState(false)
   const removed = useRef<number[]>([])
@@ -710,6 +772,12 @@ export function DrinkForm({
       setAvailable((product as unknown as { is_active?: boolean }).is_active !== false)
       setImageUrl(product.image ?? "")
       setImageFile(null)
+      galleryRemoved.current = []
+      setGallery(
+        ((product as unknown as { images?: { id: number; url: string }[] }).images ?? []).map((im) => ({
+          key: `s${im.id}`, id: im.id, url: im.url,
+        })),
+      )
       if (product.id != null) void loadOptions(product.id)
     } else {
       setName("")
@@ -720,6 +788,8 @@ export function DrinkForm({
       setAvailable(true)
       setImageUrl("")
       setImageFile(null)
+      galleryRemoved.current = []
+      setGallery([])
       setOptions([])
       setOptsReady(true)
     }
@@ -813,8 +883,12 @@ export function DrinkForm({
           notes: notes.trim(),
           is_active: available,
           image: imageFile ? undefined : imageUrl.trim(),
+          remove_images: galleryRemoved.current.length ? galleryRemoved.current.join(",") : undefined,
         },
-        { image_file: imageFile ?? undefined },
+        {
+          image_file: imageFile ?? undefined,
+          image_files: gallery.flatMap((g) => (g.file ? [g.file] : [])),
+        },
       )) as { data?: { id?: number } }
 
       const productId = product?.id ?? res?.data?.id
@@ -1021,6 +1095,23 @@ export function DrinkForm({
               setImageFile(null)
               setImageUrl("")
             }}
+          />
+          <DrinkGallery
+            photos={gallery}
+            onAdd={(files) =>
+              setGallery((prev) =>
+                [...prev, ...files.map((f) => ({ key: `n${Math.random().toString(36).slice(2)}`, url: URL.createObjectURL(f), file: f }))]
+                  .slice(0, GALLERY_MAX),
+              )
+            }
+            onRemove={(key) =>
+              setGallery((prev) => {
+                const gone = prev.find((g) => g.key === key)
+                if (gone?.id != null) galleryRemoved.current.push(gone.id)
+                if (gone?.file) URL.revokeObjectURL(gone.url)
+                return prev.filter((g) => g.key !== key)
+              })
+            }
           />
           <label className="flex items-center justify-between gap-2 rounded-2xl border px-3 py-2.5">
             <span className="text-sm font-medium">في المنيو</span>

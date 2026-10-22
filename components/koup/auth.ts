@@ -42,6 +42,8 @@ export type KoupAuth = {
     },
   ) => Promise<Order | null>
   refreshOrders?: () => Promise<void> | void
+  /** Order updates on the lock screen (Web Push). Absent = not offered. */
+  push?: { state: import('@/lib/koup-push').PushState; enable: () => Promise<boolean> }
   /** The phone app (club mode) with the menu switched on. `canOrder` adds
    *  the basket and checkout — only while the shop takes online orders
    *  (GET /public/ordering/); otherwise the menu is browse-only. */

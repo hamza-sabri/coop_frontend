@@ -33,6 +33,7 @@ type ApiItem = {
   category: string
   category_icon: string
   variants: { id: number; name: string; price: string }[]
+  images?: string[]
 }
 
 /* Points per shekel. The ledger is the source of truth for what a customer
@@ -67,6 +68,7 @@ function toItem(r: ApiItem): Item {
     g: tone(r.category || r.name),
     t: [],
     image: r.image || undefined,
+    gallery: [r.image, ...(r.images ?? [])].filter(Boolean),
     /* The real options, straight from the same rows the till sells. The
        hard-coded الحجم / الحليب groups below them were prototype furniture
        from before the menu existed — this menu has no sizes at all. */

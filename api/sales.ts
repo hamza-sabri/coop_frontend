@@ -414,4 +414,4 @@ export const taxonomyList = (
 
 /** How many invoices the current filter shows and (owner only) what they took. */
 export const salesSummary = (params: Record<string, unknown>) =>
-  customFetch<{ data: { count: number; total?: string } }>(`/api/v1/sales/summary/${qs(params)}`)
+  customFetch<{ data: { count?: number; total?: string } }>(`/api/v1/sales/summary/${qs(params)}`)

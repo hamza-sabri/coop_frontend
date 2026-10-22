@@ -22,9 +22,13 @@ import { CATS as FALLBACK_CATS, TAGS, T, type Item } from '@/lib/menu'
 import { useKoupMenu } from '@/lib/koup-menu'
 import { ClubProfile, ClubVisits } from '@/components/koup/club'
 import { compact } from '@/lib/compact-number'
+import { BlurImg } from '@/components/blur-img'
+import { storeSlug } from '@/lib/customer-session'
+import type { Order as KoupOrder } from '@/lib/koup-orders'
 
 type Lang = 'ar' | 'en' | 'he'
-type Screen = 'home' | 'menu' | 'cart' | 'track' | 'wallet' | 'rewards' | 'profile'
+type Screen = 'home' | 'menu' | 'cart' | 'track' | 'order' | 'wallet' | 'rewards' | 'profile'
+const SCREENS: Screen[] = ['home', 'menu', 'cart', 'track', 'order', 'wallet', 'profile']
 
 const FILL = 0.76
 /* A gear, inline — the icon set in this file has no settings glyph and adding
@@ -165,6 +169,10 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
     writePrefs({ lang: next })
   }, [])
   const [screen, setScreen] = useState<Screen>('home')
+  /* The order being looked at (طلب #12 — its steps and live status). */
+  const [orderId, setOrderId] = useState<number | null>(null)
+  /* The basket bar on the menu: closed (a strip) or open (the basket). */
+  const [barOpen, setBarOpen] = useState(false)
   const [cat, setCat] = useState('all')
   const [view, setView] = useState<'grid' | 'carpet'>('grid')
   const [sheetItem, setSheetItem] = useState<Item | null>(null)
@@ -258,6 +266,49 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
   const [lines, setLines] = useState<Line[]>([])
   const cartCount = lines.reduce((n, l) => n + l.qty, 0)
   const [cartBump, setCartBump] = useState(0)
+
+  /* The basket survives a refresh (and the phone killing the tab): kept per
+     shop, so two shops' baskets never mix. */
+  const cartKey = `sijilli.cart.${storeSlug() || 'shop'}`
+  const cartLoaded = useRef(false)
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(cartKey)
+      const saved = raw ? JSON.parse(raw) as Line[] : []
+      if (Array.isArray(saved) && saved.length) setLines(saved.filter(l => l && l.key && l.qty > 0))
+    } catch { /* nothing saved */ }
+    cartLoaded.current = true
+  }, [cartKey])
+  useEffect(() => {
+    if (!cartLoaded.current) return
+    try {
+      if (lines.length) localStorage.setItem(cartKey, JSON.stringify(lines))
+      else localStorage.removeItem(cartKey)
+    } catch { /* private mode */ }
+  }, [lines, cartKey])
+
+  /* Where you were survives a refresh too: the screen (and the order being
+     watched) live in the address — "#order=12" is also where a notification
+     about order 12 lands. */
+  const readHash = useCallback(() => {
+    const h = typeof window !== 'undefined' ? window.location.hash.slice(1) : ''
+    const q = new URLSearchParams(h)
+    const oid = Number(q.get('order'))
+    if (oid > 0) { setOrderId(oid); setScreen('order'); return }
+    const sc = q.get('s') as Screen | null
+    if (sc && SCREENS.includes(sc)) setScreen(sc)
+  }, [])
+  useEffect(() => {
+    readHash()
+    window.addEventListener('hashchange', readHash)
+    return () => window.removeEventListener('hashchange', readHash)
+  }, [readHash])
+  useEffect(() => {
+    const want = screen === 'order' && orderId ? `#order=${orderId}` : screen === 'home' ? '' : `#s=${screen}`
+    if (window.location.hash !== want) {
+      history.replaceState(null, '', want || (window.location.pathname + window.location.search))
+    }
+  }, [screen, orderId])
   // Everything here works offline except placing an order — the menu, the
   // points, the profile all come from cache. Ordering needs the shop.
   const [online, setOnline] = useState(true)
@@ -284,7 +335,7 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
      configured: with no keys the app simply runs open, which is what keeps
      local development working before the keys land. */
   const { locked: authLocked, user, Gate, openProfile, Account, Install, me, refreshMe, hasPhone, savePhone,
-          liveOrder, pastOrders, placeOrder, refreshOrders, club, menu } = auth
+          liveOrder, pastOrders, orders: allOrders, placeOrder, refreshOrders, club, menu, push } = auth
   /* The web page: points, visits and profile — plus the menu when switched
      on, and the basket only while the shop takes online orders. */
   const isClub = Boolean(club)
@@ -738,10 +789,17 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
     go('menu')
   }
 
+  function openOrder(id: number) {
+    setOrderId(id)
+    go('order')
+  }
+
   function go(s: Screen) {
     /* "طلبي" is one destination with two faces: once an order is placed the
-       customer wants its status, not the basket they already emptied. */
-    if (s === 'cart' && ordered) s = 'track'
+       customer wants its status, not the basket they already emptied —
+       unless there is a new basket to check out. */
+    if (s === 'cart' && ordered && !lines.length) s = 'track'
+    setBarOpen(false)
     if (s === screen) return
     SFX.tap()
     setScreen(s)
@@ -940,6 +998,46 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
                   )}
                 </div>
                 <ClubVisits purchases={(me?.purchases ?? []).slice(0, 3)} />
+
+                {/* طلباتي: the live one first, with its status as it moves,
+                    then the last few. Tap one for its steps. */}
+                {(allOrders?.length ?? 0) > 0 && (<>
+                  <div className="sechead">
+                    <h3>{t('tr.h2', 'طلباتي')}</h3>
+                    {(allOrders?.length ?? 0) > 3 && (
+                      <a onClick={() => go('track')}>{t('common.allv', 'الكل')}</a>
+                    )}
+                  </div>
+                  {liveOrder && (
+                    <div className="livecard press" onClick={() => openOrder(liveOrder.id)}>
+                      <div className="pulse"><Icon d={P.cup} s={19} /></div>
+                      <div className="t">
+                        <b>{t('tr.no', 'طلب')} #{liveOrder.id} · {liveOrder.status_label}</b>
+                        <span>{orderSummary(liveOrder)}</span>
+                      </div>
+                      <span className="eta num">₪{Number(liveOrder.total).toFixed(2)}</span>
+                    </div>
+                  )}
+                  {(pastOrders ?? []).slice(0, liveOrder ? 2 : 3).map(o => (
+                    <OrderRow key={o.id} o={o} t={t} onOpen={() => openOrder(o.id)} />
+                  ))}
+                </>)}
+
+                {push && push.state === 'off' && (
+                  <button className="club-nudge press" onClick={() => { void push.enable() }}>
+                    <span className="club-nudge-ic">🔔</span>
+                    <span className="t">
+                      <b>{t('push.t', 'فعّل الإشعارات')}</b>
+                      <span>{t('push.s', 'بنخبرك على جوالك أول ما يجهز طلبك')}</span>
+                    </span>
+                    <span className="club-nudge-go">←</span>
+                  </button>
+                )}
+                {push && push.state === 'needs-install' && (
+                  <p className="club-empty" style={{ marginTop: 14 }}>
+                    {t('push.ios', 'عشان توصلك الإشعارات على الآيفون: شارك ← «إضافة إلى الشاشة الرئيسية»، وافتح التطبيق من هناك.')}
+                  </p>
+                )}
               </>)}
               {!isClub && (<>
               {/* "امسح عند الكاشير" was removed. It scanned nothing: the
@@ -1260,7 +1358,7 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
 
             {liveOrder ? (
               <>
-                <div className="livecard" style={{ marginBottom: 18 }}>
+                <div className="livecard press" style={{ marginBottom: 18 }} onClick={() => openOrder(liveOrder.id)}>
                   <div className="pulse"><Icon d={P.cup} s={19} /></div>
                   <div className="t">
                     <b>{t('tr.no', 'طلب')} #{liveOrder.id}</b>
@@ -1311,19 +1409,52 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
               <>
                 <div className="sechead"><h3>{t('tr.past', 'طلبات سابقة')}</h3></div>
                 {pastOrders!.map(o => (
-                  <div className="line" key={o.id}>
-                    <span className="qbadge num">{o.items.length}</span>
-                    <div className="t">
-                      <h4>{t('tr.no', 'طلب')} #{o.id} · {o.status_label}</h4>
-                      <p>{new Date(o.created_at).toLocaleDateString('ar')}</p>
-                    </div>
-                    <span className="p num">₪{Number(o.total).toFixed(2)}</span>
-                  </div>
+                  <OrderRow key={o.id} o={o} t={t} onOpen={() => openOrder(o.id)} />
                 ))}
               </>
             )}
           </div>
         )}
+
+        {/* ── ONE ORDER ─────────────────────────────────────────────────
+            Its steps with the time of each (the server records every move),
+            what was in it, and — while it is live — where it is now. It
+            refreshes on its own while live, and at once when a notification
+            arrives. */}
+        {screen === 'order' && (() => {
+          const o = (allOrders ?? []).find(x => x.id === orderId) ?? null
+          return (
+            <div className="app-scroll koup-scroll">
+              <div className="greet"><div>
+                <h2>{t('tr.no', 'طلب')} #{orderId}</h2>
+                <p>{o ? `${o.status_label} · ${o.fulfilment === 'dinein'
+                  ? `${t('cart.dinein', 'على الطاولة')}${o.table_number ? ' ' + o.table_number : ''}`
+                  : t('cart.pickup', 'استلام')}` : t('tr.loading', 'لحظة…')}</p>
+              </div></div>
+              {o && (<>
+                <OrderSteps o={o} t={t} />
+                <div className="sechead"><h3>{t('tr.what', 'شو طلبت')}</h3></div>
+                {o.items.map((it, n) => (
+                  <div className="line" key={it.id ?? n}>
+                    <span className="qbadge num">{Math.round(Number(it.quantity))}</span>
+                    <div className="t"><h4>{it.name}</h4>{it.note ? <p>{it.note}</p> : null}</div>
+                    <span className="p num">₪{Number(it.line_total ?? it.unit_price).toFixed(2)}</span>
+                  </div>
+                ))}
+                {o.note ? <p className="club-empty" style={{ marginTop: 10 }}>{o.note}</p> : null}
+                <div className="totals">
+                  {o.beans_spent ? (
+                    <div><span>{t('ok.spent', 'مدفوع بالنقاط')}</span><span className="n">{o.beans_spent}</span></div>
+                  ) : null}
+                  <div className="grand"><span>{t('cart.total', 'الإجمالي')}</span><span>₪{Number(o.total).toFixed(2)}</span></div>
+                </div>
+              </>)}
+              <div className="cupcta" style={{ marginTop: 18 }}>
+                <button className="btn-ghost press" onClick={() => go('track')}>{t('tr.all', 'كل طلباتي')}</button>
+              </div>
+            </div>
+          )
+        })()}
 
         {/* ── WALLET ───────────────────────────────────────────────────── */}
         {screen === 'wallet' && (
@@ -1439,6 +1570,13 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
           <div className="sheet-body">
             <div className="grab" />
             {sheetItem && (<>
+              {(sheetItem.gallery?.length ?? 0) > 0 && (
+                <div className="sheet-gallery" dir="ltr">
+                  {sheetItem.gallery!.map((src, i) => (
+                    <BlurImg key={src + i} src={src} alt="" loading={i ? 'lazy' : 'eager'} />
+                  ))}
+                </div>
+              )}
               <h3>{nm(sheetItem, lang)}</h3>
               <p className="sub">{dsc(sheetItem, lang)}</p>
               {/* One block per cup.
@@ -1586,7 +1724,7 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
             customer needs to see that the shop has it. */}
         {placedOrder && (
           <div className="koup-settings" role="dialog" aria-modal="true"
-            onClick={() => { setPlacedOrder(null); go('track') }}>
+            onClick={() => { const id = placedOrder.id; setPlacedOrder(null); openOrder(id) }}>
             <div className="koup-settings-card placed" onClick={e => e.stopPropagation()}>
               <div className="placed-tick"><Icon d={P.check} s={26} /></div>
               <h3>{t('ok.h', 'وصل طلبك للكاشير')}</h3>
@@ -1607,8 +1745,14 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
                 <div><span>{t('ok.status', 'الحالة')}</span>
                   <b>{placedOrder.status_label}</b></div>
               </div>
+              {push && push.state === 'off' && (
+                <button className="btn-ghost press" style={{ marginBottom: 8 }}
+                  onClick={() => { void push.enable() }}>
+                  🔔 {t('push.ask', 'خبّرني لما يجهز')}
+                </button>
+              )}
               <button className="cta press"
-                onClick={() => { setPlacedOrder(null); go('track') }}>
+                onClick={() => { const id = placedOrder.id; setPlacedOrder(null); openOrder(id) }}>
                 {t('ok.track', 'تابع الطلب')}
               </button>
             </div>
@@ -1633,15 +1777,34 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
             Two tabs and a button. المنيو is not a place you go, it is what
             you do — so it is the big glowing + in the middle where a thumb
             lands without aiming, not a word competing with two others. */}
+        {/* The basket bar (like the till's on a phone): while ordering, the
+            basket rides above the tab bar — total and count, open it to
+            change quantities, remove, and send, without leaving the menu. */}
+        {canOrder && lines.length > 0 && (screen === 'menu' || screen === 'home') && (
+          <CartBar
+            open={barOpen} setOpen={setBarOpen} lines={lines} setLines={setLines}
+            total={cartSub} count={cartCount} t={t} sending={sending} online={online}
+            error={sendError} orderType={orderType} setOrderType={setOrderType}
+            tableNo={tableNo} setTableNo={setTableNo}
+            onMore={() => go('cart')}
+            onSend={() => {
+              if (!lines.length || sending) return
+              if (!hasPhone) { setPhoneErr(null); setPhoneStep(true); return }
+              void submitOrder()
+            }}
+          />
+        )}
+
         {isClub ? (
-        <nav className="tabs">
-          <button className="tab" aria-current={screen === 'home'} onClick={() => go('home')}>
+        /* Three places, always in the same spots whatever the language:
+           home on the right, a new order in the middle, the account on the
+           left (dir is fixed so English does not mirror it). */
+        <nav className="tabs tabs-3" dir="rtl">
+          <button className="tab" aria-current={screen === 'home' || screen === 'wallet' || screen === 'track' || screen === 'order'}
+            onClick={() => go('home')}>
             <Icon d={P.home} />
-            <span>{t('nav.home', 'نقاطي')}</span>
-          </button>
-          <button className="tab" aria-current={screen === 'wallet'} onClick={() => go('wallet')}>
-            <Icon d="M12 7v5l3 2M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Z" />
-            <span>{t('club.navVisits', 'زياراتي')}</span>
+            <span>{t('nav.home', 'الرئيسية')}</span>
+            {liveOrder && <span className="tabdot" aria-hidden />}
           </button>
           {showMenu && (
             <button className="tab tab-new press"
@@ -1653,18 +1816,7 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
                 <svg viewBox="0 0 24 24" aria-hidden><path d="M12 5v14M5 12h14" /></svg>
               </span>
               <span>{canOrder ? t('nav.new', 'اطلب') : t('menu.h', 'المنيو')}</span>
-            </button>
-          )}
-          {canOrder && (
-            <button className="tab"
-              aria-current={screen === 'cart' || screen === 'track'}
-              onClick={() => go('cart')}>
-              <span className="tabic" key={cartBump}
-                data-jump={cartBump > 0 ? '1' : undefined}>
-                <Icon d={P.bag} />
-                {cartCount > 0 && <span className="tabcount num">{cartCount}</span>}
-              </span>
-              <span>{t('nav.orders', 'طلباتي')}</span>
+              {cartCount > 0 && <span className="tabcount num" key={cartBump}>{cartCount}</span>}
             </button>
           )}
           <button className="tab" aria-current={screen === 'profile'} onClick={() => go('profile')}>
@@ -1705,5 +1857,147 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
         )}
       </div>
     </div>
+  )
+}
+
+/* ── orders: rows, steps, the basket bar ─────────────────────────────────── */
+type TFn = (key: string, fallbackAr: string) => string
+
+function orderSummary(o: KoupOrder): string {
+  return o.items.map(it => `${Math.round(Number(it.quantity))}× ${it.name}`).join('، ')
+}
+
+function OrderRow({ o, t, onOpen }: { o: KoupOrder; t: TFn; onOpen: () => void }) {
+  return (
+    <div className="line press" role="button" tabIndex={0} onClick={onOpen}
+      onKeyDown={e => { if (e.key === 'Enter') onOpen() }}>
+      <span className="qbadge num">{o.items.length}</span>
+      <div className="t">
+        <h4>{t('tr.no', 'طلب')} #{o.id} · {o.status_label}</h4>
+        <p>{new Date(o.created_at).toLocaleDateString('ar', { day: 'numeric', month: 'long' })} · {orderSummary(o)}</p>
+      </div>
+      <span className="p num">₪{Number(o.total).toFixed(2)}</span>
+    </div>
+  )
+}
+
+const STEP_LABEL: Record<string, string> = {
+  placed: 'وصل الطلب', accepted: 'تم القبول', preparing: 'قيد التحضير',
+  ready: 'جاهز للاستلام', collected: 'تم الاستلام', cancelled: 'أُلغي الطلب',
+}
+const LADDER = ['placed', 'accepted', 'preparing', 'ready', 'collected'] as const
+
+/** The order's steps: each one it has been through, with its time, and —
+ *  while live — the ones still to come, greyed. */
+function OrderSteps({ o, t }: { o: KoupOrder; t: TFn }) {
+  const recorded = (o.timeline ?? []).filter(s => s && s.s)
+  const at = (st: string) => {
+    for (let i = recorded.length - 1; i >= 0; i--) if (recorded[i].s === st) return recorded[i].at
+    return null
+  }
+  const time = (iso: string | null) => iso
+    ? new Date(iso).toLocaleTimeString('ar', { hour: '2-digit', minute: '2-digit' }) : ''
+  const cancelled = o.status === 'cancelled'
+  const now = LADDER.indexOf(o.status as typeof LADDER[number])
+  const rows: { st: string; cls: string; when: string }[] = cancelled
+    ? [...recorded.map(s => ({ st: s.s, cls: 'done', when: time(s.at) }))]
+    : LADDER.map((st, i) => ({
+        st,
+        cls: i < now ? 'done' : i === now ? (st === 'collected' ? 'done' : 'active') : 'pending',
+        when: i <= now ? time(at(st)) : '',
+      }))
+  return (
+    <div className="steps">
+      {rows.map((r, i) => (
+        <div className={`step ${r.cls}`} key={r.st + i}>
+          <div className="node"><Icon d={P.check} s={15} /></div>
+          <h4>{t(`tr.${r.st}`, STEP_LABEL[r.st] ?? r.st)}{r.when ? <span className="steptime num"> · {r.when}</span> : null}</h4>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+type BarLine = { key: string; name: string; unit_price: number; qty: number; note: string; product?: number; variant?: number }
+
+function CartBar({
+  open, setOpen, lines, setLines, total, count, t, sending, online, error,
+  orderType, setOrderType, tableNo, setTableNo, onMore, onSend,
+}: {
+  open: boolean
+  setOpen: (v: boolean) => void
+  lines: BarLine[]
+  setLines: React.Dispatch<React.SetStateAction<BarLine[]>>
+  total: number
+  count: number
+  t: TFn
+  sending: boolean
+  online: boolean
+  error: string | null
+  orderType: 'pickup' | 'dinein'
+  setOrderType: (v: 'pickup' | 'dinein') => void
+  tableNo: string
+  setTableNo: (v: string) => void
+  onMore: () => void
+  onSend: () => void
+}) {
+  const bump = (key: string, d: number) => {
+    SFX.tap()
+    setLines(p => p.map(x => x.key === key ? { ...x, qty: Math.max(1, Math.min(20, x.qty + d)) } : x))
+  }
+  return (
+    <>
+      {open && <div className="cartbar-scrim" onClick={() => setOpen(false)} />}
+      <div className={`cartbar ${open ? 'on' : ''}`}>
+        <button className="cartbar-head press" onClick={() => { SFX.tap(); setOpen(!open) }}
+          aria-expanded={open}>
+          <span className="cartbar-n num">{count}</span>
+          <span className="cartbar-t">{open ? t('bar.close', 'سلّتك') : t('bar.open', 'شوف السلة')}</span>
+          <span className="cartbar-p num">₪{total.toFixed(total % 1 ? 2 : 0)}</span>
+          <span className="cartbar-chev" aria-hidden>{open ? '▾' : '▴'}</span>
+        </button>
+        {open && (
+          <div className="cartbar-body">
+            {lines.map(l => (
+              <div className="line line-edit" key={l.key}>
+                <div className="lineqty">
+                  <button aria-label="−" onClick={() => bump(l.key, -1)}>−</button>
+                  <span className="num">{l.qty}</span>
+                  <button aria-label="+" onClick={() => bump(l.key, +1)}>+</button>
+                </div>
+                <div className="t"><h4>{l.name}</h4>{l.note ? <p>{l.note}</p> : null}</div>
+                <span className="p num">₪{(l.unit_price * l.qty).toFixed(2)}</span>
+                <button className="lx press" aria-label={t('cart.remove', 'احذف')}
+                  onClick={() => { SFX.tap(); setLines(p => p.filter(x => x.key !== l.key)) }}>×</button>
+              </div>
+            ))}
+            <div className="otypes otypes-sm">
+              {([['pickup', P.store, 'استلام'], ['dinein', P.table, 'على الطاولة']] as const).map(([k, d, ar]) => (
+                <button key={k} className="otype" aria-pressed={orderType === k}
+                  onClick={() => { SFX.tap(); setOrderType(k) }}>
+                  <Icon d={d} s={16} /><span>{t(`cart.${k}`, ar)}</span>
+                </button>
+              ))}
+            </div>
+            {orderType === 'dinein' && (
+              <label className="notefield">
+                <span>{t('cart.table', 'رقم الطاولة')}</span>
+                <input type="text" value={tableNo} maxLength={32}
+                  placeholder={t('cart.tablePh', 'مثلاً ٣، أو برّا')}
+                  onChange={e => setTableNo(e.target.value)} />
+              </label>
+            )}
+            {error && <p className="cartbar-err">{error}</p>}
+            <button className="cta press" disabled={!online || !lines.length || sending} onClick={onSend}>
+              <span>{sending ? t('cart.sending', 'عم نبعت…') : t('cart.confirm', 'أكّد الطلب')}</span>
+              {' · '}<span className="price">₪{total.toFixed(total % 1 ? 2 : 0)}</span>
+            </button>
+            <button className="btn-ghost press cartbar-more" onClick={onMore}>
+              {t('bar.more', 'ملاحظة، أو الدفع بالنقاط…')}
+            </button>
+          </div>
+        )}
+      </div>
+    </>
   )
 }

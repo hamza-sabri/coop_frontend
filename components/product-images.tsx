@@ -19,8 +19,8 @@ export type MedPhoto = {
   existingId?: number
 }
 
-/** 1 main + up to 8 gallery photos (backend MAX_GALLERY = 8). */
-const MAX = 9
+/** 1 main + up to 5 gallery photos (backend MAX_GALLERY = 5). */
+const MAX = 6
 
 export const uid = () =>
   typeof crypto !== "undefined" && "randomUUID" in crypto

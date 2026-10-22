@@ -9,6 +9,8 @@ import { PageShell } from "@/components/page-shell"
 import { Choice, SettingsCard } from "@/components/settings/kit"
 import { Button } from "@/components/ui/button"
 import { BrandingSection } from "@/components/settings/branding-section"
+import { AppSoundSection } from "@/components/settings/app-sound-section"
+import { OrderAlarmSound } from "@/components/settings/order-alarm-sound"
 import { PlanLockedSection } from "@/components/settings/plan-locked-section"
 import { PrintSection } from "@/components/settings/print-section"
 import { TillSound } from "@/components/settings/till-sound"
@@ -121,6 +123,9 @@ export default function SettingsPage() {
             <SettingsCard icon={Volume2} title="صوت الكاشير" hint="نغمة قصيرة عند إضافة صنف للسلة أو مسح باركود.">
               <TillSound className="mt-auto self-start" />
             </SettingsCard>
+            <SettingsCard icon={Volume2} title="جرس الطلبات" hint="يرن بصوت عالٍ ويتكرر لحد ما حدا يضغط «تم» أو يقبل الطلب.">
+              <OrderAlarmSound className="mt-auto" />
+            </SettingsCard>
             <ScannerSection />
           </div>
         )}
@@ -129,7 +134,12 @@ export default function SettingsPage() {
             re-checked here. The server refuses either way. */}
         {tab === "points" && isOwner && <PointsSection />}
         {tab === "shifts" && isOwner && <ShiftsSection />}
-        {tab === "brand" && isOwner && <BrandingSection />}
+        {tab === "brand" && isOwner && (
+          <div className="space-y-4">
+            <BrandingSection />
+            <AppSoundSection />
+          </div>
+        )}
 
         {/* Printing. Also in the POS's printer dialog, but that is only reachable
             from the till — the owner sets the shop up from here. */}

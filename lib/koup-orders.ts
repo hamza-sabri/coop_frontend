@@ -36,6 +36,9 @@ export type Order = {
   note: string
   items: OrderItem[]
   created_at: string
+  updated_at?: string
+  /** Every status it has been in, with when (the server records each move). */
+  timeline?: { s: Order["status"]; at: string | null }[]
 }
 
 /** Anything not in this set is finished business — history, not a live order. */
