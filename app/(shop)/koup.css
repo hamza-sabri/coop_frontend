@@ -1406,3 +1406,14 @@ body:has(.koup){overflow:hidden}
 .koup .basket-send:disabled{opacity:.5}
 
 .koup .club-delete{display:block;margin:18px auto 0;font-size:12.5px;color:var(--app-rust);text-decoration:underline;padding:6px}
+
+/* Cancel an order still awaiting the counter: the ghost button, in rust. */
+.koup .btn-ghost.order-cancel{color:#E79A86;border-color:rgba(217,124,103,.38)}
+.koup .btn-ghost.order-cancel:disabled{opacity:.6}
+
+/* "Get the app" nudge (components/koup/get-app.tsx) */
+.koup .getapp{position:relative;margin-bottom:12px}
+.koup .getapp .club-nudge{text-decoration:none;color:inherit;display:flex}
+.koup .getapp-x{position:absolute;top:-8px;inset-inline-start:-6px;width:26px;height:26px;border-radius:99px;
+  background:var(--app-surf2);color:var(--app-ink2);border:1px solid rgba(216,221,236,.18);font-size:16px;line-height:1;
+  display:grid;place-items:center;cursor:pointer}

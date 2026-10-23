@@ -42,6 +42,8 @@ export type KoupAuth = {
     },
   ) => Promise<Order | null>
   refreshOrders?: () => Promise<void> | void
+  /** Cancel an order still awaiting the counter (POST /shop/orders/<id>/cancel/). */
+  cancelOrder?: (id: number) => Promise<unknown>
   /** Order updates on the lock screen (Web Push). Absent = not offered. */
   push?: { state: import('@/lib/koup-push').PushState; enable: () => Promise<boolean> }
   /** The phone app (club mode) with the menu switched on. `canOrder` adds

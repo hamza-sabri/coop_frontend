@@ -15,6 +15,7 @@ import { gsap } from 'gsap'
 import { Cup } from '@/lib/cup'
 import { cssBackgroundWithBlur } from '@/lib/blurhash'
 import { SFX, haptic } from '@/lib/sfx'
+import { GetAppBanner } from '@/components/koup/get-app'
 import { readPrefs, writePrefs } from '@/lib/koup-prefs'
 import { usePullToRefresh } from '@/lib/use-pull-to-refresh'
 import { lowPower, probePerformance } from '@/lib/device'
@@ -338,7 +339,12 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
      configured: with no keys the app simply runs open, which is what keeps
      local development working before the keys land. */
   const { locked: authLocked, user, Gate, openProfile, Account, Install, me, refreshMe, hasPhone, savePhone,
-          liveOrder, pastOrders, orders: allOrders, placeOrder, refreshOrders, club, menu, push } = auth
+          liveOrder, pastOrders, orders: allOrders, placeOrder, refreshOrders, cancelOrder, club, menu, push } = auth
+  /* Cancelling an order: a second tap confirms (no browser dialog), and the
+     server's own words come back if it is too late. */
+  const [cancelAsk, setCancelAsk] = useState<number | null>(null)
+  const [cancelBusy, setCancelBusy] = useState(false)
+  const [cancelErr, setCancelErr] = useState('')
   /* The web page: points, visits and profile — plus the menu when switched
      on, and the basket only while the shop takes online orders. */
   const isClub = Boolean(club)
@@ -996,6 +1002,7 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
 
             <div className="panel" ref={panelRef}>
               {Install ? <Install /> : null}
+              <GetAppBanner />
               {isClub && !authLocked && (<>
                 {me?.profile && !me.profile.complete && (
                   <button className="club-nudge press" onClick={() => go('profile')}>
@@ -1492,6 +1499,25 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
                   <div className="grand"><span>{t('cart.total', 'الإجمالي')}</span><span>₪{Number(o.total).toFixed(2)}</span></div>
                 </div>
               </>)}
+              {o && o.status === 'placed' && cancelOrder && (
+                <div className="cupcta" style={{ marginTop: 18 }}>
+                  <button
+                    className="btn-ghost press order-cancel"
+                    disabled={cancelBusy}
+                    onClick={async () => {
+                      if (cancelAsk !== o.id) { setCancelAsk(o.id); setCancelErr(''); return }
+                      setCancelBusy(true)
+                      try { await cancelOrder(o.id); setCancelAsk(null); SFX.tap() }
+                      catch (e) { setCancelErr(e instanceof Error ? e.message : String(e)) }
+                      finally { setCancelBusy(false) }
+                    }}>
+                    {cancelBusy ? t('tr.cancelling', 'لحظة…')
+                      : cancelAsk === o.id ? t('tr.cancelSure', 'متأكد؟ اضغط مرة ثانية للإلغاء')
+                      : t('tr.cancel', 'إلغاء الطلب')}
+                  </button>
+                  {cancelErr && <p className="club-empty" role="alert" style={{ marginTop: 8 }}>{cancelErr}</p>}
+                </div>
+              )}
               <div className="cupcta" style={{ marginTop: 18 }}>
                 <button className="btn-ghost press" onClick={() => go('track')}>{t('tr.all', 'كل طلباتي')}</button>
               </div>

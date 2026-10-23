@@ -57,7 +57,7 @@ export default function KoupAppPhone() {
   }, [session?.store])
   /* A customer's orders are theirs to see whether or not the shop is taking
      new ones right now — switching ordering off must never empty طلباتي. */
-  const { orders, live: liveOrder, past: pastOrders, place: placeOrder, refresh: refreshOrders } =
+  const { orders, live: liveOrder, past: pastOrders, place: placeOrder, refresh: refreshOrders, cancel: cancelOrder } =
     useKoupOrders(uid, session ? getToken : undefined)
 
   /* Lock-screen updates, and the shop's own sound in the app. */
@@ -142,7 +142,7 @@ export default function KoupAppPhone() {
         hasPhone: true,
         club: { saveProfile, signOut, deleteAccount, email: null },
         menu: { canOrder: ordering && Boolean(session) },
-        orders, liveOrder, pastOrders, refreshOrders,
+        orders, liveOrder, pastOrders, refreshOrders, cancelOrder,
         ...(ordering ? { placeOrder } : {}),
         push: session && push.state !== 'unsupported' ? { state: push.state, enable: push.enable } : undefined,
       }}

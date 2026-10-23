@@ -159,8 +159,33 @@ export function useKoupOrders(
     return order
   }, [uid, getToken])
 
+  /** Cancel while still «بانتظار التأكيد» (the server refuses later, and
+   *  refunds any points spent). Throws the server's own words on refusal. */
+  const cancel = useCallback(async (id: number): Promise<Order | null> => {
+    if (!uid || !getToken) return null
+    const token = await getToken()
+    if (!token) return null
+    const r = await fetch(`${API}/api/v1/shop/orders/${id}/cancel/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: "{}",
+    })
+    const body = await r.json().catch(() => null) as (Order & { detail?: string }) | null
+    if (!r.ok) throw new Error(body?.detail || "ما زبط الإلغاء — جرّب كمان مرة")
+    if (body && typeof body.id === "number") {
+      setOrders(prev => {
+        const next = prev.map(o => (o.id === body.id ? body : o))
+        writeCache(uid, next)
+        return next
+      })
+    } else {
+      void refresh()
+    }
+    return body
+  }, [uid, getToken, refresh])
+
   const live = orders.find(o => isLiveOrder(o)) ?? null
   const past = orders.filter(o => !isLiveOrder(o))
 
-  return { orders, live, past, loading, refresh, place }
+  return { orders, live, past, loading, refresh, place, cancel }
 }
