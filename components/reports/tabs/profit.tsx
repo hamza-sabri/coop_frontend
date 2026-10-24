@@ -32,7 +32,7 @@ type Cost = {
 export function ProfitTab({ q }: { q: PnlQuery }) {
   const [shiftId, setShiftId] = useState<number | null>(null)
   const { data, isLoading } = useQuery({
-    queryKey: ["reports", "pnl", q.period, q.date, shiftId],
+    queryKey: ["reports", "pnl", q.period, q.date, q.start, q.end, q.pay, shiftId],
     queryFn: () => fetchPnl({ ...q, shift: shiftId }).then((r) => r.data),
     placeholderData: (p) => p,
   })

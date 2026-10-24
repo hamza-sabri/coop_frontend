@@ -55,7 +55,7 @@ export function ItemsTab({ q, onOpenItem }: { q: PnlQuery; onOpenItem: (id: numb
   /* The category whose drinks are open in the drawer (from the donut). */
   const [openCat, setOpenCat] = useState<string | null>(null)
   const { data, isLoading } = useQuery({
-    queryKey: ["reports", "items", q.period, q.date],
+    queryKey: ["reports", "items", q.period, q.date, q.start, q.end, q.pay],
     queryFn: () => fetchItems(q).then((r) => r.data),
     placeholderData: (p) => p,
   })

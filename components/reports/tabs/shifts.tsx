@@ -16,7 +16,7 @@ const COLS: Record<number, string> = { 1: "", 2: "md:grid-cols-2", 3: "md:grid-c
 
 export function ShiftsTab({ q }: { q: PnlQuery }) {
   const { data, isLoading } = useQuery({
-    queryKey: ["reports", "shifts", q.period, q.date],
+    queryKey: ["reports", "shifts", q.period, q.date, q.start, q.end, q.pay],
     queryFn: () => fetchShiftsReport(q).then((r) => r.data),
     placeholderData: (p) => p,
   })

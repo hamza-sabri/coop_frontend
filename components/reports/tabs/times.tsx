@@ -20,7 +20,7 @@ import { cn } from "@/lib/utils"
 
 export function TimesTab({ q }: { q: PnlQuery }) {
   const { data, isLoading } = useQuery({
-    queryKey: ["reports", "times", q.period, q.date],
+    queryKey: ["reports", "times", q.period, q.date, q.start, q.end, q.pay],
     queryFn: () => fetchTimes(q).then((r) => r.data),
     placeholderData: (p) => p,
   })

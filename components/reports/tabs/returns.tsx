@@ -14,7 +14,7 @@ import { formatDate, formatMoney, formatNumber, toNumber } from "@/lib/format"
 
 export function ReturnsTab({ q }: { q: PnlQuery }) {
   const { data, isLoading } = useQuery({
-    queryKey: ["reports", "returns", q.period, q.date],
+    queryKey: ["reports", "returns", q.period, q.date, q.start, q.end, q.pay],
     queryFn: () => fetchReturnsReport(q).then((r) => r.data),
     placeholderData: (p) => p,
   })

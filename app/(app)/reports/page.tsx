@@ -20,7 +20,8 @@
  */
 import { useEffect, useState } from "react"
 
-import { PeriodBar, type PeriodState } from "@/components/finance/period-bar"
+import { Chip, customQuery, PeriodBar, type PeriodState } from "@/components/finance/period-bar"
+import type { PayFilter, PnlQuery } from "@/api/finance"
 import { PageShell } from "@/components/page-shell"
 import { ItemReportSheet } from "@/components/reports/item-report"
 import { SURFACE } from "@/components/reports/kit"
@@ -36,6 +37,15 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { hasModule, useModules, useOwnerState } from "@/lib/modules"
 import { businessToday } from "@/lib/period"
 import { track } from "@/lib/analytics"
+
+/** «الكل» · نقدي · بطاقة — and the delivery apps, shown but off until they
+ *  are connected. */
+const PAYS: { value: PayFilter | null; label: string; soon?: boolean }[] = [
+  { value: null, label: "الكل" },
+  { value: "cash", label: "نقدي" },
+  { value: "card", label: "بطاقة" },
+]
+const SOON = ["هات", "ويلز"]
 
 const TABS: (SegmentedTab & { pnl?: boolean })[] = [
   { id: "overview", label: "نظرة عامة" },
@@ -55,6 +65,7 @@ export default function ReportsPage() {
   const today = businessToday()
   const [tab, setTab] = useState("overview")
   const [period, setPeriod] = useState<PeriodState>({ period: "month", anchor: today, shiftId: null })
+  const [pay, setPay] = useState<PayFilter | null>(null)
   const [item, setItem] = useState<{ id: number; name: string } | null>(null)
 
   // ?tab= deep link (read after mount — no Suspense boundary needed).
@@ -91,17 +102,41 @@ export default function ReportsPage() {
     )
   }
 
-  const q = { period: period.period, date: period.anchor }
+  const q: PnlQuery = period.custom
+    ? { period: "custom", ...customQuery(period.custom), pay }
+    : { period: period.period, date: period.anchor, pay }
   const openItem = (id: number, name = "") => setItem({ id, name })
 
   return (
     <PageShell title="التقارير">
       {/* One row: which question (tabs) · which period. */}
-      <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+      {/* With «فترة» open the bar is too wide to share the row with the tabs. */}
+      <div className={period.custom ? "flex flex-col gap-3" : "flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between"}>
         <SegmentedTabs tabs={tabs} active={active} onChange={pick} className="mb-0 min-w-0 xl:w-fit" />
         <div data-tour="reports-period" className="shrink-0">
-          <PeriodBar value={period} onChange={setPeriod} today={today} />
+          <PeriodBar value={period} onChange={setPeriod} today={today} allowCustom />
         </div>
+      </div>
+
+      {/* Which sales: all, cash only, card only. */}
+      <div className="mt-3 flex flex-wrap items-center gap-1.5" data-testid="pay-filter">
+        <span className="me-1 text-xs text-muted-foreground">طريقة الدفع</span>
+        {PAYS.map((p) => (
+          <Chip key={p.label} on={pay === p.value} onClick={() => setPay(p.value)}>
+            {p.label}
+          </Chip>
+        ))}
+        {SOON.map((name) => (
+          <span
+            key={name}
+            aria-disabled="true"
+            title="قريباً — بعد الربط مع التطبيق"
+            className="inline-flex shrink-0 cursor-not-allowed items-center gap-1.5 rounded-lg border border-dashed border-border px-3 py-1.5 text-xs font-semibold text-muted-foreground/60"
+          >
+            {name}
+            <span className="text-[10px] font-normal">قريباً</span>
+          </span>
+        ))}
       </div>
 
       {active === "overview" && <OverviewTab q={q} onOpenItem={(id) => openItem(id)} goTo={pick} />}

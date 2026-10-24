@@ -60,6 +60,8 @@ export type Pnl = {
     day_start_hour: number
   }
   shift: { id: number; name: string; start: string; end: string; wage_per_day: string } | null
+  /** The payment filter the figures were computed under, null = all. */
+  pay?: PayFilter | null
   lines: PnlLines
   kpis: {
     tickets: number
@@ -95,7 +97,12 @@ export type PnlQuery = {
   start?: string
   end?: string
   shift?: number | null
+  /** Only sales paid this way; unset = all of them. */
+  pay?: PayFilter | null
 }
+
+/** The ways of paying a report can be narrowed to. */
+export type PayFilter = "cash" | "card"
 
 export const fetchPnl = (q: PnlQuery) =>
   customFetch<Env<Pnl>>(`/api/v1/reports/pnl/${qs(q)}`)

@@ -12,12 +12,12 @@ import { formatMoney, formatNumber, toNumber } from "@/lib/format"
 
 export function OverviewTab({ q, onOpenItem, goTo }: { q: PnlQuery; onOpenItem: (id: number) => void; goTo: (tab: string) => void }) {
   const pnl = useQuery({
-    queryKey: ["reports", "pnl", q.period, q.date, null],
+    queryKey: ["reports", "pnl", q.period, q.date, q.start, q.end, q.pay, null],
     queryFn: () => fetchPnl({ ...q, shift: null }).then((r) => r.data),
     placeholderData: (p) => p,
   })
   const items = useQuery({
-    queryKey: ["reports", "items", q.period, q.date],
+    queryKey: ["reports", "items", q.period, q.date, q.start, q.end, q.pay],
     queryFn: () => fetchItems(q).then((r) => r.data),
     placeholderData: (p) => p,
   })
@@ -37,13 +37,24 @@ export function OverviewTab({ q, onOpenItem, goTo }: { q: PnlQuery; onOpenItem: 
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat label="دخل الصندوق" value={formatMoney(net)} sub={<Versus now={net} before={toNumber(prev?.net_revenue)} />} />
-        <Stat
-          label="ربحك بعد كل المصاريف"
-          value={formatMoney(profit)}
-          tone={profit >= 0 ? "good" : "bad"}
-          sub={<Versus now={profit} before={toNumber(prev?.net_profit)} />}
-        />
+        <Stat label="المبيعات" value={formatMoney(net)} sub={<Versus now={net} before={toNumber(prev?.net_revenue)} />} />
+        {d.pay ? (
+          // Expenses and waste are the whole shop's — they can't be split by
+          // how a customer paid, so a narrowed view shows the sales' own profit.
+          <Stat
+            label="ربح هذه المبيعات"
+            value={formatMoney(profit)}
+            tone={profit >= 0 ? "good" : "bad"}
+            sub="قبل المصاريف — تظهر في «الكل»"
+          />
+        ) : (
+          <Stat
+            label="ربحك بعد كل المصاريف"
+            value={formatMoney(profit)}
+            tone={profit >= 0 ? "good" : "bad"}
+            sub={<Versus now={profit} before={toNumber(prev?.net_profit)} />}
+          />
+        )}
         <Stat label="عدد الفواتير" value={formatNumber(d.kpis.tickets)} sub={<Versus now={d.kpis.tickets} before={prev?.tickets} />} />
         <Stat label="متوسط الفاتورة" value={formatMoney(d.kpis.avg_ticket)} sub={`الكوب يكلّفك ${formatMoney(d.kpis.cost_per_cup)} في المتوسط`} />
       </div>
@@ -60,7 +71,7 @@ export function OverviewTab({ q, onOpenItem, goTo }: { q: PnlQuery; onOpenItem: 
       <div className="grid gap-4 lg:grid-cols-5">
         <Panel
           className="lg:col-span-3"
-          title="دخل الصندوق يوماً بيوم"
+          title="المبيعات يوماً بيوم"
           hint={days.length > 1 ? "كل يوم عمل يبدأ الساعة ٤ فجراً" : "اختر أسبوعاً أو شهراً لرؤية الأيام"}
         >
           {days.length > 1 ? (

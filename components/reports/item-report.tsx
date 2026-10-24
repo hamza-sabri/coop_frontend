@@ -31,7 +31,7 @@ const n0 = (v: string | number) => formatNumber(Math.round(toNumber(v)))
 
 export function ItemReport({ productId, q }: { productId: number; q: PnlQuery }) {
   const { data, isLoading } = useQuery({
-    queryKey: ["reports", "item", productId, q.period, q.date],
+    queryKey: ["reports", "item", productId, q.period, q.date, q.start, q.end, q.pay],
     queryFn: () => fetchItem(productId, q).then((r) => r.data),
     placeholderData: (p) => p,
   })
@@ -176,7 +176,7 @@ export function ItemReportSheet({
      in, else the drink's own name from the report, and the last title shown
      is kept while the drawer slides away. */
   const { data } = useQuery({
-    queryKey: ["reports", "item", productId, q.period, q.date],
+    queryKey: ["reports", "item", productId, q.period, q.date, q.start, q.end, q.pay],
     queryFn: () => fetchItem(productId!, q).then((r) => r.data),
     enabled: productId != null,
     placeholderData: (p) => p,

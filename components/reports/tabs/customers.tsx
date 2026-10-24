@@ -24,7 +24,7 @@ function Face({ c }: { c: Top }) {
 export function CustomersTab({ q }: { q: PnlQuery }) {
   const router = useRouter()
   const { data, isLoading } = useQuery({
-    queryKey: ["reports", "customers", q.period, q.date],
+    queryKey: ["reports", "customers", q.period, q.date, q.start, q.end, q.pay],
     queryFn: () => fetchCustomersReport(q).then((r) => r.data),
     placeholderData: (p) => p,
   })
