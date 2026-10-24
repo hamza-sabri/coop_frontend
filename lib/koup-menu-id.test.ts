@@ -14,4 +14,11 @@ describe("customer menu", () => {
     expect(src).toContain("menu: { canOrder: ordering && Boolean(session) }")
     expect(src).toContain("publicOrdering(")
   })
+  // Two drinks can share a name (بطيخ is a smoothie AND a mojito). Keyed by
+  // name, React kept the wrong card when a category chip was tapped, so the
+  // web menu showed items from the previous category.
+  it("menu cards are keyed by product id, not by name", () => {
+    const src = readFileSync("components/KoupApp.tsx", "utf8")
+    expect(src).not.toMatch(/key=\{m\.en\}/)
+  })
 })

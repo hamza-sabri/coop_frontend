@@ -33,6 +33,12 @@ describe("the list itself", () => {
     expect(SALE_AFFECTED_KEYS).toContainEqual(["sales-day-summary"])
   })
 
+  // The owner sold, looked at the drawer, and it still showed the amount from
+  // before the sale — it only refreshed once a minute.
+  it("includes the cash drawer, so its expected amount moves with each sale", () => {
+    expect(SALE_AFFECTED_KEYS).toContainEqual(["cash-drawer"])
+  })
+
   it("includes everything a sale moves", () => {
     for (const key of [
       "products",

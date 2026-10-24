@@ -25,6 +25,8 @@ export const SALE_AFFECTED_KEYS: string[][] = [
   ["dashboard-stats"],
   ["customers"],
   ["customers-quick"],
+  // the till's cash drawer: "what should be in it" moves with every cash sale
+  ["cash-drawer"],
 ]
 
 /**

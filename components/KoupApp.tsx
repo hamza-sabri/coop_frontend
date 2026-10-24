@@ -1183,7 +1183,7 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
               </div>
               <div className="pcarpet">
                 {MENU.slice(0, 6).map((m, i) => (
-                  <ProductCard key={m.en} m={m} i={i} lang={lang}
+                  <ProductCard key={m.id ?? `n:${m.en}`} m={m} i={i} lang={lang}
                     onOpen={() => { SFX.tap(); setSheetItem(m) }} />
                 ))}
               </div>
@@ -1246,7 +1246,7 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
             <div className={view === 'grid' ? 'pgrid' : 'pcarpet'}
               onScroll={() => paintGloss()}>
               {list.map((m, i) => (
-                <ProductCard key={m.en} m={m} i={i} lang={lang}
+                <ProductCard key={m.id ?? `n:${m.en}`} m={m} i={i} lang={lang}
                   onOpen={() => { SFX.tap(); setSheetItem(m) }} />
               ))}
             </div>
@@ -1580,7 +1580,7 @@ export default function KoupApp({ auth }: { auth: KoupAuth }) {
               <div className="sechead"><h3>{t('w.can', 'بتقدر تاخد هلق')}</h3></div>
               <div className="redeemgrid">
                 {MENU.slice(0, 4).map((m, i) => (
-                  <div key={m.en} className={`rd press ${m.b <= beansRef.current ? 'can' : 'cant'}`}>
+                  <div key={m.id ?? `n:${m.en}`} className={`rd press ${m.b <= beansRef.current ? 'can' : 'cant'}`}>
                     <div className="rdart" style={{ ['--c' as any]: m.g[1], ['--c0' as any]: m.g[0],
                       ['--i' as any]: i, position: 'relative', overflow: 'hidden' }}>
                       <div className="pcard-bg" />
